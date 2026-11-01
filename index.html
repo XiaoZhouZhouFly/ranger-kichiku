@@ -1,0 +1,1170 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ranger 鬼畜工坊</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+/* Layout: 舞台（畫布）在上／左並固定，下方／右側是分頁面板；按鈕帶粗黑描邊＋位移陰影，呼應遊戲的卡通線條 */
+:root {
+  --paper: #f3f5fb;
+  --panel: #ffffff;
+  --ink: #1b2038;
+  --muted: #5d6585;
+  --line: #d5daea;
+  --accent: #ffc814;
+  --accent-ink: #1b2038;
+  --hot: #ff3d7f;
+  --cool: #2f7cff;
+  --stage: #e7eaf5;
+  --check-a: #ffffff;
+  --check-b: #e2e6f2;
+  --shadow: #1b2038;
+  --font-display: "Bungee", "Noto Sans TC", system-ui, sans-serif;
+  --font-body: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12152a; --panel: #1b1f38; --ink: #eef0fb; --muted: #a2a9c9; --line: #2f3557;
+    --accent: #ffcf33; --accent-ink: #161a30; --hot: #ff5b93; --cool: #5b98ff; --stage: #0c0f20;
+    --check-a: #242944; --check-b: #1b1f38; --shadow: #000000; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12152a; --panel: #1b1f38; --ink: #eef0fb; --muted: #a2a9c9; --line: #2f3557;
+  --accent: #ffcf33; --accent-ink: #161a30; --hot: #ff5b93; --cool: #5b98ff; --stage: #0c0f20;
+  --check-a: #242944; --check-b: #1b1f38; --shadow: #000000; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { background: var(--paper); color: var(--ink); }
+body {
+  font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 40px;
+}
+button, input, select { font: inherit; color: inherit; }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 16px; }
+header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.logo { font-family: var(--font-display); font-size: 22px; letter-spacing: .02em; line-height: 1; display: flex; align-items: baseline; gap: 8px; }
+.logo b { font-family: var(--font-body); font-weight: 900; font-size: 20px; background: var(--accent); color: var(--accent-ink); padding: 2px 8px; border: 2px solid var(--ink); border-radius: 6px; box-shadow: 2px 2px 0 var(--shadow); }
+.mode-note { font-size: 12px; color: var(--muted); }
+.mode-note.off { color: var(--hot); }
+
+/* 搜尋 */
+.search { display: grid; gap: 10px; }
+.search-row { display: flex; gap: 8px; }
+.search-row input { flex: 1; min-width: 0; padding: 10px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--panel); }
+.results { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.r-card { flex: 0 0 auto; width: 92px; display: grid; justify-items: center; gap: 4px; padding: 6px 4px; border: 2px solid var(--line); border-radius: 10px; background: var(--panel); cursor: pointer; text-align: center; }
+.r-card:hover, .r-card:focus-visible { border-color: var(--ink); outline: none; }
+.r-card.active { border-color: var(--ink); background: var(--accent); color: var(--accent-ink); box-shadow: 2px 2px 0 var(--shadow); }
+.r-card.locked { opacity: .45; cursor: not-allowed; }
+.r-card .thumb { width: 56px; height: 56px; border-radius: 8px; background: var(--stage); display: grid; place-items: center; overflow: hidden; font-weight: 900; font-size: 20px; color: var(--muted); }
+.r-card .thumb img { width: 100%; height: 100%; object-fit: contain; }
+.r-card .nm { font-size: 12px; font-weight: 700; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.r-card .meta { font-size: 10px; color: var(--muted); }
+.r-card.active .meta { color: var(--accent-ink); }
+
+/* 主區 */
+.main { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) {
+  .main { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; }
+  .stage-col { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+}
+.stage-col { display: grid; gap: 10px; min-width: 0; }
+.now { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.now h1 { font-size: 20px; margin: 0; font-weight: 900; text-wrap: balance; }
+.now .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.stage { position: relative; border: 2px solid var(--ink); border-radius: 14px; background: var(--stage); overflow: hidden; display: grid; place-items: center; box-shadow: 4px 4px 0 var(--shadow); }
+.stage canvas { display: block; width: auto; height: auto; max-width: 100%; max-height: 62vh; touch-action: none; cursor: grab; }
+.stage canvas.checker { background-color: var(--check-a); background-image: linear-gradient(45deg, var(--check-b) 25%, transparent 25%), linear-gradient(-45deg, var(--check-b) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--check-b) 75%), linear-gradient(-45deg, transparent 75%, var(--check-b) 75%); background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0; }
+.overlay { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--stage) 80%, transparent); font-weight: 700; text-align: center; padding: 16px; }
+.rec-badge { position: absolute; top: 10px; left: 10px; background: var(--hot); color: #fff; font-weight: 900; font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); }
+.transport { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.frame-no { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 72px; text-align: right; }
+.seg-mode { display: inline-flex; border: 2px solid var(--ink); border-radius: 10px; overflow: hidden; }
+.seg-mode button { border: 0; background: var(--panel); padding: 6px 10px; font-weight: 700; font-size: 13px; cursor: pointer; }
+.seg-mode button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+
+/* 按鈕 */
+.btn { border: 2px solid var(--ink); background: var(--panel); border-radius: 10px; padding: 7px 12px; font-weight: 700; cursor: pointer; box-shadow: 2px 2px 0 var(--shadow); transition: transform .06s, box-shadow .06s; white-space: nowrap; }
+.btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--shadow); }
+.btn:focus-visible, .chip:focus-visible, .tabs button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--cool); outline-offset: 2px; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); }
+.btn.hot { background: var(--hot); color: #fff; }
+.btn.small { padding: 4px 8px; font-size: 12px; border-radius: 8px; box-shadow: 1px 1px 0 var(--shadow); }
+.btn.icon { width: 40px; padding: 7px 0; text-align: center; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* 分頁 */
+.panel { background: var(--panel); border: 2px solid var(--ink); border-radius: 14px; overflow: hidden; min-width: 0; }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 2px solid var(--ink); }
+.tabs button { border: 0; background: transparent; padding: 10px 4px; font-weight: 900; cursor: pointer; font-size: 14px; border-right: 2px solid var(--ink); }
+.tabs button:last-child { border-right: 0; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+.tab-body { padding: 14px; display: grid; gap: 14px; }
+.group { display: grid; gap: 8px; }
+.group > .lbl { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .06em; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 2px solid var(--line); background: var(--paper); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-weight: 700; font-size: 13px; }
+.chip[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.chip:disabled { opacity: .35; cursor: not-allowed; }
+.chip .n { font-family: var(--font-mono); font-size: 10px; opacity: .7; margin-left: 4px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.field { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+.field input[type="number"], .field select { width: 100%; padding: 5px 7px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-family: var(--font-mono); font-size: 13px; }
+.field select { font-family: var(--font-body); }
+.slider { display: grid; grid-template-columns: 76px minmax(0, 1fr) 48px; gap: 8px; align-items: center; font-size: 13px; }
+.slider output { font-family: var(--font-mono); font-size: 12px; text-align: right; color: var(--muted); }
+input[type="range"] { width: 100%; accent-color: var(--hot); }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+.big-select { width: 100%; padding: 9px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--panel); color: var(--ink); font-weight: 700; font-size: 15px; }
+details.more summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--muted); }
+
+/* 元件 */
+.comps { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.comp { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px; display: grid; gap: 6px; background: var(--paper); }
+.comp.off { opacity: .5; }
+.comp .head { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 8px; align-items: center; }
+.comp canvas { width: 48px; height: 48px; border-radius: 6px; background: var(--check-a); }
+.comp .cname { font-family: var(--font-mono); font-size: 10px; color: var(--muted); word-break: break-all; line-height: 1.3; }
+.comp .slider { grid-template-columns: 34px minmax(0, 1fr) 34px; font-size: 11px; }
+
+/* 鬼畜剪輯 */
+.segs { display: grid; gap: 10px; }
+.seg { border: 1.5px solid var(--line); border-left: 6px solid var(--hot); border-radius: 10px; padding: 10px; background: var(--paper); display: grid; gap: 8px; }
+.seg:nth-child(3n+2) { border-left-color: var(--cool); }
+.seg:nth-child(3n) { border-left-color: var(--accent); }
+.seg .seg-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.seg .seg-title { font-weight: 900; font-size: 13px; flex: 1; min-width: 120px; }
+.seg .seg-title span { font-family: var(--font-mono); font-weight: 500; font-size: 11px; color: var(--muted); margin-left: 6px; }
+.seg .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; }
+.seg .flags { display: flex; gap: 12px; flex-wrap: wrap; }
+.total { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+.status { font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--paper); border: 1.5px dashed var(--line); }
+.status:empty { display: none; }
+footer { font-size: 12px; color: var(--muted); }
+footer a { color: inherit; }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="top">
+    <div class="logo">RANGER <b>鬼畜工坊</b></div>
+    <span class="mode-note" id="modeNote">正在連線資料庫…</span>
+  </header>
+
+  <section class="search" aria-label="搜尋角色">
+    <div class="search-row">
+      <input id="q" type="search" placeholder="輸入角色名稱，例如：風之痕、熊大、兔兔" autocomplete="off">
+      <button class="btn primary" id="qBtn">搜尋</button>
+    </div>
+    <div class="results" id="results" role="list"></div>
+  </section>
+
+  <div class="main">
+    <div class="stage-col">
+      <div class="now">
+        <h1 id="unitName">—</h1>
+        <span class="tag" id="unitTag"></span>
+      </div>
+      <div class="stage">
+        <canvas id="cv" width="720" height="720" aria-label="動畫預覽"></canvas>
+        <div class="overlay" id="overlay">載入中…</div>
+        <div class="rec-badge" id="recBadge" hidden>● 錄製中</div>
+      </div>
+      <div class="transport">
+        <button class="btn icon" id="playBtn" aria-label="暫停">❚❚</button>
+        <div class="seg-mode" role="group" aria-label="播放模式">
+          <button id="modeOrig" aria-pressed="true">原始</button>
+          <button id="modeRemix" aria-pressed="false">鬼畜</button>
+        </div>
+        <input type="range" id="scrub" min="0" max="0" value="0" aria-label="播放位置">
+        <span class="frame-no" id="frameNo">0 / 0</span>
+      </div>
+      <p class="hint">拖曳畫面可平移鏡頭，雙擊畫面重設。</p>
+    </div>
+
+    <div class="panel">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="act">動作</button>
+        <button role="tab" aria-selected="false" data-tab="comp">元件</button>
+        <button role="tab" aria-selected="false" data-tab="remix">鬼畜剪輯</button>
+        <button role="tab" aria-selected="false" data-tab="out">輸出</button>
+      </div>
+
+      <div class="tab-body" data-panel="act">
+        <div class="group">
+          <span class="lbl">部件</span>
+          <div class="chips" id="parts"></div>
+        </div>
+        <div class="group">
+          <span class="lbl">動作</span>
+          <div class="chips" id="clips"></div>
+          <details class="more"><summary>其他原始動作片段</summary><div class="chips" id="rawClips" style="margin-top:8px"></div></details>
+        </div>
+        <div class="group">
+          <span class="lbl">播放</span>
+          <label class="slider">速度 <input type="range" id="speed" min="0.1" max="4" step="0.05" value="1"><output id="speedOut">1.00×</output></label>
+          <label class="slider">鏡頭縮放 <input type="range" id="camZoom" min="0.3" max="4" step="0.05" value="1"><output id="camZoomOut">1.00×</output></label>
+          <div class="row">
+            <label class="check"><input type="checkbox" id="follow"> 鏡頭跟隨角色</label>
+            <label class="check"><input type="checkbox" id="loop" checked> 循環播放</label>
+          </div>
+        </div>
+        <div class="group">
+          <span class="lbl">背景</span>
+          <div class="chips" id="bgs">
+            <button class="chip" data-bg="white" aria-pressed="true">白</button>
+            <button class="chip" data-bg="black" aria-pressed="false">黑</button>
+            <button class="chip" data-bg="green" aria-pressed="false">綠幕</button>
+            <button class="chip" data-bg="transparent" aria-pressed="false">透明</button>
+          </div>
+          <p class="hint">綠幕方便你之後丟進剪輯 App 去背；透明只適用於存 PNG。</p>
+        </div>
+      </div>
+
+      <div class="tab-body" data-panel="comp" hidden>
+        <p class="hint">這裡列出目前動作用到的每個圖片零件。可以單獨隱藏、放大、讓它自己轉圈、變色或亂抖，原始與鬼畜模式都會套用。</p>
+        <div class="row">
+          <button class="btn small" id="compReset">全部重設</button>
+          <button class="btn small hot" id="compChaos">隨機亂改</button>
+          <button class="btn small" id="compShowAll">全部顯示</button>
+        </div>
+        <div class="comps" id="comps"></div>
+      </div>
+
+      <div class="tab-body" data-panel="remix" hidden>
+        <div class="group">
+          <label class="lbl" for="remixAnim">要鬼畜的動作</label>
+          <select id="remixAnim" class="big-select"></select>
+          <p class="hint">每個動作各自保存一套剪輯，切換時不會互相覆蓋。</p>
+        </div>
+        <div class="group">
+          <span class="lbl">快速套用</span>
+          <div class="chips">
+            <button class="chip" data-preset="plain">原速</button>
+            <button class="chip" data-preset="spam">連打</button>
+            <button class="chip" data-preset="demo">鬼畜示範</button>
+            <button class="chip" data-preset="random">隨機鬼畜</button>
+          </div>
+          <p class="hint">片段會依序接起來播放。幀號以目前選的動作為準，可以先在「原始」模式拖進度條找想連打的那幾幀。</p>
+        </div>
+        <div class="row">
+          <button class="btn small primary" id="segAdd">＋ 新增片段</button>
+          <span class="total" id="segTotal"></span>
+        </div>
+        <div class="segs" id="segs"></div>
+      </div>
+
+      <div class="tab-body" data-panel="out" hidden>
+        <div class="group">
+          <span class="lbl">畫面比例</span>
+          <div class="chips" id="sizes">
+            <button class="chip" data-size="720x720" aria-pressed="true">1:1</button>
+            <button class="chip" data-size="720x1280" aria-pressed="false">9:16 直式</button>
+            <button class="chip" data-size="1280x720" aria-pressed="false">16:9 橫式</button>
+          </div>
+        </div>
+        <div class="group">
+          <span class="lbl">背景音樂（選用）</span>
+          <input type="file" id="audioFile" accept="audio/*">
+          <label class="slider">音樂起點 <input type="range" id="audioStart" min="0" max="60" step="0.1" value="0"><output id="audioStartOut">0.0s</output></label>
+          <p class="hint">錄製時會從指定秒數開始播放並一起錄進影片。請使用你有權使用的音樂。</p>
+        </div>
+        <div class="group">
+          <span class="lbl">錄製</span>
+          <div class="row">
+            <button class="btn hot" id="recRemix">錄製鬼畜版</button>
+            <button class="btn" id="recOrig">錄製原始動作</button>
+            <button class="btn" id="savePng">存目前畫面 PNG</button>
+          </div>
+          <label class="slider">原始重複 <input type="range" id="origLoops" min="1" max="10" step="1" value="1"><output id="origLoopsOut">1 次</output></label>
+          <div class="status" id="outStatus"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    動畫資料每日同步自 <a href="https://rangerbook.warmycat.com/" target="_blank" rel="noopener">LINE Rangers 資料站</a>（蚯蚓貓）的公開素材庫。角色美術版權屬於 LINE，輸出內容請自行斟酌用途。
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const LOCAL = "data/";
+  const DEFAULT_UNIT = "u362e-blast";
+  const FPS_OUT = 30;
+
+  const CLIPS = [
+    { key: "idle", label: "待機", names: ["idle", "wait"] },
+    { key: "move", label: "移動", names: ["walk"] },
+    { key: "attack", label: "一般攻擊", names: ["attack_all", "attack", "attack_a", "attack_b"] },
+    { key: "skill1", label: "技能1", names: ["s_attack_all", "s_action_attack_all", "s_attack", "s_attack_a", "s_attack_b", "s_action_attack_2", "s_action_attack_3"] },
+    { key: "skill2", label: "技能2", names: ["s2_attack_all", "s2_attack", "s2_attack_a", "s2_attack_b", "skill"] },
+    { key: "knockback", label: "被擊退", names: ["knockback"] },
+  ];
+  const PART_LABEL = { body: "本體", bul: "投射物・普攻", bul2: "投射物・技能1", bul3: "投射物・技能2" };
+  const BG = { white: "#ffffff", black: "#000000", green: "#00b140", transparent: null };
+
+  const $ = (id) => document.getElementById(id);
+  const cv = $("cv");
+  const ctx = cv.getContext("2d");
+
+  const S = {
+    index: [],
+    unit: null, meta: null, partKey: "body", part: null, animName: null,
+    atlas: null, sprites: new Map(), hueCache: new Map(),
+    bounds: null, centers: [],
+    comps: {}, segs: [],
+    mode: "orig", playing: true, speed: 1, camZoom: 1, follow: false, loop: true,
+    bg: "white", panX: 0, panY: 0,
+    pos: 0, lastTs: 0, timeline: [],
+    recording: false, audioBuf: null, audioUrl: null,
+  };
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem("rk_" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem("rk_" + k, JSON.stringify(v)); } catch {} },
+  };
+
+  /* ---------- 資料讀取 ---------- */
+  async function fetchFirst(urls, kind) {
+    let lastErr;
+    for (const u of urls) {
+      try {
+        const r = await fetch(u);
+        if (!r.ok) throw new Error(r.status + " " + u);
+        return kind === "json" ? await r.json() : await r.blob();
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error("無法讀取");
+  }
+  async function blobToImage(blob) {
+    if (window.createImageBitmap) { try { return await createImageBitmap(blob); } catch {} }
+    return await new Promise((res, rej) => {
+      const img = new Image(); const url = URL.createObjectURL(blob);
+      img.onload = () => res(img); img.onerror = rej; img.src = url;
+    });
+  }
+  let pakoPromise = null;
+  function loadPako() {
+    if (window.pako) return Promise.resolve();
+    if (!pakoPromise) pakoPromise = new Promise((res, rej) => {
+      const sc = document.createElement("script");
+      sc.src = "https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js";
+      sc.onload = res; sc.onerror = () => rej(new Error("無法載入解壓縮元件"));
+      document.head.appendChild(sc);
+    });
+    return pakoPromise;
+  }
+  async function fetchGzJson(url) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`找不到資料（${r.status}）`);
+    const u8 = new Uint8Array(await r.arrayBuffer());
+    if (!(u8[0] === 0x1f && u8[1] === 0x8b)) return JSON.parse(new TextDecoder().decode(u8));
+    if (window.DecompressionStream) {
+      const stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream("gzip"));
+      return JSON.parse(await new Response(stream).text());
+    }
+    await loadPako();
+    return JSON.parse(window.pako.ungzip(u8, { to: "string" }));
+  }
+
+  async function loadIndex() {
+    const note = $("modeNote");
+    try { S.index = await fetchFirst([LOCAL + "units.json"], "json"); } catch { S.index = []; }
+    S.index.forEach((r) => { if (!r.name) r.name = r.id; });
+    let when = "";
+    try {
+      const st = await fetchFirst([LOCAL + "sync_state.json"], "json");
+      if (st.synced_at) when = `・資料更新於 ${new Date(st.synced_at).toLocaleDateString("zh-TW")}`;
+    } catch {}
+    if (S.index.length) { note.textContent = `共 ${S.index.length} 隻角色${when}`; note.classList.remove("off"); }
+    else { note.textContent = "還沒有角色資料。第一次同步完成後重新整理即可。"; note.classList.add("off"); }
+  }
+  const available = () => true;
+
+  /* ---------- 搜尋 ---------- */
+  function thumbUrls(id) {
+    return [`${LOCAL}res/${id}/${id}-thum-140.png`, `${LOCAL}res/${id}/${id}-thum.png`];
+  }
+  function renderResults(q) {
+    const box = $("results");
+    box.textContent = "";
+    q = (q || "").trim();
+    let list;
+    if (!q) { box.innerHTML = `<p class="hint">輸入角色名稱開始搜尋。</p>`; return; }
+    list = S.index.filter((r) => (r.name || "").includes(q) || r.id.includes(q.toLowerCase()));
+    list.sort((a, b) => (b.name === q) - (a.name === q) || (a.name === a.id) - (b.name === b.id));
+    if (!list.length) { box.innerHTML = `<p class="hint">找不到「${escapeHtml(q)}」。試試較短的關鍵字。</p>`; return; }
+    for (const r of list.slice(0, 80)) {
+      const ok = available(r.id);
+      const b = document.createElement("button");
+      b.className = "r-card" + (ok ? "" : " locked") + (S.unit && S.unit.id === r.id ? " active" : "");
+      b.setAttribute("role", "listitem");
+      b.title = `${r.name}（${r.id}）`;
+      const th = document.createElement("div"); th.className = "thumb"; th.textContent = (r.name || "?").slice(-1);
+      const urls = thumbUrls(r.id); let i = 0;
+      const img = new Image(); img.alt = "";
+      img.onload = () => { th.textContent = ""; th.appendChild(img); };
+      img.onerror = () => { if (++i < urls.length) img.src = urls[i]; };
+      img.src = urls[0];
+      const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = r.name;
+      const mt = document.createElement("div"); mt.className = "meta"; mt.textContent = [r.star, r.element].filter(Boolean).join("・");
+      b.append(th, nm, mt);
+      b.addEventListener("click", () => { if (ok) selectUnit(r); });
+      box.appendChild(b);
+    }
+  }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  /* ---------- 角色與部件 ---------- */
+  async function selectUnit(r, opts = {}) {
+    showOverlay(`載入 ${r.name} …`);
+    try {
+      let meta;
+      try { meta = await fetchGzJson(`${LOCAL}units/${r.id}.json.gz`); }
+      catch { meta = await fetchFirst([`${LOCAL}units/${r.id}.json`], "json"); }
+      S.unit = r; S.meta = meta;
+      $("unitName").textContent = r.name;
+      $("unitTag").textContent = [r.id, r.star, r.type, r.element].filter(Boolean).join("・");
+      store.set("unit", r.id);
+      buildParts();
+      const pk = opts.part && meta.parts[opts.part] ? opts.part : (meta.parts.body ? "body" : Object.keys(meta.parts)[0]);
+      await selectPart(pk, opts.clip || "skill1");
+      document.querySelectorAll(".r-card").forEach((el) => el.classList.toggle("active", el.title.includes(`（${r.id}）`)));
+      hideOverlay();
+    } catch (e) {
+      showOverlay(`讀取 ${r.name} 失敗：${e.message || e}`);
+    }
+  }
+  function buildParts() {
+    const box = $("parts"); box.textContent = "";
+    for (const k of Object.keys(S.meta.parts)) {
+      const b = chip(PART_LABEL[k] || k, k === S.partKey);
+      b.dataset.part = k;
+      b.onclick = () => selectPart(k, currentClipKey() || "idle");
+      box.appendChild(b);
+    }
+  }
+  function chip(label, pressed) {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = label; b.setAttribute("aria-pressed", String(!!pressed));
+    return b;
+  }
+  async function selectPart(key, clipKey) {
+    S.partKey = key; S.part = S.meta.parts[key];
+    $("parts").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.part === key)));
+    S.atlas = await blobToImage(await fetchFirst([LOCAL + S.part.png], "blob"));
+    S.sprites.clear(); S.hueCache.clear();
+    buildClips();
+    const anim = resolveClip(clipKey) || firstAnim();
+    selectAnim(anim);
+  }
+  function resolveClip(key) {
+    const c = CLIPS.find((x) => x.key === key);
+    if (!c) return null;
+    return c.names.find((n) => S.part.animations[n]?.frames?.length) || null;
+  }
+  function firstAnim() {
+    for (const c of CLIPS) { const a = resolveClip(c.key); if (a) return a; }
+    return Object.keys(S.part.animations).find((n) => S.part.animations[n]?.frames?.length);
+  }
+  function currentClipKey() {
+    if (!S.part) return null;
+    const c = CLIPS.find((x) => x.names.includes(S.animName));
+    return c ? c.key : null;
+  }
+  function buildClips() {
+    const box = $("clips"); box.textContent = "";
+    for (const c of CLIPS) {
+      const a = resolveClip(c.key);
+      const b = chip(c.label, false);
+      b.dataset.anim = a || "";
+      if (a) { const n = document.createElement("span"); n.className = "n"; n.textContent = S.part.animations[a].frame_count; b.appendChild(n); }
+      b.disabled = !a;
+      b.onclick = () => a && selectAnim(a);
+      box.appendChild(b);
+    }
+    const sel = $("remixAnim"); sel.textContent = "";
+    const og1 = document.createElement("optgroup"); og1.label = "常用動作";
+    for (const c of CLIPS) {
+      const a = resolveClip(c.key);
+      if (!a) continue;
+      const o = document.createElement("option"); o.value = a;
+      o.textContent = `${c.label}（${S.part.animations[a].frame_count} 幀）`;
+      og1.appendChild(o);
+    }
+    sel.appendChild(og1);
+    const og2 = document.createElement("optgroup"); og2.label = "原始片段";
+    for (const n of Object.keys(S.part.animations)) {
+      if (!S.part.animations[n]?.frames?.length || n === "_all" || [...og1.children].some((x) => x.value === n)) continue;
+      const o = document.createElement("option"); o.value = n;
+      o.textContent = `${n}（${S.part.animations[n].frame_count} 幀）`;
+      og2.appendChild(o);
+    }
+    sel.appendChild(og2);
+    const raw = $("rawClips"); raw.textContent = "";
+    for (const n of Object.keys(S.part.animations)) {
+      if (!S.part.animations[n]?.frames?.length) continue;
+      const b = chip(n === "_all" ? "全部（完整時間軸）" : n, false);
+      b.dataset.anim = n;
+      b.onclick = () => selectAnim(n);
+      raw.appendChild(b);
+    }
+  }
+  function selectAnim(name) {
+    S.animName = name;
+    document.querySelectorAll("#clips .chip, #rawClips .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.anim === name)));
+    const sel = $("remixAnim");
+    if ([...sel.options].some((o) => o.value === name)) sel.value = name;
+    const frames = anim().frames;
+    computeBounds(frames);
+    S.centers = frames.map(bodyCenter);
+    S.pos = 0; S.panX = 0; S.panY = 0;
+    buildComps();
+    const saved = store.get("segs:" + S.unit.id + ":" + S.partKey + ":" + name, null);
+    S.segs = saved && saved.length ? saved : presetDemo(frames.length);
+    renderSegs();
+    rebuildTimeline();
+    updateScrub();
+    drawCurrent();
+  }
+  const anim = () => S.part.animations[S.animName];
+
+  /* ---------- 幾何 ---------- */
+  function spriteOf(name) {
+    if (S.sprites.has(name)) return S.sprites.get(name);
+    const sp = S.part.sprites[name];
+    if (!sp || !sp.rect || !sp.rect[2] || !sp.rect[3]) { S.sprites.set(name, null); return null; }
+    const [sx, sy, w, h] = sp.rect;
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const g = c.getContext("2d");
+    if (sp.rotated) { g.translate(w / 2, h / 2); g.rotate(-Math.PI / 2); g.drawImage(S.atlas, sx, sy, h, w, -h / 2, -w / 2, h, w); }
+    else g.drawImage(S.atlas, sx, sy, w, h, 0, 0, w, h);
+    S.sprites.set(name, c);
+    return c;
+  }
+  function hueSprite(name, hue) {
+    const base = spriteOf(name);
+    if (!base) return null;
+    hue = ((Math.round(hue / 15) * 15) % 360 + 360) % 360;
+    if (!hue) return base;
+    const key = name + "|" + hue;
+    if (S.hueCache.has(key)) return S.hueCache.get(key);
+    const c = document.createElement("canvas"); c.width = base.width; c.height = base.height;
+    const g = c.getContext("2d"); g.drawImage(base, 0, 0);
+    try {
+      const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
+      const a = hue * Math.PI / 180, co = Math.cos(a), si = Math.sin(a);
+      const m = [
+        0.213 + co * 0.787 - si * 0.213, 0.715 - co * 0.715 - si * 0.715, 0.072 - co * 0.072 + si * 0.928,
+        0.213 - co * 0.213 + si * 0.143, 0.715 + co * 0.285 + si * 0.140, 0.072 - co * 0.072 - si * 0.283,
+        0.213 - co * 0.213 - si * 0.787, 0.715 - co * 0.715 + si * 0.715, 0.072 + co * 0.928 + si * 0.072,
+      ];
+      for (let i = 0; i < px.length; i += 4) {
+        const r = px[i], gg = px[i + 1], b = px[i + 2];
+        px[i] = m[0] * r + m[1] * gg + m[2] * b;
+        px[i + 1] = m[3] * r + m[4] * gg + m[5] * b;
+        px[i + 2] = m[6] * r + m[7] * gg + m[8] * b;
+      }
+      g.putImageData(d, 0, 0);
+    } catch {}
+    S.hueCache.set(key, c);
+    return c;
+  }
+  function itemsOf(frame) {
+    const out = [];
+    for (const it of frame || []) {
+      const res = it[1], om = it[2], col = it[3];
+      const def = S.part.images[res];
+      if (!def || !Array.isArray(om) || !Array.isArray(def.m)) continue;
+      const alpha = (Array.isArray(col) && col.length > 3 ? col[3] : 255) / 255;
+      if (alpha <= 0) continue;
+      const sp = S.part.sprites[def.name];
+      if (!sp || !sp.rect || !sp.rect[2]) continue;
+      const [m00, m01, m10, m11, m02, m12] = om;
+      const [i00, i01, i10, i11, i02, i12] = def.m;
+      out.push({
+        name: def.name, alpha, w: sp.rect[2], h: sp.rect[3],
+        A: m00 * i00 + m01 * i10, B: m00 * i01 + m01 * i11, C: m00 * i02 + m01 * i12 + m02,
+        D: m10 * i00 + m11 * i10, E: m10 * i01 + m11 * i11, F: m10 * i02 + m11 * i12 + m12,
+      });
+    }
+    return out;
+  }
+  function computeBounds(frames) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const fr of frames) for (const t of itemsOf(fr)) {
+      if (t.alpha < 0.12) continue;
+      for (const [px, py] of [[0, 0], [t.w, 0], [0, t.h], [t.w, t.h]]) {
+        const x = t.A * px + t.B * py + t.C, y = t.D * px + t.E * py + t.F;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+    if (!isFinite(x0)) { x0 = -50; y0 = -100; x1 = 50; y1 = 10; }
+    S.bounds = { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+  }
+  function bodyCenter(frame) {
+    const xs = [], ys = [];
+    for (const t of itemsOf(frame)) {
+      if (t.alpha < 0.3) continue;
+      xs.push(t.A * t.w / 2 + t.B * t.h / 2 + t.C);
+      ys.push(t.D * t.w / 2 + t.E * t.h / 2 + t.F);
+    }
+    if (!xs.length) return null;
+    xs.sort((a, b) => a - b); ys.sort((a, b) => a - b);
+    return { x: xs[xs.length >> 1], y: ys[ys.length >> 1] };
+  }
+  function centerAt(i) {
+    const c = S.centers[i];
+    if (c) return c;
+    for (let d = 1; d < S.centers.length; d++) { const a = S.centers[i - d] || S.centers[i + d]; if (a) return a; }
+    return { x: S.bounds.cx, y: S.bounds.cy };
+  }
+  function fitScale() {
+    const b = S.bounds;
+    return Math.min(cv.width * 0.88 / Math.max(1, b.x1 - b.x0), cv.height * 0.88 / Math.max(1, b.y1 - b.y0));
+  }
+
+  /* ---------- 繪製 ---------- */
+  function hash(n) { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+
+  function render(frameIdx, cam, fx, tick) {
+    const W = cv.width, H = cv.height;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+    const bg = BG[S.bg];
+    if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H); } else ctx.clearRect(0, 0, W, H);
+    if (!S.part) return;
+    const frames = anim().frames;
+    const frame = frames[Math.max(0, Math.min(frames.length - 1, frameIdx))];
+    ctx.translate(W / 2 + cam.dx + S.panX, H / 2 + cam.dy + S.panY);
+    if (cam.rot) ctx.rotate(cam.rot * Math.PI / 180);
+    ctx.scale(cam.zoom * (cam.mirror ? -1 : 1), cam.zoom);
+    ctx.translate(-cam.fx, -cam.fy);
+    for (const t of itemsOf(frame)) {
+      const cp = S.comps[t.name] || defComp();
+      if (!cp.show) continue;
+      const img = hueSprite(t.name, (cp.hue || 0) + (fx.hue || 0));
+      if (!img) continue;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, t.alpha);
+      ctx.transform(t.A, t.D, t.B, t.E, t.C, t.F);
+      const spin = (cp.spin || 0) * tick;
+      const jit = cp.jitter || 0;
+      if (cp.scale !== 1 || spin || jit) {
+        const jx = jit ? (hash(tick * 3.1 + t.w) - 0.5) * 2 * jit : 0;
+        const jy = jit ? (hash(tick * 5.7 + t.h) - 0.5) * 2 * jit : 0;
+        ctx.translate(t.w / 2 + jx, t.h / 2 + jy);
+        if (spin) ctx.rotate(spin * Math.PI / 180);
+        ctx.scale(cp.scale, cp.scale);
+        ctx.translate(-t.w / 2, -t.h / 2);
+      }
+      ctx.drawImage(img, 0, 0);
+      ctx.restore();
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (fx.invert && bg) {
+      ctx.globalCompositeOperation = "difference";
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = "source-over";
+    }
+  }
+
+  function origCam(frameIdx) {
+    const f = S.follow ? centerAt(frameIdx) : { x: S.bounds.cx, y: S.bounds.cy };
+    return { fx: f.x, fy: f.y, zoom: fitScale() * S.camZoom, rot: 0, mirror: false, dx: 0, dy: 0 };
+  }
+  const lerp = (a, b, t) => a + (b - a) * t;
+  function remixState(k) {
+    const e = S.timeline[Math.max(0, Math.min(S.timeline.length - 1, k))];
+    if (!e) return null;
+    const s = e.seg, t = e.t;
+    const f = s.focus === "body" ? centerAt(e.idx) : { x: S.bounds.cx, y: S.bounds.cy };
+    const sh = +s.shake || 0;
+    return {
+      idx: e.idx,
+      cam: {
+        fx: f.x, fy: f.y,
+        zoom: fitScale() * S.camZoom * lerp(+s.zoom0 || 1, +s.zoom1 || 1, t),
+        rot: lerp(+s.rot0 || 0, +s.rot1 || 0, t),
+        mirror: s.mirror === "on" || (s.mirror === "alt" && e.rep % 2 === 1),
+        dx: sh ? (hash(k * 1.3) - 0.5) * 2 * sh : 0,
+        dy: sh ? (hash(k * 2.9 + 7) - 0.5) * 2 * sh : 0,
+      },
+      fx: { hue: lerp(+s.hue0 || 0, +s.hue1 || 0, t), invert: !!s.invert },
+    };
+  }
+
+  /* ---------- 時間軸 ---------- */
+  function expandSegs(segs, n) {
+    const out = [];
+    for (const s of segs) {
+      let a = clampInt(s.start, 0, n - 1), b = clampInt(s.end ?? s.start, 0, n - 1);
+      if (b < a) [a, b] = [b, a];
+      let base = [];
+      const hold = clampInt(s.hold, 0, 600);
+      if (hold > 0) base = Array(hold).fill(a);
+      else for (let i = a; i <= b; i++) base.push(i);
+      if (s.reverse) base.reverse();
+      if (s.pingpong && base.length > 2) base = base.concat(base.slice(1, -1).reverse());
+      const sp = Math.max(0.05, +s.speed || 1);
+      if (!hold && sp !== 1) {
+        const cnt = Math.max(1, Math.round(base.length / sp));
+        const src = base; base = [];
+        for (let i = 0; i < cnt; i++) base.push(src[Math.min(src.length - 1, Math.floor(i * sp))]);
+      }
+      const reps = clampInt(s.repeat, 1, 50);
+      const seq = [];
+      for (let r = 0; r < reps; r++) for (const idx of base) seq.push([idx, r]);
+      seq.forEach(([idx, r], k) => out.push({ idx, rep: r, seg: s, t: seq.length > 1 ? k / (seq.length - 1) : 0 }));
+    }
+    return out;
+  }
+  function rebuildTimeline() {
+    const n = anim() ? anim().frames.length : 1;
+    S.timeline = expandSegs(S.segs, n);
+    $("segTotal").textContent = `共 ${S.timeline.length} 幀・約 ${(S.timeline.length / FPS_OUT).toFixed(1)} 秒`;
+  }
+  function clampInt(v, lo, hi) { v = Math.round(+v); if (!isFinite(v)) v = lo; return Math.max(lo, Math.min(hi, v)); }
+
+  /* ---------- 播放迴圈 ---------- */
+  function totalLen() { return S.mode === "remix" ? S.timeline.length : (anim() ? anim().frames.length : 0); }
+  function rate() { return S.mode === "remix" ? FPS_OUT : (S.part?.anim_rate || 24) * S.speed; }
+  function drawCurrent() {
+    if (!S.part) return;
+    const k = Math.floor(S.pos);
+    if (S.mode === "remix") {
+      const st = remixState(k);
+      if (st) render(st.idx, st.cam, st.fx, k);
+    } else {
+      render(k, origCam(k), {}, k);
+    }
+    $("frameNo").textContent = `${Math.min(k, Math.max(0, totalLen() - 1))} / ${Math.max(0, totalLen() - 1)}`;
+    if (!scrubbing) $("scrub").value = String(k);
+  }
+  let scrubbing = false;
+  function updateScrub() { $("scrub").max = String(Math.max(0, totalLen() - 1)); }
+  function loop(ts) {
+    requestAnimationFrame(loop);
+    if (!S.lastTs) S.lastTs = ts;
+    const dt = Math.min(0.1, (ts - S.lastTs) / 1000);
+    S.lastTs = ts;
+    if (!S.part || S.recording) return;
+    if (S.playing) {
+      const len = totalLen();
+      S.pos += dt * rate();
+      if (S.pos >= len) {
+        if (S.loop || S.mode === "remix") S.pos = S.pos % Math.max(1, len);
+        else { S.pos = len - 1; setPlaying(false); }
+      }
+    }
+    drawCurrent();
+  }
+  function setPlaying(p) {
+    S.playing = p;
+    $("playBtn").textContent = p ? "❚❚" : "▶";
+    $("playBtn").setAttribute("aria-label", p ? "暫停" : "播放");
+  }
+  function setMode(m) {
+    S.mode = m; S.pos = 0;
+    $("modeOrig").setAttribute("aria-pressed", String(m === "orig"));
+    $("modeRemix").setAttribute("aria-pressed", String(m === "remix"));
+    updateScrub(); drawCurrent();
+  }
+
+  /* ---------- 元件 ---------- */
+  function defComp() { return { show: true, scale: 1, spin: 0, hue: 0, jitter: 0 }; }
+  function buildComps() {
+    const used = new Map();
+    for (const fr of anim().frames) for (const t of itemsOf(fr)) used.set(t.name, (used.get(t.name) || 0) + 1);
+    const keep = S.comps; S.comps = {};
+    for (const n of used.keys()) S.comps[n] = keep[n] || defComp();
+    const box = $("comps"); box.textContent = "";
+    const names = [...used.keys()].sort((a, b) => used.get(b) - used.get(a));
+    for (const name of names) box.appendChild(compCard(name));
+  }
+  function compCard(name) {
+    const cp = S.comps[name];
+    const card = document.createElement("div"); card.className = "comp" + (cp.show ? "" : " off");
+    const head = document.createElement("div"); head.className = "head";
+    const c = document.createElement("canvas"); c.width = 96; c.height = 96;
+    const sp = spriteOf(name);
+    if (sp) { const g = c.getContext("2d"); const s = Math.min(88 / sp.width, 88 / sp.height); g.drawImage(sp, (96 - sp.width * s) / 2, (96 - sp.height * s) / 2, sp.width * s, sp.height * s); }
+    const info = document.createElement("div");
+    const nm = document.createElement("div"); nm.className = "cname"; nm.textContent = name.replace(/^.*-(body|bul\d?)_/, "");
+    const lab = document.createElement("label"); lab.className = "check";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = cp.show;
+    cb.onchange = () => { cp.show = cb.checked; card.classList.toggle("off", !cp.show); drawCurrent(); };
+    lab.append(cb, document.createTextNode(" 顯示"));
+    info.append(nm, lab);
+    head.append(c, info);
+    card.appendChild(head);
+    const mk = (label, key, min, max, step, fmt) => {
+      const l = document.createElement("label"); l.className = "slider";
+      const r = document.createElement("input"); r.type = "range"; r.min = min; r.max = max; r.step = step; r.value = cp[key];
+      const o = document.createElement("output"); o.textContent = fmt(cp[key]);
+      r.oninput = () => { cp[key] = +r.value; o.textContent = fmt(cp[key]); drawCurrent(); };
+      l.append(document.createTextNode(label), r, o);
+      return l;
+    };
+    card.append(
+      mk("縮放", "scale", 0.1, 4, 0.05, (v) => v.toFixed(2)),
+      mk("自轉", "spin", -45, 45, 1, (v) => v + "°"),
+      mk("色相", "hue", 0, 345, 15, (v) => v + "°"),
+      mk("亂抖", "jitter", 0, 40, 1, (v) => String(v)),
+    );
+    return card;
+  }
+
+  /* ---------- 剪輯片段 ---------- */
+  function defSeg(n, extra) {
+    return Object.assign({ start: 0, end: n - 1, speed: 1, repeat: 1, hold: 0, reverse: false, pingpong: false, mirror: "none",
+      rot0: 0, rot1: 0, zoom0: 1, zoom1: 1, focus: "center", shake: 0, invert: false, hue0: 0, hue1: 0 }, extra || {});
+  }
+  function presetPlain(n) { return [defSeg(n)]; }
+  function presetSpam(n) {
+    const a = Math.round(n * 0.4), b = Math.min(n - 1, a + 5);
+    return [defSeg(n, { end: a - 1 }), defSeg(n, { start: a, end: b, repeat: 6, mirror: "alt", zoom0: 1.5, zoom1: 1.5, focus: "body" }), defSeg(n, { start: a, end: n - 1 })];
+  }
+  function presetDemo(n) {
+    const p = (x) => Math.max(0, Math.min(n - 1, Math.round(n * x)));
+    const a = p(0.33), a2 = Math.min(n - 1, a + 5), hit = Math.min(n - 1, a + 4), b = p(0.4), c = p(0.67), d = p(0.84);
+    return [
+      defSeg(n, { start: 0, end: Math.max(0, a - 1), zoom0: 1.5, zoom1: 1.5, focus: "body" }),
+      defSeg(n, { start: a, end: a2, repeat: 4, zoom0: 1.6, zoom1: 1.6, focus: "body" }),
+      defSeg(n, { start: a, end: a2, repeat: 4, speed: 2, mirror: "alt", zoom0: 1.6, zoom1: 1.6, focus: "body" }),
+      defSeg(n, { start: hit, end: hit, hold: 3, invert: true, zoom0: 2.4, zoom1: 2.2, focus: "body", shake: 30 }),
+      defSeg(n, { start: hit, end: hit, hold: 6, zoom0: 2.2, zoom1: 1, focus: "body", shake: 18 }),
+      defSeg(n, { start: b, end: c, speed: 1.5, rot0: 0, rot1: 720 }),
+      defSeg(n, { start: b, end: c, speed: 3, reverse: true, hue0: 180, hue1: 180 }),
+      defSeg(n, { start: b, end: c, speed: 0.5, hue0: 0, hue1: 360 }),
+      defSeg(n, { start: p(0.52), end: Math.min(n - 1, p(0.52) + 4), repeat: 6, mirror: "alt", shake: 12 }),
+      defSeg(n, { start: c, end: d, pingpong: true, repeat: 2, speed: 2 }),
+      defSeg(n, { start: d, end: n - 1, zoom0: 1.5, zoom1: 1.5, focus: "body" }),
+      defSeg(n, { start: Math.max(0, n - 4), end: n - 1, repeat: 3, zoom0: 1, zoom1: 2.5, focus: "body" }),
+      defSeg(n, { start: n - 1, end: n - 1, hold: 12, zoom0: 2.5, zoom1: 2.5, rot0: 0, rot1: 15, focus: "body" }),
+    ];
+  }
+  function presetRandom(n) {
+    const R = Math.random, pick = (arr) => arr[Math.floor(R() * arr.length)];
+    const out = [];
+    for (let i = 0; i < 9; i++) {
+      const len = 2 + Math.floor(R() * 8), st = Math.floor(R() * Math.max(1, n - len));
+      const s = defSeg(n, { start: st, end: Math.min(n - 1, st + len) });
+      const kind = pick(["spam", "spin", "rev", "slow", "hit", "zoom", "color"]);
+      if (kind === "spam") Object.assign(s, { repeat: 3 + Math.floor(R() * 5), mirror: pick(["alt", "none"]), focus: "body", zoom0: 1.6, zoom1: 1.6 });
+      if (kind === "spin") Object.assign(s, { rot0: 0, rot1: pick([360, -360, 720]), speed: 1.5 });
+      if (kind === "rev") Object.assign(s, { reverse: true, speed: 2, pingpong: R() < 0.5 });
+      if (kind === "slow") Object.assign(s, { speed: 0.35, zoom0: 1, zoom1: 2, focus: "body" });
+      if (kind === "hit") Object.assign(s, { end: st, hold: 5, invert: true, shake: 28, zoom0: 2.4, zoom1: 2.4, focus: "body" });
+      if (kind === "zoom") Object.assign(s, { zoom0: 0.6, zoom1: 2.6, focus: "body", repeat: 2 });
+      if (kind === "color") Object.assign(s, { hue0: 0, hue1: 360, shake: 8, repeat: 2 });
+      out.push(s);
+    }
+    return out;
+  }
+  function saveSegs() {
+    if (S.unit && S.animName) store.set("segs:" + S.unit.id + ":" + S.partKey + ":" + S.animName, S.segs);
+  }
+  function segsChanged(rebuild = true) {
+    rebuildTimeline(); saveSegs();
+    if (S.mode === "remix") { updateScrub(); if (S.pos >= totalLen()) S.pos = 0; drawCurrent(); }
+    if (rebuild) renderSegs();
+  }
+  function segSummary(s) {
+    const bits = [s.hold > 0 ? `幀 ${s.start} 停格${s.hold}` : `幀 ${s.start}–${s.end}`];
+    if (+s.speed !== 1) bits.push(`${s.speed}×速`);
+    if (s.repeat > 1) bits.push(`連打${s.repeat}`);
+    if (s.reverse) bits.push("倒放");
+    if (s.pingpong) bits.push("來回");
+    if (s.mirror === "on") bits.push("翻轉");
+    if (s.mirror === "alt") bits.push("交替翻轉");
+    if (+s.rot0 || +s.rot1) bits.push("旋轉");
+    if (+s.zoom0 !== 1 || +s.zoom1 !== 1) bits.push("縮放");
+    if (+s.shake) bits.push("震動");
+    if (s.invert) bits.push("負片");
+    if (+s.hue0 || +s.hue1) bits.push("變色");
+    return bits.join("・");
+  }
+  function renderSegs() {
+    const box = $("segs"); box.textContent = "";
+    const n = anim() ? anim().frames.length : 1;
+    S.segs.forEach((s, i) => {
+      const el = document.createElement("div"); el.className = "seg";
+      const head = document.createElement("div"); head.className = "seg-head";
+      const title = document.createElement("div"); title.className = "seg-title";
+      title.innerHTML = `片段 ${i + 1}<span></span>`;
+      const sum = title.querySelector("span"); sum.textContent = segSummary(s);
+      head.appendChild(title);
+      const act = (label, fn, aria) => { const b = document.createElement("button"); b.className = "btn small"; b.textContent = label; b.setAttribute("aria-label", aria); b.onclick = fn; head.appendChild(b); };
+      act("▶", () => { const off = S.segs.slice(0, i).reduce((acc, x) => acc + segLength(x, n), 0); setMode("remix"); S.pos = off; setPlaying(true); }, "從這段開始預覽");
+      act("↑", () => { if (i > 0) { [S.segs[i - 1], S.segs[i]] = [S.segs[i], S.segs[i - 1]]; segsChanged(); } }, "上移");
+      act("↓", () => { if (i < S.segs.length - 1) { [S.segs[i + 1], S.segs[i]] = [S.segs[i], S.segs[i + 1]]; segsChanged(); } }, "下移");
+      act("複製", () => { S.segs.splice(i + 1, 0, JSON.parse(JSON.stringify(s))); segsChanged(); }, "複製片段");
+      act("刪除", () => { S.segs.splice(i, 1); if (!S.segs.length) S.segs = presetPlain(n); segsChanged(); }, "刪除片段");
+      el.appendChild(head);
+
+      const grid = document.createElement("div"); grid.className = "grid";
+      const num = (label, key, min, max, step) => {
+        const f = document.createElement("label"); f.className = "field"; f.textContent = label;
+        const inp = document.createElement("input"); inp.type = "number"; inp.min = min; inp.max = max; inp.step = step; inp.value = s[key];
+        inp.id = `seg${i}_${key}`;
+        inp.onchange = () => { s[key] = +inp.value; sum.textContent = segSummary(s); segsChanged(false); };
+        f.appendChild(inp); grid.appendChild(f);
+      };
+      const sel = (label, key, opts, parent) => {
+        const f = document.createElement("label"); f.className = "field"; f.textContent = label;
+        const se = document.createElement("select"); se.id = `seg${i}_${key}`;
+        for (const [v, t] of opts) { const o = document.createElement("option"); o.value = v; o.textContent = t; se.appendChild(o); }
+        se.value = s[key];
+        se.onchange = () => { s[key] = se.value; sum.textContent = segSummary(s); segsChanged(false); };
+        f.appendChild(se); (parent || grid).appendChild(f);
+      };
+      num("起始幀", "start", 0, n - 1, 1);
+      num("結束幀", "end", 0, n - 1, 1);
+      num("速度", "speed", 0.05, 8, 0.05);
+      num("連打次數", "repeat", 1, 50, 1);
+      num("停格幀數", "hold", 0, 300, 1);
+      sel("翻轉", "mirror", [["none", "不翻"], ["on", "翻轉"], ["alt", "每次交替"]]);
+      el.appendChild(grid);
+
+      const flags = document.createElement("div"); flags.className = "flags";
+      const ck = (label, key) => {
+        const l = document.createElement("label"); l.className = "check";
+        const c = document.createElement("input"); c.type = "checkbox"; c.checked = !!s[key]; c.id = `seg${i}_${key}`;
+        c.onchange = () => { s[key] = c.checked; sum.textContent = segSummary(s); segsChanged(false); };
+        l.append(c, document.createTextNode(" " + label)); flags.appendChild(l);
+      };
+      ck("倒放", "reverse"); ck("正放接倒放", "pingpong"); ck("負片閃光", "invert");
+      el.appendChild(flags);
+
+      const more = document.createElement("details"); more.className = "more";
+      const smy = document.createElement("summary"); smy.textContent = "鏡頭與特效"; more.appendChild(smy);
+      const g2 = document.createElement("div"); g2.className = "grid"; g2.style.marginTop = "8px";
+      const num2 = (label, key, min, max, step) => {
+        const f = document.createElement("label"); f.className = "field"; f.textContent = label;
+        const inp = document.createElement("input"); inp.type = "number"; inp.min = min; inp.max = max; inp.step = step; inp.value = s[key];
+        inp.id = `seg${i}_${key}`;
+        inp.onchange = () => { s[key] = +inp.value; sum.textContent = segSummary(s); segsChanged(false); };
+        f.appendChild(inp); g2.appendChild(f);
+      };
+      num2("縮放 起", "zoom0", 0.2, 8, 0.1); num2("縮放 迄", "zoom1", 0.2, 8, 0.1);
+      num2("旋轉 起°", "rot0", -3600, 3600, 15); num2("旋轉 迄°", "rot1", -3600, 3600, 15);
+      num2("震動", "shake", 0, 120, 1);
+      num2("色相 起°", "hue0", -720, 720, 15); num2("色相 迄°", "hue1", -720, 720, 15);
+      sel("鏡頭對準", "focus", [["center", "整個畫面"], ["body", "角色本體"]], g2);
+      more.appendChild(g2);
+      el.appendChild(more);
+      box.appendChild(el);
+    });
+  }
+  function segLength(s, n) { return expandSegs([s], n).length; }
+
+  /* ---------- 輸出 ---------- */
+  let downloadsApi = null;
+  (async () => { try { if (window.claude && window.claude.use) downloadsApi = await window.claude.use("downloads"); } catch {} })();
+  async function offerFile(blob, filename) {
+    const status = $("outStatus");
+    if (downloadsApi) {
+      try { await downloadsApi.save({ filename, data: blob }); status.textContent = `已存檔：${filename}`; return; }
+      catch (e) { if (e && e.code === "declined") { status.textContent = "已取消存檔。"; return; } }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    status.textContent = `已產生 ${filename}。若沒有自動下載，請改用 Safari 或 Chrome 開啟本頁。`;
+  }
+  function pickMime() {
+    if (!window.MediaRecorder) return null;
+    const list = ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    return list.find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || "";
+  }
+  async function record(kind) {
+    const status = $("outStatus");
+    if (!S.part) return;
+    const mime = pickMime();
+    if (mime === null || !cv.captureStream) { status.textContent = "這個瀏覽器不支援錄製影片。請改用電腦版 Chrome，或用 Python 腳本輸出。"; return; }
+    if (S.bg === "transparent") { setBg("white"); }
+    setMode(kind);
+    const loops = kind === "orig" ? +$("origLoops").value : 1;
+    const len = kind === "remix" ? S.timeline.length : anim().frames.length * loops;
+    const fps = kind === "remix" ? FPS_OUT : Math.round((S.part.anim_rate || 24) * S.speed) || 30;
+    const stream = cv.captureStream(fps);
+    let audioEl = null, actx = null;
+    if (S.audioUrl) {
+      try {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        audioEl = new Audio(S.audioUrl); audioEl.currentTime = +$("audioStart").value || 0;
+        const src = actx.createMediaElementSource(audioEl);
+        const dest = actx.createMediaStreamDestination();
+        src.connect(dest); src.connect(actx.destination);
+        dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+      } catch { audioEl = null; }
+    }
+    let rec;
+    try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined); }
+    catch { status.textContent = "無法啟動錄影。"; return; }
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    const done = new Promise((r) => (rec.onstop = r));
+    S.recording = true; $("recBadge").hidden = false;
+    document.querySelectorAll("#recRemix,#recOrig").forEach((b) => (b.disabled = true));
+    status.textContent = `錄製中…約 ${(len / fps).toFixed(1)} 秒`;
+    render(...firstArgs(kind, 0));
+    rec.start(250);
+    if (audioEl) { try { await audioEl.play(); } catch {} }
+    const t0 = performance.now();
+    await new Promise((resolve) => {
+      const step = () => {
+        const k = Math.floor((performance.now() - t0) / 1000 * fps);
+        if (k >= len) return resolve();
+        render(...firstArgs(kind, k));
+        $("frameNo").textContent = `${k} / ${len - 1}`;
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    rec.stop(); await done;
+    if (audioEl) { audioEl.pause(); }
+    if (actx) { try { actx.close(); } catch {} }
+    S.recording = false; $("recBadge").hidden = true;
+    document.querySelectorAll("#recRemix,#recOrig").forEach((b) => (b.disabled = false));
+    const type = (rec.mimeType || mime || "video/webm").split(";")[0];
+    const ext = type.includes("mp4") ? "mp4" : "webm";
+    const blob = new Blob(chunks, { type });
+    const clip = (CLIPS.find((c) => c.names.includes(S.animName)) || {}).key || S.animName;
+    await offerFile(blob, `${S.unit.id}_${clip}_${kind === "remix" ? "kichiku" : "orig"}.${ext}`);
+    S.pos = 0;
+  }
+  function firstArgs(kind, k) {
+    if (kind === "remix") { const st = remixState(k); return [st.idx, st.cam, st.fx, k]; }
+    const n = anim().frames.length, i = k % n;
+    return [i, origCam(i), {}, k];
+  }
+  async function savePng() {
+    drawCurrent();
+    const blob = await new Promise((r) => cv.toBlob(r, "image/png"));
+    if (blob) await offerFile(blob, `${S.unit.id}_${S.animName}_${Math.floor(S.pos)}.png`);
+  }
+
+  /* ---------- 介面事件 ---------- */
+  function showOverlay(t) { $("overlay").hidden = false; $("overlay").textContent = t; }
+  function hideOverlay() { $("overlay").hidden = true; }
+  function setBg(bg) {
+    S.bg = bg;
+    document.querySelectorAll("#bgs .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.bg === bg)));
+    cv.classList.toggle("checker", bg === "transparent");
+    store.set("bg", bg); drawCurrent();
+  }
+  function setSize(sz) {
+    const [w, h] = sz.split("x").map(Number);
+    cv.width = w; cv.height = h;
+    document.querySelectorAll("#sizes .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.size === sz)));
+    store.set("size", sz); drawCurrent();
+  }
+
+  $("qBtn").onclick = () => renderResults($("q").value);
+  $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") renderResults($("q").value); });
+  let qTimer; $("q").addEventListener("input", () => { clearTimeout(qTimer); qTimer = setTimeout(() => renderResults($("q").value), 250); });
+  $("playBtn").onclick = () => setPlaying(!S.playing);
+  $("modeOrig").onclick = () => setMode("orig");
+  $("modeRemix").onclick = () => setMode("remix");
+  $("scrub").addEventListener("input", () => { scrubbing = true; S.pos = +$("scrub").value; setPlaying(false); drawCurrent(); });
+  $("scrub").addEventListener("change", () => { scrubbing = false; });
+  const bindRange = (id, outId, fmt, fn) => { const r = $(id), o = $(outId); r.addEventListener("input", () => { o.textContent = fmt(+r.value); fn(+r.value); }); };
+  bindRange("speed", "speedOut", (v) => v.toFixed(2) + "×", (v) => (S.speed = v));
+  bindRange("camZoom", "camZoomOut", (v) => v.toFixed(2) + "×", (v) => { S.camZoom = v; drawCurrent(); });
+  bindRange("audioStart", "audioStartOut", (v) => v.toFixed(1) + "s", () => {});
+  bindRange("origLoops", "origLoopsOut", (v) => v + " 次", () => {});
+  $("follow").onchange = (e) => { S.follow = e.target.checked; drawCurrent(); };
+  $("loop").onchange = (e) => { S.loop = e.target.checked; if (S.loop && !S.playing) setPlaying(true); };
+  document.querySelectorAll("#bgs .chip").forEach((c) => (c.onclick = () => setBg(c.dataset.bg)));
+  document.querySelectorAll("#sizes .chip").forEach((c) => (c.onclick = () => setSize(c.dataset.size)));
+  document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => {
+    document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+    document.querySelectorAll("[data-panel]").forEach((p) => (p.hidden = p.dataset.panel !== b.dataset.tab));
+    if (b.dataset.tab === "remix" && S.mode !== "remix") setMode("remix");
+  }));
+  document.querySelectorAll("[data-preset]").forEach((b) => (b.onclick = () => {
+    const n = anim().frames.length;
+    S.segs = { plain: presetPlain, spam: presetSpam, demo: presetDemo, random: presetRandom }[b.dataset.preset](n);
+    segsChanged(); setMode("remix"); setPlaying(true);
+  }));
+  $("remixAnim").onchange = (e) => { selectAnim(e.target.value); setMode("remix"); setPlaying(true); };
+  $("segAdd").onclick = () => { const n = anim().frames.length; S.segs.push(defSeg(n)); segsChanged(); };
+  $("compReset").onclick = () => { for (const k in S.comps) S.comps[k] = defComp(); buildComps(); drawCurrent(); };
+  $("compShowAll").onclick = () => { for (const k in S.comps) S.comps[k].show = true; buildComps(); drawCurrent(); };
+  $("compChaos").onclick = () => {
+    const R = Math.random;
+    for (const k in S.comps) {
+      const c = S.comps[k];
+      c.scale = R() < 0.35 ? +(0.5 + R() * 2.5).toFixed(2) : 1;
+      c.spin = R() < 0.35 ? Math.round((R() - 0.5) * 60) : 0;
+      c.hue = R() < 0.4 ? Math.floor(R() * 24) * 15 : 0;
+      c.jitter = R() < 0.25 ? Math.round(R() * 20) : 0;
+      c.show = R() > 0.05;
+    }
+    buildComps(); drawCurrent();
+  };
+  $("recRemix").onclick = () => record("remix");
+  $("recOrig").onclick = () => record("orig");
+  $("savePng").onclick = savePng;
+  $("audioFile").onchange = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (S.audioUrl) URL.revokeObjectURL(S.audioUrl);
+    S.audioUrl = f ? URL.createObjectURL(f) : null;
+    $("outStatus").textContent = f ? `已載入音樂：${f.name}` : "";
+  };
+
+  // 拖曳平移
+  let drag = null;
+  cv.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, px: S.panX, py: S.panY }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const r = cv.getBoundingClientRect(), k = cv.width / r.width;
+    S.panX = drag.px + (e.clientX - drag.x) * k; S.panY = drag.py + (e.clientY - drag.y) * k; drawCurrent();
+  });
+  cv.addEventListener("pointerup", () => (drag = null));
+  cv.addEventListener("pointercancel", () => (drag = null));
+  cv.addEventListener("dblclick", () => { S.panX = 0; S.panY = 0; drawCurrent(); });
+
+  /* ---------- 啟動 ---------- */
+  (async () => {
+    setSize(store.get("size", "720x720"));
+    setBg(store.get("bg", "white"));
+    await loadIndex();
+    const want = store.get("unit", DEFAULT_UNIT);
+    let r = S.index.find((x) => x.id === want && available(x.id)) || S.index.find((x) => x.id === DEFAULT_UNIT && available(x.id)) || S.index.find((x) => available(x.id));
+    $("q").value = r ? (r.name.includes("風之痕") ? "風之痕" : r.name) : "";
+    renderResults($("q").value);
+    if (r) await selectUnit(r, { clip: "skill1" });
+    else showOverlay("目前無法讀取角色資料。");
+    setMode("remix");
+    requestAnimationFrame(loop);
+  })();
+})();
+</script>
+
+
+</body>
+</html>
