@@ -1,5 +1,10 @@
 # Ranger 惡搞工坊
 
+<p align="center">
+  <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.1-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.1"></a>
+</p>
+
 ### 👉 [點這裡開啟網站](https://xiaozhouzhoufly.github.io/ranger-kichiku/)
 
 輸入 LINE Rangers 角色名稱，播放技能、移動等動作，調整個別零件，剪成惡搞影片輸出。
