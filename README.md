@@ -1,5 +1,5 @@
 # Ranger 鬼畜工坊
-
+### 👉 [點這裡開啟網站](https://xiaozhouzhoufly.github.io/ranger-kichiku/)
 輸入 LINE Rangers 角色名稱，播放技能、移動等動作，調整個別零件，剪成鬼畜影片輸出。
 
 非官方粉絲工具，與 LINE 無關。角色美術版權屬於 LINE；動畫資料每日同步自 [LINE Rangers 資料站](https://rangerbook.warmycat.com/)（蚯蚓貓）的公開素材庫。
