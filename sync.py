@@ -396,10 +396,12 @@ def sync_stats(rows) -> None:
             for e in sk.get("技能組") or []:
                 kind = str(e.get("效果") or "")
                 coef = str(e.get("係數") or "")
-                if "傷害" not in kind or "*" not in coef:
+                # 傷害：名稱有「傷害」且有倍率；或係數是「攻擊力 × N%」（擊退、擊暈等也會打傷害）
+                is_dmg = ("傷害" in kind and "*" in coef) or coef.startswith("攻擊力*")
+                if not is_dmg or "恢復" in kind:
                     continue
                 effects.append({
-                    "t": "dot" if "持續" in kind else "hit",
+                    "t": "dot" if ("持續" in kind and "傷害" in kind) else "hit",
                     "c": _num(coef.split("*", 1)[1]) / 100,
                     "b": "hp" if coef.startswith("體力") else "atk",
                     "d": _num(e.get("有效時間")),

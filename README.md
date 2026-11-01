@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.3-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.3"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.4-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.4"></a>
 </p>
 
 <p align="center">
@@ -33,8 +33,8 @@
 | 類型 | 適合 | 怎麼打 |
 | --- | --- | --- |
 | **經典對戰** | 拍好看的對打片段 | 照招式順序輪流出招，可以選你來我往、隨機或自己排招 |
-| **真距離對戰** | 比較攻擊距離的差異 | 依各自的攻擊距離走位、同時出手，距離短的傷害較高 |
-| **原始數值對戰** | 用遊戲數值硬碰硬 | 照資料庫的等級、攻防、爆擊、閃避、技能倍率自動對戰，還有金手指可以改數值 |
+| **真距離對戰** | 比較攻擊距離的差異 | 依各自的攻擊距離走位、同時出手，距離短的一方有傷害加成 |
+| **原始數值對戰** | 用遊戲數值硬碰硬 | 照資料庫的等級、攻防、爆擊、閃避、技能倍率自動對戰，可調血量倍率，還有金手指可以改數值 |
 
 最後一擊會顯示 K.O.，再用淡灰慢動作重播一次。競技場可以換成白、黑、綠幕，或上傳自己的背景圖。
 
@@ -43,11 +43,11 @@
 - 單人與雙人畫面都能直接錄成影片，可選 16:9、1:1、9:16。
 - 可以加上自己的背景音樂。
 
-## 最近更新（v4.3）
+## 最近更新（v4.4）
 
-- 對戰類型分成三種：經典對戰、真距離對戰、原始數值對戰。
-- 真距離與原始數值對戰：只有體力跌破一半與倒下時才會擊退，並立刻打斷正在出的招。
-- 經典對戰：新增說明，輔助技能在經典對戰中同樣會造成傷害。
+- 真距離對戰：距離補償改為只加成短手，最多 1.8 倍，長短手互有輸贏。
+- 原始數值對戰：新增血量倍率；金手指可以改技能發動率、冷卻與倍率。
+- 修正擊退、擊暈類技能沒有傷害，以及錄影檔顯示長度錯誤的問題。
 
 📜 [完整版本更新日誌](CHANGELOG.md)
 

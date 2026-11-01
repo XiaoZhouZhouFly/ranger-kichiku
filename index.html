@@ -100,9 +100,12 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 .cheat-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; padding: 10px; border-radius: 10px; background: var(--paper); border: 1.5px solid var(--line); border-top: 5px solid var(--hot); align-content: start; }
 .cheat-col.is-b { border-top-color: var(--cool); }
 .hint.warn { color: var(--hot); font-weight: 700; }
+#rHpMul { align-items: center; }
+#rHpMul input { width: 84px; min-width: 0; padding: 5px 8px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font-size: 13px; }
 .cheat-col > strong, .cheat-col > .cheat-mult, .cheat-col > button { grid-column: 1 / -1; }
 .cheat-col strong { font-size: 13px; }
 .cheat-col .field.changed { color: var(--hot); font-weight: 700; }
+.cheat-col .cheat-sk { grid-column: 1 / -1; margin-top: 6px; padding-top: 6px; border-top: 1.5px dashed var(--line); font-size: 12px; font-weight: 900; }
 .cheat-mult { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
 .cheat-mult input { width: 72px; padding: 4px 6px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); }
 .moves-side { margin: 6px 0 0; font-size: 12px; font-weight: 900; color: var(--muted); }
@@ -476,7 +479,7 @@ footer a { color: inherit; }
               <label class="field">時間上限（秒）<input type="number" id="rTime" min="5" max="600" step="5" value="60"></label>
             </div>
             <div class="row"><button class="btn small" id="rRangeReset">攻擊距離恢復預設</button></div>
-            <p class="hint" id="rCompHint">距離補償：攻擊距離較短的一方傷害較高，例如距離 1：2 時傷害 2：1。</p>
+            <p class="hint" id="rCompHint">距離補償：只加成攻擊距離較短的一方，傷害 ×（1 + 0.8 × 距離差 ÷ 較長的距離），最多 1.8 倍；長手不變。例如距離 200 對 400，短手傷害 ×1.4；50 對 550，短手 ×1.73。</p>
             <p class="hint warn" id="rRawMissing" hidden>網站上還沒有原始數值資料（data/stats.json），所以原始數值對戰暫時不能用。請確認 GitHub 上的 sync.py 已換成新版，並等同步跑完再重新整理。</p>
             <p class="hint warn" id="rZeroWarn" hidden></p>
             <div id="rawBox" hidden class="group">
@@ -484,7 +487,18 @@ footer a { color: inherit; }
                 <label class="field">左方等級<span class="lv"><input type="number" id="rLv0" min="1" step="1"><span id="rLvMax0"></span></span></label>
                 <label class="field">右方等級<span class="lv"><input type="number" id="rLv1" min="1" step="1"><span id="rLvMax1"></span></span></label>
               </div>
-              <p class="hint">傷害 =（攻擊 − 對方防禦）× 倍率，最少 1 點，物理、魔法分開計算。照攻擊速度自動出招：先判定技能 1、再判定技能 2，都沒發動就普通攻擊。普通攻擊看「普攻閃避 − 普攻命中」，技能看「技能閃避 − 技能命中」。技能抗性會讓受到的技能傷害（含持續傷害）減少同樣的 %，不影響普通攻擊。爆擊只算普通攻擊；持續傷害每秒結算，多次附加可以疊加。不使用距離補償。<br>純輔助技能（沒有傷害倍率）發動時：50% 機率下一次攻擊 +50%，50% 機率回復 20% 體力。</p>
+              <p class="hint">傷害 =（攻擊 − 對方防禦）× 倍率，最少 1 點，物理、魔法分開計算。照攻擊速度自動出招：先判定技能 1、再判定技能 2，都沒發動就普通攻擊。普通攻擊看「普攻閃避 − 普攻命中」，技能看「技能閃避 − 技能命中」。技能抗性會讓受到的技能傷害（含持續傷害）減少同樣的 %，不影響普通攻擊。爆擊只算普通攻擊；持續傷害每秒結算，多次附加可以疊加。金手指裡也能改每個技能的發動率、冷卻與傷害倍率。不使用距離補償。<br>純輔助技能（沒有傷害倍率）發動時：50% 機率下一次攻擊 +50%，50% 機率回復 20% 體力。</p>
+              <div class="group hp-mul">
+                <span class="lbl">血量倍率</span>
+                <div class="chips" id="rHpMul">
+                  <button class="chip" data-hpmul="1">×1</button>
+                  <button class="chip" data-hpmul="5">×5</button>
+                  <button class="chip" data-hpmul="10">×10</button>
+                  <button class="chip" data-hpmul="20">×20</button>
+                  <input type="number" id="rHpMulIn" min="0.1" step="any" placeholder="自訂" aria-label="自訂血量倍率">
+                </div>
+                <p class="hint">雙方最大體力一起乘上倍率（金手指改過的體力也會再乘），戰鬥會拉長，普攻、防禦、爆擊、閃避更有影響。打到時間上限就比剩餘血量 %。</p>
+              </div>
               <div class="row"><button class="btn small primary" id="rRerun">重新對戰（重抽機率）</button></div>
               <details class="more" id="cheatBox"><summary>金手指（直接改數值）</summary><div class="cheat-grid" id="cheatGrid"></div></details>
             </div>
@@ -1492,6 +1506,151 @@ footer a { color: inherit; }
     setTimeout(() => URL.revokeObjectURL(url), 60000);
     status.textContent = `已產生 ${filename}。若沒有自動下載，請改用 Safari 或 Chrome 開啟本頁。`;
   }
+  /* ---------- 錄影檔補上正確的總長度 ----------
+     瀏覽器錄出的 MP4 是分段格式，檔頭總長度寫 0；WebM 則完全沒有總長度。
+     播放器只好自己猜，才會出現「顯示 3 秒、實際播十幾秒」。這裡在錄完後把長度寫回檔頭。 */
+  async function fixVideoDuration(blob, type, elapsedMs) {
+    try {
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      const out = type.includes("mp4") ? fixMp4Duration(buf, elapsedMs) : fixWebmDuration(buf, elapsedMs);
+      return out ? new Blob([out], { type }) : blob;
+    } catch { return blob; }
+  }
+  function fixMp4Duration(b, elapsedMs) {
+    const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+    const u32 = (o) => dv.getUint32(o), typ = (o) => String.fromCharCode(b[o + 4], b[o + 5], b[o + 6], b[o + 7]);
+    const kids = (start, end) => {
+      const list = [];
+      for (let o = start; o + 8 <= end;) {
+        let size = u32(o), hdr = 8;
+        if (size === 1) { size = Number(dv.getBigUint64(o + 8)); hdr = 16; }
+        if (size === 0) size = end - o;
+        if (size < 8 || o + size > end) break;
+        list.push({ o, size, hdr, t: typ(o) });
+        o += size;
+      }
+      return list;
+    };
+    const top = kids(0, b.length);
+    const moov = top.find((x) => x.t === "moov");
+    if (!moov) return null;
+    // 各軌道：timescale 與實際總長度（從每段 moof 的 tfdt + trun 加總）
+    const tracks = {};
+    const trex = {};
+    const moovKids = kids(moov.o + 8, moov.o + moov.size);
+    const mvhd = moovKids.find((x) => x.t === "mvhd");
+    const mvex = moovKids.find((x) => x.t === "mvex");
+    if (!mvhd) return null;
+    const mvVer = b[mvhd.o + 8];
+    const movieTs = mvVer === 1 ? u32(mvhd.o + 8 + 20) : u32(mvhd.o + 8 + 12);
+    if (mvex) for (const x of kids(mvex.o + 8, mvex.o + mvex.size)) if (x.t === "trex") trex[u32(x.o + 12)] = u32(x.o + 20);
+    const traks = moovKids.filter((x) => x.t === "trak").map((t) => {
+      const tk = kids(t.o + 8, t.o + t.size);
+      const tkhd = tk.find((x) => x.t === "tkhd"), mdia = tk.find((x) => x.t === "mdia");
+      const mdhd = mdia && kids(mdia.o + 8, mdia.o + mdia.size).find((x) => x.t === "mdhd");
+      const id = tkhd ? (b[tkhd.o + 8] === 1 ? u32(tkhd.o + 8 + 20) : u32(tkhd.o + 8 + 12)) : 0;
+      const ts = mdhd ? (b[mdhd.o + 8] === 1 ? u32(mdhd.o + 8 + 20) : u32(mdhd.o + 8 + 12)) : 0;
+      tracks[id] = { ts, end: 0 };
+      return { tkhd, mdhd, id };
+    });
+    for (const moof of top.filter((x) => x.t === "moof")) {
+      for (const traf of kids(moof.o + 8, moof.o + moof.size).filter((x) => x.t === "traf")) {
+        const tk = kids(traf.o + 8, traf.o + traf.size);
+        const tfhd = tk.find((x) => x.t === "tfhd"); if (!tfhd) continue;
+        const fl = u32(tfhd.o + 8) & 0xffffff, id = u32(tfhd.o + 12);
+        let p = tfhd.o + 16; if (fl & 1) p += 8; if (fl & 2) p += 4;
+        const defDur = fl & 8 ? u32(p) : (trex[id] || 0);
+        const tfdt = tk.find((x) => x.t === "tfdt");
+        let t = tfdt ? (b[tfdt.o + 8] === 1 ? Number(dv.getBigUint64(tfdt.o + 12)) : u32(tfdt.o + 12)) : 0;
+        for (const trun of tk.filter((x) => x.t === "trun")) {
+          const tf = u32(trun.o + 8) & 0xffffff, n = u32(trun.o + 12);
+          let q = trun.o + 16; if (tf & 1) q += 4; if (tf & 4) q += 4;
+          const per = ((tf & 0x100) ? 4 : 0) + ((tf & 0x200) ? 4 : 0) + ((tf & 0x400) ? 4 : 0) + ((tf & 0x800) ? 4 : 0);
+          for (let s = 0; s < n; s++) { t += (tf & 0x100) ? u32(q + s * per) : defDur; }
+        }
+        if (tracks[id]) tracks[id].end = Math.max(tracks[id].end, t);
+      }
+    }
+    let sec = 0;
+    for (const id in tracks) if (tracks[id].ts) sec = Math.max(sec, tracks[id].end / tracks[id].ts);
+    if (!(sec > 0)) sec = elapsedMs / 1000;
+    if (!(sec > 0)) return null;
+    const setDur = (box, val, verOff, v0, v1) => {
+      if (!box) return;
+      const o = box.o + 8;
+      if (b[o] === 1) dv.setBigUint64(o + v1, BigInt(Math.round(val))); else dv.setUint32(o + v0, Math.min(0xffffffff, Math.round(val)));
+    };
+    setDur(mvhd, sec * movieTs, 0, 16, 24);
+    for (const t of traks) {
+      const tr = tracks[t.id] || { ts: 0, end: 0 };
+      const tsec = tr.ts && tr.end ? tr.end / tr.ts : sec;
+      setDur(t.tkhd, tsec * movieTs, 0, 20, 28);
+      if (t.mdhd && tr.ts) setDur(t.mdhd, tsec * tr.ts, 0, 16, 24);
+    }
+    if (!mvex || kids(mvex.o + 8, mvex.o + mvex.size).some((x) => x.t === "mehd")) return b;
+    // 在 mvex 裡補上 mehd（分段影片的總長度），並更新 moov、mvex 的大小
+    const mehd = new Uint8Array(16), mv = new DataView(mehd.buffer);
+    mv.setUint32(0, 16); mehd.set([109, 101, 104, 100], 4); mv.setUint32(8, 0); mv.setUint32(12, Math.round(sec * movieTs));
+    if (moov.hdr !== 8 || mvex.hdr !== 8) return b;
+    const out = new Uint8Array(b.length + 16);
+    const at = mvex.o + 8;
+    out.set(b.subarray(0, at), 0); out.set(mehd, at); out.set(b.subarray(at), at + 16);
+    const ov = new DataView(out.buffer);
+    ov.setUint32(moov.o, moov.size + 16); ov.setUint32(mvex.o, mvex.size + 16);
+    return out;
+  }
+  function fixWebmDuration(b, elapsedMs) {
+    if (!(elapsedMs > 0)) return null;
+    const vint = (o) => {
+      const first = b[o]; let len = 1, mask = 0x80;
+      while (len <= 8 && !(first & mask)) { len++; mask >>= 1; }
+      if (len > 8) return null;
+      let val = first & (mask - 1), unknown = val === mask - 1;
+      for (let i = 1; i < len; i++) { val = val * 256 + b[o + i]; if (b[o + i] !== 255) unknown = false; }
+      return { len, val, unknown };
+    };
+    const idAt = (o) => { const v = vint(o); if (!v) return null; let id = 0; for (let i = 0; i < v.len; i++) id = id * 256 + b[o + i]; return { id, len: v.len }; };
+    // 找 Segment → Info
+    let o = 0;
+    while (o < b.length) {
+      const id = idAt(o); if (!id) return null; const sz = vint(o + id.len); if (!sz) return null;
+      const data = o + id.len + sz.len;
+      if (id.id === 0x18538067) { o = data; break; }
+      o = data + sz.val;
+    }
+    const segEnd = b.length;
+    while (o < segEnd) {
+      const id = idAt(o); if (!id) return null; const sz = vint(o + id.len); if (!sz) return null;
+      const data = o + id.len + sz.len;
+      if (id.id === 0x1549a966) {
+        const infoEnd = data + sz.val;
+        let scale = 1000000;
+        for (let p = data; p < infoEnd;) {
+          const cid = idAt(p), csz = vint(p + cid.len), cd = p + cid.len + csz.len;
+          if (cid.id === 0x2ad7b1) { let v = 0; for (let i = 0; i < csz.val; i++) v = v * 256 + b[cd + i]; scale = v || scale; }
+          if (cid.id === 0x4489) return null; // 已經有長度
+          p = cd + csz.val;
+        }
+        const dur = new Uint8Array(11), dd = new DataView(dur.buffer);
+        dur.set([0x44, 0x89, 0x88], 0); dd.setFloat64(3, elapsedMs * 1e6 / scale);
+        const newSize = sz.val + 11;
+        const head = new Uint8Array(id.len + 8);
+        head.set(b.subarray(o, o + id.len), 0);
+        head[id.len] = 0x01; let v = newSize; for (let i = 7; i >= 1; i--) { head[id.len + i] = v & 255; v = Math.floor(v / 256); }
+        const out = new Uint8Array(b.length - (id.len + sz.len) + head.length + 11);
+        let w = 0;
+        out.set(b.subarray(0, o), w); w += o;
+        out.set(head, w); w += head.length;
+        out.set(b.subarray(data, infoEnd), w); w += infoEnd - data;
+        out.set(dur, w); w += 11;
+        out.set(b.subarray(infoEnd), w);
+        return out;
+      }
+      if (sz.unknown) return null;
+      o = data + sz.val;
+    }
+    return null;
+  }
   function pickMime() {
     if (!window.MediaRecorder) return null;
     const list = ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
@@ -1529,7 +1688,7 @@ footer a { color: inherit; }
     document.querySelectorAll("#recRemix,#recOrig").forEach((b) => (b.disabled = true));
     status.textContent = `錄製中…約 ${(len / fps).toFixed(1)} 秒`;
     render(...firstArgs(kind, 0));
-    rec.start(250);
+    rec.start(250); const recT0 = performance.now();
     if (audioEl) { try { await audioEl.play(); } catch {} }
     const t0 = performance.now();
     await new Promise((resolve) => {
@@ -1543,14 +1702,15 @@ footer a { color: inherit; }
       requestAnimationFrame(step);
     });
     await new Promise((r) => setTimeout(r, 150));
-    rec.stop(); await done;
+    rec.stop(); await done; const recMs = performance.now() - recT0;
     if (audioEl) { audioEl.pause(); }
     if (actx) { try { actx.close(); } catch {} }
     S.recording = false; $("recBadge").hidden = true;
     document.querySelectorAll("#recRemix,#recOrig").forEach((b) => (b.disabled = false));
     const type = (rec.mimeType || mime || "video/webm").split(";")[0];
     const ext = type.includes("mp4") ? "mp4" : "webm";
-    const blob = new Blob(chunks, { type });
+    status.textContent = "整理影片中…";
+    const blob = await fixVideoDuration(new Blob(chunks, { type }), type, recMs);
     const clip = (CLIPS.find((c) => c.names.includes(S.animName)) || {}).key || S.animName;
     await offerFile(blob, `${S.unit.id}_${clip}_${kind === "remix" ? "egao" : "orig"}.${ext}`);
     S.pos = 0;
@@ -1662,7 +1822,7 @@ footer a { color: inherit; }
   const D = {
     f: [null, null], moves: [], dist: 320, speed: 1, shake: true, invert: false, numbers: true, bars: true, projOn: true, projs: [],
     finale: true, finalKey: null, koInfo: null, finalStart: 0, finalTarget: 1, bgImg: null, ground: 8, mode: "trade",
-    kind: "classic", raw: false, timeLimit: 60, range: [null, null], level: [null, null], cheat: [{}, {}],
+    kind: "classic", raw: false, timeLimit: 60, hpMul: 1, range: [null, null], level: [null, null], cheat: [{}, {}],
     frames: [[], []], timeMap: null, maxHp: [100, 100], resultK: -1, resultText: "", winner: -1, simLen: 0,
     tracks: [[], []], events: [], posKeys: [[], []], len: 1, cam: null,
     pos: 0, playing: true, recording: false, seed: 1,
@@ -2178,7 +2338,7 @@ footer a { color: inherit; }
   }
   function saveDuel() {
     store.set("duel", { a: D.f[0]?.r.id, b: D.f[1]?.r.id, moves: D.moves, dist: D.dist, speed: D.speed, shake: D.shake, invert: D.invert, numbers: D.numbers, bars: D.bars, seed: D.seed, projOn: D.projOn, mode: D.mode, finale: D.finale, ground: D.ground,
-      kind: D.kind, raw: D.raw, timeLimit: D.timeLimit, range: D.range, level: D.level, cheat: D.cheat });
+      kind: D.kind, raw: D.raw, timeLimit: D.timeLimit, hpMul: D.hpMul, range: D.range, level: D.level, cheat: D.cheat });
   }
   function fighterPanel(i) {
     const f = D.f[i];
@@ -2231,7 +2391,7 @@ footer a { color: inherit; }
     const done = new Promise((r) => (rec.onstop = r));
     D.recording = true; $("drecBadge").hidden = false; $("dRec").disabled = true;
     status.textContent = `錄製中…約 ${(D.len / DFPS).toFixed(1)} 秒`;
-    renderDuel(0); rec.start(250);
+    renderDuel(0); rec.start(250); const recT0 = performance.now();
     if (audioEl) { try { await audioEl.play(); } catch {} }
     const t0 = performance.now();
     await new Promise((resolve) => {
@@ -2244,13 +2404,14 @@ footer a { color: inherit; }
       requestAnimationFrame(step);
     });
     await new Promise((r) => setTimeout(r, 150));
-    rec.stop(); await done;
+    rec.stop(); await done; const recMs = performance.now() - recT0;
     if (audioEl) audioEl.pause();
     if (actx) { try { actx.close(); } catch {} }
     D.recording = false; $("drecBadge").hidden = true; $("dRec").disabled = false;
     const type = (rec.mimeType || mime || "video/webm").split(";")[0];
     const ext = type.includes("mp4") ? "mp4" : "webm";
-    await offerFile(new Blob(chunks, { type }), `duel_${D.f[0].r.id}_vs_${D.f[1].r.id}.${ext}`, status);
+    status.textContent = "整理影片中…";
+    await offerFile(await fixVideoDuration(new Blob(chunks, { type }), type, recMs), `duel_${D.f[0].r.id}_vs_${D.f[1].r.id}.${ext}`, status);
     D.pos = 0;
   }
   function setDuelSize(sz) {
@@ -2266,7 +2427,7 @@ footer a { color: inherit; }
     Object.assign(D, { dist: saved.dist || 320, speed: saved.speed || 1, shake: saved.shake !== false, invert: !!saved.invert, numbers: saved.numbers !== false, bars: saved.bars !== false, seed: saved.seed || 1, projOn: saved.projOn !== false });
     $("dProj").checked = D.projOn;
     D.finale = saved.finale !== false; $("dFinale").checked = D.finale;
-    D.kind = saved.kind || "classic"; D.raw = !!saved.raw; D.timeLimit = saved.timeLimit || 60;
+    D.kind = saved.kind || "classic"; D.raw = !!saved.raw; D.timeLimit = saved.timeLimit || 60; D.hpMul = saved.hpMul > 0 ? saved.hpMul : 1;
     D.range = saved.range || [null, null]; D.level = saved.level || [null, null]; D.cheat = saved.cheat || [{}, {}];
     D.ground = saved.ground ?? 8; $("dGround").value = D.ground; $("dGroundOut").textContent = D.ground + "%";
     try { const u = localStorage.getItem("rk_duelBg"); if (u) applyDuelBg(await loadDuelBg(u)); } catch {}
@@ -2402,7 +2563,20 @@ footer a { color: inherit; }
     Object.assign(out, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, dg: st.dg || 0, hit: st.hit || 0, sh: st.sh || 0, sdg: st.sdg || 0, sr: st.sr || 0, rg: rangeOf(i), mv: st.mv || f.proj.speed || 100 });
     const ov = D.cheat[i] || {};
     for (const [k] of CHEAT_FIELDS) if (ov[k] !== undefined && ov[k] !== "" && isFinite(+ov[k])) out[k] = +ov[k];
-    out.sk = st.sk || [];
+    // 技能：發動率、冷卻、各傷害效果的倍率都可以用金手指覆蓋
+    const osk = ov.sk || [];
+    out.sk = [0, 1].map((s) => {
+      const base = (st.sk || [])[s], o = osk[s] || {};
+      if (!base) return null;
+      const e = base.e.map((x, n) => (o.c && o.c[n] !== undefined && o.c[n] !== "" && isFinite(+o.c[n]) ? { ...x, c: +o.c[n] / 100 } : { ...x }));
+      // 輔助技能填了倍率，就當作有單次傷害
+      if (!base.e.length && o.c && +o.c[0] > 0) e.push({ t: "hit", c: +o.c[0] / 100, b: "atk", d: 0 });
+      return {
+        r: o.r !== undefined && o.r !== "" && isFinite(+o.r) ? +o.r : base.r,
+        cd: o.cd !== undefined && o.cd !== "" && isFinite(+o.cd) ? +o.cd : base.cd,
+        e,
+      };
+    });
     return out;
   }
   function basicStats(i) {
@@ -2425,10 +2599,14 @@ footer a { color: inherit; }
     const rng = mulberry32(D.seed * 7919 + 13);
     const raw = D.raw && !!(S.stats && Object.keys(S.stats).length);
     const st = [0, 1].map((i) => (raw ? rawStats(i) : basicStats(i)));
-    const maxHp = raw ? [st[0].hp, st[1].hp] : [100, 100];
+    const hpMul = raw ? Math.max(0.01, D.hpMul || 1) : 1;
+    const maxHp = raw ? [Math.max(1, st[0].hp * hpMul), Math.max(1, st[1].hp * hpMul)] : [100, 100];
     D.maxHp = maxHp;
     const r0 = st[0].rg, r1 = st[1].rg;
-    const comp = [2 * r1 / Math.max(1, r0 + r1), 2 * r0 / Math.max(1, r0 + r1)]; // 距離補償
+    // 距離補償：只加成短手，短手傷害 ×（1 + k × 距離差 ÷ 長手距離），k = 0.8，最多 1.8 倍
+    const COMP_K = 0.8;
+    const RL = Math.max(r0, r1), RS = Math.min(r0, r1), bonus = RL > 0 ? 1 + COMP_K * (RL - RS) / RL : 1;
+    const comp = r0 === r1 ? [1, 1] : r0 < r1 ? [bonus, 1] : [1, bonus];
     const gap0 = Math.max(r0, r1) + 100;
     const cd0 = gap0 + (A.w + B.w) / 2;
     const F = [0, 1].map((i) => ({
@@ -2456,6 +2634,13 @@ footer a { color: inherit; }
       if (t.hp <= 0) { t.pendingKb = true; t.kbKo = true; }
       else if (before >= half && t.hp < half) t.pendingKb = true;
     };
+    // 原始數值看金手指覆蓋後的技能；真距離看資料庫
+    const supportFor = (i, action) => {
+      if (action !== "skill1" && action !== "skill2") return false;
+      if (!raw) return isSupport(i, action);
+      const sk = st[i].sk[action === "skill1" ? 0 : 1];
+      return !sk || !sk.e.length;
+    };
     const pushEvent = (e) => { e.hp = [F[0].hp, F[1].hp]; D.events.push(e); };
 
     const applyHit = (h, k) => {
@@ -2463,7 +2648,7 @@ footer a { color: inherit; }
       if (t.dead) return;
       const sa = st[h.i], stt = st[h.j];
       let dmg = 0, label = "", crit = false;
-      if (h.action !== "attack" && (isSupport(h.i, h.action) || (raw && !(sa.sk[h.action === "skill1" ? 0 : 1] || { e: [] }).e.length))) {
+      if (h.action !== "attack" && supportFor(h.i, h.action)) {
         // 純輔助技能：不打對手、不會被閃避。一半機率下一擊 +50%，一半機率回復 20% 體力
         if (rng() < 0.5) { a.buff = true; pushEvent({ k, target: h.i, attacker: h.i, dmg: 0, label: "下一擊 +50%", fx: "buff", noFx: true }); }
         else { a.hp = Math.min(maxHp[h.i], a.hp + maxHp[h.i] * 0.2); pushEvent({ k, target: h.i, attacker: h.i, dmg: 0, label: "回復 20%", fx: "heal", noFx: true }); }
@@ -2579,7 +2764,7 @@ footer a { color: inherit; }
         const dur = startAnim(i, anim, k, false);
         me.busy = k + dur + (raw ? 0 : 4);
         let hitAt = k + Math.round(dur * hitFrac(f, anim)), rel = hitAt;
-        const cfg = D.projOn && !isSupport(i, action) ? f.proj[{ attack: "n", skill1: "s1", skill2: "s2" }[action]] : null;
+        const cfg = D.projOn && !supportFor(i, action) ? f.proj[{ attack: "n", skill1: "s1", skill2: "s2" }[action]] : null;
         const drp = cfg && f.bul[cfg.p];
         const flight = drp && pickAnim(drp.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
         if (drp && flight) {
@@ -2653,6 +2838,9 @@ footer a { color: inherit; }
     $("rCompHint").hidden = !!D.raw;
     $("movesBox").hidden = real && D.raw;
     $("rTime").value = D.timeLimit;
+    const hm = D.hpMul || 1;
+    document.querySelectorAll("#rHpMul .chip").forEach((c) => c.setAttribute("aria-pressed", String(+c.dataset.hpmul === hm)));
+    $("rHpMulIn").value = [1, 5, 10, 20].includes(hm) ? "" : hm;
     for (const i of [0, 1]) {
       if (!D.f[i]) continue;
       $(`rRange${i}`).value = rangeOf(i);
@@ -2687,6 +2875,37 @@ footer a { color: inherit; }
         };
         l.appendChild(inp); col.appendChild(l);
       }
+      // 技能：發動率、冷卻、傷害倍率
+      const baseSk = (S.stats[D.f[i].r.id] || {}).sk || [];
+      for (const sIdx of [0, 1]) {
+        const base = baseSk[sIdx], eff = sv.sk[sIdx];
+        const head = document.createElement("span"); head.className = "cheat-sk";
+        const nm = (D.f[i].skills && D.f[i].skills[sIdx] && D.f[i].skills[sIdx].name) || "";
+        head.textContent = `技能${sIdx + 1}` + (nm ? "・" + nm : "") + (base ? (eff.e.length ? "" : "（輔助）") : "：沒有這個技能");
+        col.appendChild(head);
+        if (!base) continue;
+        const ovs = () => { D.cheat[i] = D.cheat[i] || {}; D.cheat[i].sk = D.cheat[i].sk || [{}, {}]; D.cheat[i].sk[sIdx] = D.cheat[i].sk[sIdx] || {}; return D.cheat[i].sk[sIdx]; };
+        const cur = (((D.cheat[i] || {}).sk || [])[sIdx]) || {};
+        const addField = (label, value, changed, onset) => {
+          const l = document.createElement("label"); l.className = "field"; l.textContent = label;
+          const inp = document.createElement("input"); inp.type = "number"; inp.step = "any"; inp.min = "0";
+          inp.value = value === "" ? "" : +(+value).toFixed(2);
+          if (changed) l.classList.add("changed");
+          inp.onchange = () => { onset(inp.value === "" ? undefined : +inp.value); realChanged(); };
+          l.appendChild(inp); col.appendChild(l);
+        };
+        addField("發動率 %", eff.r, cur.r !== undefined, (v) => { ovs().r = v; });
+        addField("冷卻（秒）", eff.cd, cur.cd !== undefined, (v) => { ovs().cd = v; });
+        const setC = (n, v) => { const o = ovs(); o.c = o.c || []; o.c[n] = v; };
+        if (base.e.length) {
+          base.e.forEach((x, n) => {
+            const label = x.t === "dot" ? `持續傷害 %／秒（${x.d} 秒）` : `單擊倍率 %` + (base.e.length > 1 ? `（第 ${n + 1} 段）` : "");
+            addField(label, eff.e[n].c * 100, cur.c && cur.c[n] !== undefined, (v) => setC(n, v));
+          });
+        } else {
+          addField("單擊倍率 %（空白＝輔助）", cur.c && cur.c[0] > 0 ? cur.c[0] : "", cur.c && cur.c[0] !== undefined, (v) => setC(0, v));
+        }
+      }
       const mult = document.createElement("div"); mult.className = "cheat-mult";
       const lab = document.createElement("span"); lab.textContent = "體力／攻防 ×"; mult.appendChild(lab);
       for (const n of [10, 100, 1000]) {
@@ -2718,6 +2937,8 @@ footer a { color: inherit; }
 
 
   document.querySelectorAll("#dKinds .chip").forEach((c) => (c.onclick = () => setKind(c.dataset.kind)));
+  document.querySelectorAll("#rHpMul .chip").forEach((c) => (c.onclick = () => { D.hpMul = +c.dataset.hpmul; realChanged(); }));
+  $("rHpMulIn").onchange = () => { const v = +$("rHpMulIn").value; D.hpMul = v > 0 ? Math.min(100000, v) : 1; realChanged(); };
   $("rTime").onchange = () => { D.timeLimit = Math.max(5, Math.min(600, +$("rTime").value || 60)); realChanged(); };
   for (const i of [0, 1]) {
     $(`rRange${i}`).onchange = () => { const v = $(`rRange${i}`).value; D.range[i] = v === "" ? null : Math.max(0, +v); realChanged(); };
