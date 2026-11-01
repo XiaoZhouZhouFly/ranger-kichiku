@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Ranger 鬼畜工坊</title>
+<title>Ranger 惡搞工坊</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -50,7 +50,9 @@ body {
   padding-block: 12px 40px;
 }
 button, input, select { font: inherit; color: inherit; }
-.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 16px; }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.transport input[type="range"] { min-width: 0; }
+.search-row .btn { padding-inline: 10px; }
 header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .logo { font-family: var(--font-display); font-size: 22px; letter-spacing: .02em; line-height: 1; display: flex; align-items: baseline; gap: 8px; }
 .logo b { font-family: var(--font-body); font-weight: 900; font-size: 20px; background: var(--accent); color: var(--accent-ink); padding: 2px 8px; border: 2px solid var(--ink); border-radius: 6px; box-shadow: 2px 2px 0 var(--shadow); }
@@ -58,7 +60,7 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 .mode-note.off { color: var(--hot); }
 
 /* 搜尋 */
-.search { display: grid; gap: 10px; }
+.search { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .search-row { display: flex; gap: 8px; }
 .search-row input { flex: 1; min-width: 0; padding: 10px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--panel); }
 .results { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
@@ -72,13 +74,61 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 .r-card .meta { font-size: 10px; color: var(--muted); }
 .r-card.active .meta { color: var(--accent-ink); }
 
+/* 模式切換 */
+.brand { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.app-mode button { padding: 6px 12px; font-size: 14px; }
+
+/* 雙人對打 */
+.duel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.fighters { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: start; }
+.fighter { display: grid; gap: 8px; padding: 10px; border: 2px solid var(--ink); border-radius: 14px; background: var(--panel); min-width: 0; }
+.fighter.is-a { border-top: 6px solid var(--hot); }
+.fighter.is-b { border-top: 6px solid var(--cool); }
+.fighter input { width: 100%; min-width: 0; padding: 8px 10px; border: 2px solid var(--line); border-radius: 10px; background: var(--paper); }
+.f-head { display: grid; grid-template-columns: auto 44px minmax(0, 1fr); gap: 8px; align-items: center; }
+.side-tag { font-size: 11px; font-weight: 900; padding: 2px 8px; border-radius: 999px; color: #fff; }
+.is-a .side-tag { background: var(--hot); }
+.is-b .side-tag { background: var(--cool); }
+.f-thumb { width: 44px; height: 44px; border-radius: 8px; background: var(--stage); overflow: hidden; }
+.f-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.f-name { font-size: 15px; font-weight: 900; line-height: 1.25; overflow-wrap: anywhere; }
+.swap { align-self: center; }
+.fighter .results .r-card { width: 80px; }
+.duel-transport { grid-template-columns: auto minmax(0, 1fr) auto; }
+.moves { display: grid; gap: 6px; }
+.move { display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1.3fr); gap: 6px 8px; align-items: center; padding: 8px; border-radius: 10px; background: var(--paper); border: 1.5px solid var(--line); border-left: 6px solid var(--hot); }
+.move.is-b { border-left-color: var(--cool); }
+.move-no { font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: center; }
+.move select, .move input[type="number"] { width: 100%; min-width: 0; padding: 5px 6px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font-size: 13px; }
+.move .rep { grid-column: 2; display: grid; grid-template-columns: auto 56px; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.move .check { font-size: 12px; margin-right: auto; white-space: nowrap; }
+.move-tools { grid-column: 3; display: flex; align-items: center; gap: 6px; justify-content: flex-end; min-width: 0; }
+@media (max-width: 520px) { .fighters { grid-template-columns: minmax(0, 1fr); } .swap { justify-self: center; } }
+
+/* 角色庫 */
+.lib { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px; border: 2px solid var(--ink); border-radius: 14px; background: var(--panel); }
+.lib-head { display: flex; align-items: baseline; gap: 10px; }
+.lib-head strong { font-size: 17px; font-weight: 900; }
+.lib-head .btn { margin-left: auto; }
+.lib-count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lib-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.lib-filters select { font-family: var(--font-body); }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 8px; max-height: 60vh; overflow-y: auto; padding: 2px 2px 6px; }
+.lib-grid .r-card { width: auto; }
+.elem-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; border: 1px solid var(--ink); }
+#libMore { justify-self: center; }
+.r-card .thumb { position: relative; }
+.thumb .ph { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.thumb img.lazy { position: relative; opacity: 0; transition: opacity .2s; }
+.thumb img.lazy.ok { opacity: 1; }
+
 /* 主區 */
 .main { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 900px) {
   .main { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; }
   .stage-col { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
 }
-.stage-col { display: grid; gap: 10px; min-width: 0; }
+.stage-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
 .now { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .now h1 { font-size: 20px; margin: 0; font-weight: 900; text-wrap: balance; }
 .now .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
@@ -126,6 +176,20 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 input[type="range"] { width: 100%; accent-color: var(--hot); }
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
 .hint { font-size: 12px; color: var(--muted); margin: 0; }
+.skills { display: grid; gap: 8px; }
+.skill { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; align-items: start; text-align: left; width: 100%; padding: 10px; border: 2px solid var(--line); border-radius: 12px; background: var(--panel); cursor: pointer; }
+.skill:hover { border-color: var(--muted); }
+.skill[aria-pressed="true"] { border-color: var(--ink); box-shadow: 3px 3px 0 var(--shadow); }
+.skill .ico { width: 52px; height: 52px; border-radius: 10px; background: var(--stage); display: grid; place-items: center; overflow: hidden; font-weight: 900; color: var(--muted); border: 2px solid var(--ink); }
+.skill .ico img { width: 100%; height: 100%; object-fit: cover; }
+.skill .sk-body { display: grid; gap: 3px; min-width: 0; }
+.skill .sk-name { font-weight: 900; font-size: 15px; line-height: 1.3; }
+.skill .sk-slot { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); margin-right: 6px; vertical-align: 2px; }
+.skill .sk-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.skill .sk-desc { font-size: 13px; white-space: pre-line; color: var(--ink); margin-top: 4px; }
+.skill .sk-desc[hidden] { display: none; }
+.skill .sk-more { font-size: 12px; color: var(--cool); font-weight: 700; }
+.chip .chip-ico { width: 18px; height: 18px; border-radius: 4px; vertical-align: -4px; margin-right: 5px; }
 .big-select { width: 100%; padding: 9px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--panel); color: var(--ink); font-weight: 700; font-size: 15px; }
 details.more summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--muted); }
 
@@ -138,7 +202,7 @@ details.more summary { cursor: pointer; font-size: 13px; font-weight: 700; color
 .comp .cname { font-family: var(--font-mono); font-size: 10px; color: var(--muted); word-break: break-all; line-height: 1.3; }
 .comp .slider { grid-template-columns: 34px minmax(0, 1fr) 34px; font-size: 11px; }
 
-/* 鬼畜剪輯 */
+/* 惡搞剪輯 */
 .segs { display: grid; gap: 10px; }
 .seg { border: 1.5px solid var(--line); border-left: 6px solid var(--hot); border-radius: 10px; padding: 10px; background: var(--paper); display: grid; gap: 8px; }
 .seg:nth-child(3n+2) { border-left-color: var(--cool); }
@@ -163,19 +227,47 @@ footer a { color: inherit; }
 
 <div class="wrap">
   <header class="top">
-    <div class="logo">RANGER <b>鬼畜工坊</b></div>
+    <div class="brand">
+      <div class="logo">RANGER <b>惡搞工坊</b></div>
+      <div class="seg-mode app-mode" role="group" aria-label="模式">
+        <button id="appSingle" aria-pressed="true">單人</button>
+        <button id="appDuel" aria-pressed="false">雙人對打</button>
+      </div>
+    </div>
     <span class="mode-note" id="modeNote">正在連線資料庫…</span>
   </header>
 
-  <section class="search" aria-label="搜尋角色">
+  <section class="search" data-app="single" aria-label="搜尋角色">
     <div class="search-row">
       <input id="q" type="search" placeholder="輸入角色名稱，例如：風之痕、熊大、兔兔" autocomplete="off">
       <button class="btn primary" id="qBtn">搜尋</button>
+      <button class="btn" id="libBtn" aria-expanded="false">角色庫</button>
     </div>
     <div class="results" id="results" role="list"></div>
+    <div class="lib" id="library" hidden>
+      <div class="lib-head">
+        <strong>角色庫</strong>
+        <span class="lib-count" id="libCount"></span>
+        <button class="btn small" id="libClose">收起</button>
+      </div>
+      <div class="lib-filters">
+        <label class="field">星數<select id="fStar"></select></label>
+        <label class="field">類型<select id="fType"></select></label>
+        <label class="field">排序<select id="fSort">
+          <option value="new">最新登場</option>
+          <option value="old">最早登場</option>
+          <option value="star">星數高→低</option>
+          <option value="name">名稱</option>
+        </select></label>
+      </div>
+      <div class="chips" id="fElem" role="group" aria-label="屬性"></div>
+      <label class="check"><input type="checkbox" id="fNamed" checked> 只顯示有中文名稱的角色（未命名的多半是敵人或測試資料）</label>
+      <div class="lib-grid" id="libGrid" role="list"></div>
+      <button class="btn" id="libMore" hidden>顯示更多</button>
+    </div>
   </section>
 
-  <div class="main">
+  <div class="main" data-app="single">
     <div class="stage-col">
       <div class="now">
         <h1 id="unitName">—</h1>
@@ -190,19 +282,20 @@ footer a { color: inherit; }
         <button class="btn icon" id="playBtn" aria-label="暫停">❚❚</button>
         <div class="seg-mode" role="group" aria-label="播放模式">
           <button id="modeOrig" aria-pressed="true">原始</button>
-          <button id="modeRemix" aria-pressed="false">鬼畜</button>
+          <button id="modeRemix" aria-pressed="false">惡搞</button>
         </div>
         <input type="range" id="scrub" min="0" max="0" value="0" aria-label="播放位置">
         <span class="frame-no" id="frameNo">0 / 0</span>
       </div>
       <p class="hint">拖曳畫面可平移鏡頭，雙擊畫面重設。</p>
+      <div class="skills" id="skills" aria-label="技能"></div>
     </div>
 
     <div class="panel">
       <div class="tabs" role="tablist">
         <button role="tab" aria-selected="true" data-tab="act">動作</button>
         <button role="tab" aria-selected="false" data-tab="comp">元件</button>
-        <button role="tab" aria-selected="false" data-tab="remix">鬼畜剪輯</button>
+        <button role="tab" aria-selected="false" data-tab="remix">惡搞剪輯</button>
         <button role="tab" aria-selected="false" data-tab="out">輸出</button>
       </div>
 
@@ -238,7 +331,7 @@ footer a { color: inherit; }
       </div>
 
       <div class="tab-body" data-panel="comp" hidden>
-        <p class="hint">這裡列出目前動作用到的每個圖片零件。可以單獨隱藏、放大、讓它自己轉圈、變色或亂抖，原始與鬼畜模式都會套用。</p>
+        <p class="hint">這裡列出目前動作用到的每個圖片零件。可以單獨隱藏、放大、讓它自己轉圈、變色或亂抖，原始與惡搞模式都會套用。</p>
         <div class="row">
           <button class="btn small" id="compReset">全部重設</button>
           <button class="btn small hot" id="compChaos">隨機亂改</button>
@@ -249,7 +342,7 @@ footer a { color: inherit; }
 
       <div class="tab-body" data-panel="remix" hidden>
         <div class="group">
-          <label class="lbl" for="remixAnim">要鬼畜的動作</label>
+          <label class="lbl" for="remixAnim">要惡搞的動作</label>
           <select id="remixAnim" class="big-select"></select>
           <p class="hint">每個動作各自保存一套剪輯，切換時不會互相覆蓋。</p>
         </div>
@@ -258,8 +351,9 @@ footer a { color: inherit; }
           <div class="chips">
             <button class="chip" data-preset="plain">原速</button>
             <button class="chip" data-preset="spam">連打</button>
-            <button class="chip" data-preset="demo">鬼畜示範</button>
-            <button class="chip" data-preset="random">隨機鬼畜</button>
+            <button class="chip" data-preset="demo1">惡搞示範 1</button>
+            <button class="chip" data-preset="demo2">惡搞示範 2</button>
+            <button class="chip" data-preset="random">隨機惡搞</button>
           </div>
           <p class="hint">片段會依序接起來播放。幀號以目前選的動作為準，可以先在「原始」模式拖進度條找想連打的那幾幀。</p>
         </div>
@@ -288,7 +382,7 @@ footer a { color: inherit; }
         <div class="group">
           <span class="lbl">錄製</span>
           <div class="row">
-            <button class="btn hot" id="recRemix">錄製鬼畜版</button>
+            <button class="btn hot" id="recRemix">錄製惡搞版</button>
             <button class="btn" id="recOrig">錄製原始動作</button>
             <button class="btn" id="savePng">存目前畫面 PNG</button>
           </div>
@@ -298,6 +392,93 @@ footer a { color: inherit; }
       </div>
     </div>
   </div>
+
+  <section class="duel" data-app="duel" hidden aria-label="雙人對打">
+    <div class="fighters">
+      <div class="fighter is-a">
+        <div class="f-head">
+          <span class="side-tag">左方</span>
+          <div class="f-thumb" id="dthumb0"></div>
+          <strong class="f-name" id="dname0">未選擇</strong>
+        </div>
+        <input id="dq0" type="search" placeholder="搜尋左方角色" autocomplete="off">
+        <div class="results" id="dr0" role="list"></div>
+      </div>
+      <button class="btn small swap" id="dSwap" aria-label="左右交換">⇄</button>
+      <div class="fighter is-b">
+        <div class="f-head">
+          <span class="side-tag">右方</span>
+          <div class="f-thumb" id="dthumb1"></div>
+          <strong class="f-name" id="dname1">未選擇</strong>
+        </div>
+        <input id="dq1" type="search" placeholder="搜尋右方角色" autocomplete="off">
+        <div class="results" id="dr1" role="list"></div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="stage-col">
+        <div class="stage">
+          <canvas id="dcv" width="1280" height="720" aria-label="對打預覽"></canvas>
+          <div class="overlay" id="doverlay">載入中…</div>
+          <div class="rec-badge" id="drecBadge" hidden>● 錄製中</div>
+        </div>
+        <div class="transport duel-transport">
+          <button class="btn icon" id="dPlay" aria-label="暫停">❚❚</button>
+          <input type="range" id="dscrub" min="0" max="0" value="0" aria-label="播放位置">
+          <span class="frame-no" id="dframeNo">0 / 0</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="tab-body">
+          <div class="group">
+            <span class="lbl">招式編排</span>
+            <div class="chips">
+              <button class="chip" id="dPresetTrade">你來我往</button>
+              <button class="chip" id="dPresetRandom">隨機對打</button>
+            </div>
+            <p class="hint">由上往下依序出招，被打中的一方會自動播放被擊退。血量歸零就 K.O.，後面的招式不再執行。</p>
+            <span class="total" id="duelTotal"></span>
+          </div>
+          <div class="moves" id="moves"></div>
+          <div class="row">
+            <button class="btn small primary" id="dAddA">＋ 左方出招</button>
+            <button class="btn small primary" id="dAddB">＋ 右方出招</button>
+          </div>
+
+          <div class="group">
+            <span class="lbl">設定</span>
+            <label class="slider">雙方距離 <input type="range" id="dDist" min="120" max="700" step="10" value="320"><output id="dDistOut">320</output></label>
+            <label class="slider">整體速度 <input type="range" id="dSpeed" min="0.4" max="2.5" step="0.05" value="1"><output id="dSpeedOut">1.00×</output></label>
+            <div class="row">
+              <label class="check"><input type="checkbox" id="dShake" checked> 命中震動</label>
+              <label class="check"><input type="checkbox" id="dInvert"> 命中負片閃光</label>
+              <label class="check"><input type="checkbox" id="dNumbers" checked> 傷害數字</label>
+              <label class="check"><input type="checkbox" id="dBars" checked> 血條</label>
+            </div>
+            <div class="chips">
+              <button class="chip" data-bg="white" aria-pressed="true">白</button>
+              <button class="chip" data-bg="black" aria-pressed="false">黑</button>
+              <button class="chip" data-bg="green" aria-pressed="false">綠幕</button>
+            </div>
+          </div>
+
+          <div class="group">
+            <span class="lbl">輸出</span>
+            <div class="chips" id="dsizes">
+              <button class="chip" data-size="1280x720" aria-pressed="true">16:9 橫式</button>
+              <button class="chip" data-size="720x720" aria-pressed="false">1:1</button>
+              <button class="chip" data-size="720x1280" aria-pressed="false">9:16 直式</button>
+            </div>
+            <label class="field">背景音樂（選用）<input type="file" id="dAudio" accept="audio/*"></label>
+            <div class="row"><button class="btn hot" id="dRec">錄製對打影片</button></div>
+            <div class="status" id="dStatus"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <footer>
     動畫資料每日同步自 <a href="https://rangerbook.warmycat.com/" target="_blank" rel="noopener">LINE Rangers 資料站</a>（蚯蚓貓）的公開素材庫。角色美術版權屬於 LINE，輸出內容請自行斟酌用途。
@@ -327,7 +508,7 @@ footer a { color: inherit; }
   const ctx = cv.getContext("2d");
 
   const S = {
-    index: [],
+    index: [], skills: {},
     unit: null, meta: null, partKey: "body", part: null, animName: null,
     atlas: null, sprites: new Map(), hueCache: new Map(),
     bounds: null, centers: [],
@@ -390,6 +571,7 @@ footer a { color: inherit; }
     const note = $("modeNote");
     try { S.index = await fetchFirst([LOCAL + "units.json"], "json"); } catch { S.index = []; }
     S.index.forEach((r) => { if (!r.name) r.name = r.id; });
+    try { S.skills = await fetchFirst([LOCAL + "skills.json"], "json"); } catch { S.skills = {}; }
     let when = "";
     try {
       const st = await fetchFirst([LOCAL + "sync_state.json"], "json");
@@ -413,24 +595,90 @@ footer a { color: inherit; }
     list = S.index.filter((r) => (r.name || "").includes(q) || r.id.includes(q.toLowerCase()));
     list.sort((a, b) => (b.name === q) - (a.name === q) || (a.name === a.id) - (b.name === b.id));
     if (!list.length) { box.innerHTML = `<p class="hint">找不到「${escapeHtml(q)}」。試試較短的關鍵字。</p>`; return; }
-    for (const r of list.slice(0, 80)) {
-      const ok = available(r.id);
-      const b = document.createElement("button");
-      b.className = "r-card" + (ok ? "" : " locked") + (S.unit && S.unit.id === r.id ? " active" : "");
-      b.setAttribute("role", "listitem");
-      b.title = `${r.name}（${r.id}）`;
-      const th = document.createElement("div"); th.className = "thumb"; th.textContent = (r.name || "?").slice(-1);
-      const urls = thumbUrls(r.id); let i = 0;
-      const img = new Image(); img.alt = "";
-      img.onload = () => { th.textContent = ""; th.appendChild(img); };
-      img.onerror = () => { if (++i < urls.length) img.src = urls[i]; };
-      img.src = urls[0];
-      const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = r.name;
-      const mt = document.createElement("div"); mt.className = "meta"; mt.textContent = [r.star, r.element].filter(Boolean).join("・");
-      b.append(th, nm, mt);
-      b.addEventListener("click", () => { if (ok) selectUnit(r); });
-      box.appendChild(b);
+    for (const r of list.slice(0, 80)) box.appendChild(unitCard(r));
+  }
+  function unitCard(r, onPick, opts = {}) {
+    const b = document.createElement("button");
+    b.className = "r-card" + (S.unit && S.unit.id === r.id ? " active" : "");
+    b.setAttribute("role", "listitem");
+    b.title = `${r.name}（${r.id}）`;
+    const th = document.createElement("div"); th.className = "thumb";
+    const ph = document.createElement("span"); ph.className = "ph"; ph.textContent = (String(r.name || "?").replace(/\[.*?\]/g, "").trim() || "?").slice(-1);
+    const urls = thumbUrls(r.id); let i = 0;
+    const img = document.createElement("img"); img.alt = ""; img.loading = "lazy"; img.className = "lazy";
+    img.onload = () => { img.classList.add("ok"); ph.remove(); };
+    img.onerror = () => { if (++i < urls.length) img.src = urls[i]; };
+    img.src = urls[0];
+    th.append(ph, img);
+    const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = r.name;
+    const mt = document.createElement("div"); mt.className = "meta"; mt.textContent = [r.star, r.element].filter(Boolean).join("・");
+    b.append(th, nm, mt);
+    b.addEventListener("click", () => { if (opts.select !== false) selectUnit(r); if (onPick) onPick(r); });
+    return b;
+  }
+
+  /* ---------- 角色庫 ---------- */
+  const ELEM_COLOR = { 火: "#ff5a3c", 水: "#2f8cff", 木: "#3cbf5a", 光: "#ffd23f", 暗: "#7a4cc2", 無: "#b9bfd3" };
+  const LIB_PAGE = 60;
+  const lib = { shown: LIB_PAGE, elem: "", built: false };
+  function starKey(s) {
+    const m = /(\d+)星/.exec(s || ""); const n = m ? +m[1] : 0;
+    return n * 10 + (s.includes("超進化") ? 2 : s.includes("終極進化") ? 1 : 0);
+  }
+  function buildLibFilters() {
+    if (lib.built) return; lib.built = true;
+    const saved = store.get("lib", {});
+    const fill = (sel, label, values) => {
+      sel.textContent = "";
+      const all = document.createElement("option"); all.value = ""; all.textContent = label; sel.appendChild(all);
+      for (const v of values) { const o = document.createElement("option"); o.value = v; o.textContent = v; sel.appendChild(o); }
+    };
+    const stars = [...new Set(S.index.map((r) => r.star).filter(Boolean))].sort((a, b) => starKey(b) - starKey(a));
+    const types = [...new Set(S.index.map((r) => r.type).filter(Boolean))];
+    fill($("fStar"), "全部", stars); fill($("fType"), "全部", types);
+    $("fStar").value = saved.star || ""; $("fType").value = saved.type || ""; $("fSort").value = saved.sort || "new";
+    $("fNamed").checked = saved.named !== false;
+    lib.elem = saved.elem || "";
+    const eb = $("fElem"); eb.textContent = "";
+    const elems = ["", ...["火", "水", "木", "光", "暗", "無"].filter((e) => S.index.some((r) => r.element === e))];
+    for (const e of elems) {
+      const c = chip("", lib.elem === e); c.dataset.elem = e;
+      if (e) { const d = document.createElement("span"); d.className = "elem-dot"; d.style.background = ELEM_COLOR[e]; c.appendChild(d); }
+      c.appendChild(document.createTextNode(e || "全部屬性"));
+      c.onclick = () => { lib.elem = e; eb.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.elem === e))); resetLib(); };
+      eb.appendChild(c);
     }
+    ["fStar", "fType", "fSort", "fNamed"].forEach((id) => $(id).addEventListener("change", resetLib));
+  }
+  function libList() {
+    const star = $("fStar").value, type = $("fType").value, sort = $("fSort").value, named = $("fNamed").checked;
+    let list = S.index.filter((r) => (!star || r.star === star) && (!type || r.type === type) && (!lib.elem || r.element === lib.elem) && (!named || r.name !== r.id));
+    const d = (r) => r.date || "0000";
+    const cmp = {
+      new: (a, b) => d(b).localeCompare(d(a)) || b.id.localeCompare(a.id),
+      old: (a, b) => d(a).localeCompare(d(b)) || a.id.localeCompare(b.id),
+      star: (a, b) => starKey(b.star) - starKey(a.star) || d(b).localeCompare(d(a)),
+      name: (a, b) => a.name.localeCompare(b.name, "zh-Hant"),
+    }[sort];
+    return list.sort(cmp);
+  }
+  function renderLib() {
+    const list = libList(), grid = $("libGrid");
+    grid.textContent = "";
+    $("libCount").textContent = `共 ${list.length} 隻`;
+    if (!list.length) { grid.innerHTML = `<p class="hint">沒有符合條件的角色，試著放寬篩選。</p>`; }
+    const pick = () => document.querySelector(".stage").scrollIntoView({ behavior: "smooth", block: "center" });
+    for (const r of list.slice(0, lib.shown)) grid.appendChild(unitCard(r, pick));
+    $("libMore").hidden = list.length <= lib.shown;
+    $("libMore").textContent = `顯示更多（還有 ${Math.max(0, list.length - lib.shown)} 隻）`;
+    store.set("lib", { star: $("fStar").value, type: $("fType").value, sort: $("fSort").value, named: $("fNamed").checked, elem: lib.elem });
+  }
+  function resetLib() { lib.shown = LIB_PAGE; renderLib(); $("libGrid").scrollTop = 0; }
+  function toggleLib(open) {
+    $("library").hidden = !open; $("results").hidden = open;
+    $("libBtn").setAttribute("aria-expanded", String(open));
+    $("libBtn").classList.toggle("primary", open); $("qBtn").classList.toggle("primary", !open);
+    if (open) { buildLibFilters(); renderLib(); }
   }
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
@@ -446,6 +694,7 @@ footer a { color: inherit; }
       $("unitTag").textContent = [r.id, r.star, r.type, r.element].filter(Boolean).join("・");
       store.set("unit", r.id);
       buildParts();
+      renderSkills();
       const pk = opts.part && meta.parts[opts.part] ? opts.part : (meta.parts.body ? "body" : Object.keys(meta.parts)[0]);
       await selectPart(pk, opts.clip || "skill1");
       document.querySelectorAll(".r-card").forEach((el) => el.classList.toggle("active", el.title.includes(`（${r.id}）`)));
@@ -453,6 +702,49 @@ footer a { color: inherit; }
     } catch (e) {
       showOverlay(`讀取 ${r.name} 失敗：${e.message || e}`);
     }
+  }
+  const skillIconUrl = (icon) => icon ? `${LOCAL}res/skill_icon/${icon}` : "";
+  function unitSkills() { return (S.unit && S.skills[S.unit.id]) || []; }
+  function renderSkills() {
+    const box = $("skills"); box.textContent = "";
+    const list = unitSkills();
+    list.forEach((sk, i) => {
+      if (!sk) return;
+      const key = i === 0 ? "skill1" : "skill2";
+      const card = document.createElement("button");
+      card.className = "skill"; card.dataset.clip = key; card.type = "button";
+      card.setAttribute("aria-pressed", "false");
+      const ico = document.createElement("div"); ico.className = "ico"; ico.textContent = sk.name.slice(0, 1);
+      if (sk.icon) {
+        const img = new Image(); img.alt = "";
+        img.onload = () => { ico.textContent = ""; ico.appendChild(img); };
+        img.src = skillIconUrl(sk.icon);
+      }
+      const body = document.createElement("div"); body.className = "sk-body";
+      const nm = document.createElement("div"); nm.className = "sk-name";
+      const slot = document.createElement("span"); slot.className = "sk-slot"; slot.textContent = i === 0 ? "技能1" : "技能2";
+      nm.append(slot, document.createTextNode(sk.name));
+      const meta = document.createElement("div"); meta.className = "sk-meta";
+      [["發動", sk.rate], ["冷卻", sk.cooldown], ["目標", sk.trigger]].forEach(([k, v]) => {
+        if (!v) return; const sp = document.createElement("span"); sp.textContent = `${k} ${v}`; meta.appendChild(sp);
+      });
+      const desc = document.createElement("div"); desc.className = "sk-desc"; desc.textContent = sk.desc; desc.hidden = true;
+      const more = document.createElement("span"); more.className = "sk-more"; more.textContent = sk.desc ? "看技能說明" : "";
+      more.addEventListener("click", (e) => { e.stopPropagation(); desc.hidden = !desc.hidden; more.textContent = desc.hidden ? "看技能說明" : "收起說明"; });
+      body.append(nm, meta, more, desc);
+      card.append(ico, body);
+      card.onclick = async () => {
+        if (S.partKey !== "body" && S.meta.parts.body) await selectPart("body", key);
+        const a = resolveClip(key);
+        if (a) { selectAnim(a); setPlaying(true); }
+      };
+      box.appendChild(card);
+    });
+    markSkill();
+  }
+  function markSkill() {
+    const cur = currentClipKey();
+    document.querySelectorAll("#skills .skill").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.clip === cur && S.partKey === "body")));
   }
   function buildParts() {
     const box = $("parts"); box.textContent = "";
@@ -498,6 +790,12 @@ footer a { color: inherit; }
       const b = chip(c.label, false);
       b.dataset.anim = a || "";
       if (a) { const n = document.createElement("span"); n.className = "n"; n.textContent = S.part.animations[a].frame_count; b.appendChild(n); }
+      const sk = c.key === "skill1" ? unitSkills()[0] : c.key === "skill2" ? unitSkills()[1] : null;
+      if (sk && sk.icon && a) {
+        const im = new Image(); im.className = "chip-ico"; im.alt = ""; im.src = skillIconUrl(sk.icon);
+        im.onerror = () => im.remove(); b.prepend(im);
+        b.title = sk.name;
+      }
       b.disabled = !a;
       b.onclick = () => a && selectAnim(a);
       box.appendChild(b);
@@ -508,7 +806,8 @@ footer a { color: inherit; }
       const a = resolveClip(c.key);
       if (!a) continue;
       const o = document.createElement("option"); o.value = a;
-      o.textContent = `${c.label}（${S.part.animations[a].frame_count} 幀）`;
+      const skn = c.key === "skill1" ? unitSkills()[0] : c.key === "skill2" ? unitSkills()[1] : null;
+      o.textContent = `${c.label}${skn ? "・" + skn.name : ""}（${S.part.animations[a].frame_count} 幀）`;
       og1.appendChild(o);
     }
     sel.appendChild(og1);
@@ -534,13 +833,14 @@ footer a { color: inherit; }
     document.querySelectorAll("#clips .chip, #rawClips .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.anim === name)));
     const sel = $("remixAnim");
     if ([...sel.options].some((o) => o.value === name)) sel.value = name;
+    markSkill();
     const frames = anim().frames;
     computeBounds(frames);
     S.centers = frames.map(bodyCenter);
     S.pos = 0; S.panX = 0; S.panY = 0;
     buildComps();
     const saved = store.get("segs:" + S.unit.id + ":" + S.partKey + ":" + name, null);
-    S.segs = saved && saved.length ? saved : presetDemo(frames.length);
+    S.segs = saved && saved.length ? saved : presetDemo1(frames.length);
     renderSegs();
     rebuildTimeline();
     updateScrub();
@@ -693,11 +993,26 @@ footer a { color: inherit; }
     return { fx: f.x, fy: f.y, zoom: fitScale() * S.camZoom, rot: 0, mirror: false, dx: 0, dy: 0 };
   }
   const lerp = (a, b, t) => a + (b - a) * t;
+  // 「角色（固定鏡頭）」：取這段用到的幀的角色平均位置，鏡頭不跟著零件晃動
+  const fixedCache = new WeakMap();
+  function fixedCenter(s) {
+    const n = anim().frames.length;
+    const key = `${S.unit?.id}|${S.animName}|${s.start}|${s.end}|${s.hold}`;
+    const hit = fixedCache.get(s);
+    if (hit && hit.key === key) return hit.c;
+    let a = clampInt(s.start, 0, n - 1), b = clampInt(s.hold > 0 ? s.start : s.end, 0, n - 1);
+    if (b < a) [a, b] = [b, a];
+    let sx = 0, sy = 0, cnt = 0;
+    for (let i = a; i <= b; i++) { const c = centerAt(i); sx += c.x; sy += c.y; cnt++; }
+    const c = cnt ? { x: sx / cnt, y: sy / cnt } : { x: S.bounds.cx, y: S.bounds.cy };
+    fixedCache.set(s, { key, c });
+    return c;
+  }
   function remixState(k) {
     const e = S.timeline[Math.max(0, Math.min(S.timeline.length - 1, k))];
     if (!e) return null;
     const s = e.seg, t = e.t;
-    const f = s.focus === "body" ? centerAt(e.idx) : { x: S.bounds.cx, y: S.bounds.cy };
+    const f = s.focus === "body" ? centerAt(e.idx) : s.focus === "bodyFixed" ? fixedCenter(s) : { x: S.bounds.cx, y: S.bounds.cy };
     const sh = +s.shake || 0;
     return {
       idx: e.idx,
@@ -767,6 +1082,7 @@ footer a { color: inherit; }
     if (!S.lastTs) S.lastTs = ts;
     const dt = Math.min(0.1, (ts - S.lastTs) / 1000);
     S.lastTs = ts;
+    if (S.app === "duel") { duelTick(dt); return; }
     if (!S.part || S.recording) return;
     if (S.playing) {
       const len = totalLen();
@@ -844,7 +1160,17 @@ footer a { color: inherit; }
     const a = Math.round(n * 0.4), b = Math.min(n - 1, a + 5);
     return [defSeg(n, { end: a - 1 }), defSeg(n, { start: a, end: b, repeat: 6, mirror: "alt", zoom0: 1.5, zoom1: 1.5, focus: "body" }), defSeg(n, { start: a, end: n - 1 })];
   }
-  function presetDemo(n) {
+  function presetDemo1(n) {
+    const segs = presetDemo2(n);
+    segs[0] = Object.assign(segs[0], { focus: "bodyFixed" });
+    segs[8] = Object.assign(segs[8], { mirror: "none" }); // 後段連打不再左右來回翻轉
+    const L = segs.length;
+    segs[L - 3] = Object.assign(segs[L - 3], { focus: "bodyFixed" });
+    segs[L - 2] = Object.assign(segs[L - 2], { focus: "bodyFixed" });
+    segs[L - 1] = Object.assign(segs[L - 1], { focus: "bodyFixed", rot0: 0, rot1: 0 });
+    return segs;
+  }
+  function presetDemo2(n) {
     const p = (x) => Math.max(0, Math.min(n - 1, Math.round(n * x)));
     const a = p(0.33), a2 = Math.min(n - 1, a + 5), hit = Math.min(n - 1, a + 4), b = p(0.4), c = p(0.67), d = p(0.84);
     return [
@@ -970,7 +1296,7 @@ footer a { color: inherit; }
       num2("旋轉 起°", "rot0", -3600, 3600, 15); num2("旋轉 迄°", "rot1", -3600, 3600, 15);
       num2("震動", "shake", 0, 120, 1);
       num2("色相 起°", "hue0", -720, 720, 15); num2("色相 迄°", "hue1", -720, 720, 15);
-      sel("鏡頭對準", "focus", [["center", "整個畫面"], ["body", "角色本體"]], g2);
+      sel("鏡頭對準", "focus", [["center", "整個畫面"], ["bodyFixed", "角色（固定）"], ["body", "角色（跟隨）"]], g2);
       more.appendChild(g2);
       el.appendChild(more);
       box.appendChild(el);
@@ -981,8 +1307,7 @@ footer a { color: inherit; }
   /* ---------- 輸出 ---------- */
   let downloadsApi = null;
   (async () => { try { if (window.claude && window.claude.use) downloadsApi = await window.claude.use("downloads"); } catch {} })();
-  async function offerFile(blob, filename) {
-    const status = $("outStatus");
+  async function offerFile(blob, filename, status = $("outStatus")) {
     if (downloadsApi) {
       try { await downloadsApi.save({ filename, data: blob }); status.textContent = `已存檔：${filename}`; return; }
       catch (e) { if (e && e.code === "declined") { status.textContent = "已取消存檔。"; return; } }
@@ -1053,7 +1378,7 @@ footer a { color: inherit; }
     const ext = type.includes("mp4") ? "mp4" : "webm";
     const blob = new Blob(chunks, { type });
     const clip = (CLIPS.find((c) => c.names.includes(S.animName)) || {}).key || S.animName;
-    await offerFile(blob, `${S.unit.id}_${clip}_${kind === "remix" ? "kichiku" : "orig"}.${ext}`);
+    await offerFile(blob, `${S.unit.id}_${clip}_${kind === "remix" ? "egao" : "orig"}.${ext}`);
     S.pos = 0;
   }
   function firstArgs(kind, k) {
@@ -1072,7 +1397,7 @@ footer a { color: inherit; }
   function hideOverlay() { $("overlay").hidden = true; }
   function setBg(bg) {
     S.bg = bg;
-    document.querySelectorAll("#bgs .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.bg === bg)));
+    document.querySelectorAll("[data-bg]").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.bg === bg)));
     cv.classList.toggle("checker", bg === "transparent");
     store.set("bg", bg); drawCurrent();
   }
@@ -1083,9 +1408,12 @@ footer a { color: inherit; }
     store.set("size", sz); drawCurrent();
   }
 
-  $("qBtn").onclick = () => renderResults($("q").value);
+  $("qBtn").onclick = () => { toggleLib(false); renderResults($("q").value); };
+  $("libBtn").onclick = () => toggleLib($("library").hidden);
+  $("libClose").onclick = () => toggleLib(false);
+  $("libMore").onclick = () => { lib.shown += LIB_PAGE; renderLib(); };
   $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") renderResults($("q").value); });
-  let qTimer; $("q").addEventListener("input", () => { clearTimeout(qTimer); qTimer = setTimeout(() => renderResults($("q").value), 250); });
+  let qTimer; $("q").addEventListener("input", () => { clearTimeout(qTimer); qTimer = setTimeout(() => { toggleLib(false); renderResults($("q").value); }, 250); });
   $("playBtn").onclick = () => setPlaying(!S.playing);
   $("modeOrig").onclick = () => setMode("orig");
   $("modeRemix").onclick = () => setMode("remix");
@@ -1098,7 +1426,7 @@ footer a { color: inherit; }
   bindRange("origLoops", "origLoopsOut", (v) => v + " 次", () => {});
   $("follow").onchange = (e) => { S.follow = e.target.checked; drawCurrent(); };
   $("loop").onchange = (e) => { S.loop = e.target.checked; if (S.loop && !S.playing) setPlaying(true); };
-  document.querySelectorAll("#bgs .chip").forEach((c) => (c.onclick = () => setBg(c.dataset.bg)));
+  document.querySelectorAll("[data-bg]").forEach((c) => (c.onclick = () => setBg(c.dataset.bg)));
   document.querySelectorAll("#sizes .chip").forEach((c) => (c.onclick = () => setSize(c.dataset.size)));
   document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
@@ -1107,7 +1435,7 @@ footer a { color: inherit; }
   }));
   document.querySelectorAll("[data-preset]").forEach((b) => (b.onclick = () => {
     const n = anim().frames.length;
-    S.segs = { plain: presetPlain, spam: presetSpam, demo: presetDemo, random: presetRandom }[b.dataset.preset](n);
+    S.segs = { plain: presetPlain, spam: presetSpam, demo1: presetDemo1, demo2: presetDemo2, random: presetRandom }[b.dataset.preset](n);
     segsChanged(); setMode("remix"); setPlaying(true);
   }));
   $("remixAnim").onchange = (e) => { selectAnim(e.target.value); setMode("remix"); setPlaying(true); };
@@ -1148,6 +1476,479 @@ footer a { color: inherit; }
   cv.addEventListener("pointercancel", () => (drag = null));
   cv.addEventListener("dblclick", () => { S.panX = 0; S.panY = 0; drawCurrent(); });
 
+  /* ---------- 雙人對打 ---------- */
+  const dcv = $("dcv");
+  const dctx = dcv.getContext("2d");
+  const DFPS = 30;
+  const DMG = { attack: 15, skill1: 30, skill2: 40 };
+  const ACTION_LABEL = { move: "移動接近", attack: "一般攻擊", skill1: "技能1", skill2: "技能2" };
+  const D = {
+    f: [null, null], moves: [], dist: 320, speed: 1, shake: true, invert: false, numbers: true, bars: true,
+    tracks: [[], []], events: [], posKeys: [[], []], len: 1, cam: null,
+    pos: 0, playing: true, recording: false, seed: 1,
+  };
+
+  async function loadFighter(r) {
+    let meta;
+    try { meta = await fetchGzJson(`${LOCAL}units/${r.id}.json.gz`); }
+    catch { meta = await fetchFirst([`${LOCAL}units/${r.id}.json`], "json"); }
+    const part = meta.parts.body || meta.parts[Object.keys(meta.parts)[0]];
+    const atlas = await blobToImage(await fetchFirst([LOCAL + part.png], "blob"));
+    const f = { r, part, atlas, sprites: new Map() };
+    const clip = (key) => { const c = CLIPS.find((x) => x.key === key); return c ? c.names.find((n) => part.animations[n]?.frames?.length) || null : null; };
+    f.clips = { idle: clip("idle"), move: clip("move"), attack: clip("attack"), skill1: clip("skill1"), skill2: clip("skill2"), knockback: clip("knockback") };
+    f.skills = S.skills[r.id] || [];
+    f.lb = fBounds(f, f.clips.idle || f.clips.attack);
+    // 讓角色以身體中心站位、腳踩在地面上（原始素材的原點不在腳底中央）
+    f.ox = -(f.lb.x0 + f.lb.x1) / 2; f.oy = -f.lb.y1;
+    f.w = f.lb.x1 - f.lb.x0; f.h = f.lb.y1 - f.lb.y0;
+    return f;
+  }
+  function fSprite(f, name) {
+    if (f.sprites.has(name)) return f.sprites.get(name);
+    const sp = f.part.sprites[name];
+    if (!sp || !sp.rect || !sp.rect[2] || !sp.rect[3]) { f.sprites.set(name, null); return null; }
+    const [sx, sy, w, h] = sp.rect;
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const g = c.getContext("2d");
+    if (sp.rotated) { g.translate(w / 2, h / 2); g.rotate(-Math.PI / 2); g.drawImage(f.atlas, sx, sy, h, w, -h / 2, -w / 2, h, w); }
+    else g.drawImage(f.atlas, sx, sy, w, h, 0, 0, w, h);
+    f.sprites.set(name, c);
+    return c;
+  }
+  function fItems(f, frame) {
+    const out = [];
+    for (const it of frame || []) {
+      const def = f.part.images[it[1]], om = it[2], col = it[3];
+      if (!def || !Array.isArray(om) || !Array.isArray(def.m)) continue;
+      const alpha = (Array.isArray(col) && col.length > 3 ? col[3] : 255) / 255;
+      if (alpha <= 0) continue;
+      const sp = f.part.sprites[def.name];
+      if (!sp || !sp.rect || !sp.rect[2]) continue;
+      const [m00, m01, m10, m11, m02, m12] = om, [i00, i01, i10, i11, i02, i12] = def.m;
+      out.push({ name: def.name, alpha, w: sp.rect[2], h: sp.rect[3],
+        A: m00 * i00 + m01 * i10, B: m00 * i01 + m01 * i11, C: m00 * i02 + m01 * i12 + m02,
+        D: m10 * i00 + m11 * i10, E: m10 * i01 + m11 * i11, F: m10 * i02 + m11 * i12 + m12 });
+    }
+    return out;
+  }
+  function fBounds(f, anim) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const fr of (f.part.animations[anim]?.frames || [])) for (const t of fItems(f, fr)) {
+      if (t.alpha < 0.3) continue;
+      for (const [px, py] of [[0, 0], [t.w, 0], [0, t.h], [t.w, t.h]]) {
+        const x = t.A * px + t.B * py + t.C, y = t.D * px + t.E * py + t.F;
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      }
+    }
+    if (!isFinite(x0)) return { x0: -40, x1: 40, y0: -100, y1: 0 };
+    return { x0, x1, y0, y1 };
+  }
+  function drawFighter(f, anim, idx, x, faceLeft, flash) {
+    const a = f.part.animations[anim];
+    if (!a) return;
+    const frame = a.frames[Math.max(0, Math.min(a.frames.length - 1, idx))];
+    dctx.save();
+    dctx.translate(x, 0);
+    if (faceLeft) dctx.scale(-1, 1);
+    dctx.translate(f.ox, f.oy);
+    for (const t of fItems(f, frame)) {
+      const img = fSprite(f, t.name);
+      if (!img) continue;
+      dctx.save();
+      dctx.globalAlpha = Math.min(1, t.alpha);
+      dctx.transform(t.A, t.D, t.B, t.E, t.C, t.F);
+      dctx.drawImage(img, 0, 0);
+      if (flash) { dctx.globalCompositeOperation = "lighter"; dctx.globalAlpha = Math.min(1, t.alpha) * 0.7; dctx.drawImage(img, 0, 0); }
+      dctx.restore();
+    }
+    dctx.restore();
+  }
+
+  /* 招式編排 → 逐幀時間軸 */
+  function rnd(n) { return hash(n * 7.13 + D.seed * 3.7); }
+  function hitFrac(f, anim) {
+    const a = f.part.animations[anim];
+    if (!a) return 0.5;
+    if (anim.endsWith("_all")) {
+      const ready = f.part.animations[anim.replace(/_all$/, "_ready")] || f.part.animations[anim.replace(/attack_all$/, "attack_ready")];
+      if (ready) return Math.max(0.2, Math.min(0.9, (ready.frame_count + (a.frame_count - ready.frame_count) * 0.3) / a.frame_count));
+    }
+    return 0.5;
+  }
+  function framesFor(f, anim, slow) {
+    const a = f.part.animations[anim];
+    const rate = (f.part.anim_rate || 24) * D.speed * (slow ? 0.5 : 1);
+    return { rate, dur: Math.max(1, Math.round(a.frame_count / rate * DFPS)) };
+  }
+  function compileDuel() {
+    const [A, B] = D.f;
+    D.tracks = [[], []]; D.events = []; D.len = 30;
+    if (!A || !B) return;
+    const pos = [-D.dist / 2, D.dist / 2];
+    D.posKeys = [[{ k: 0, x: pos[0] }], [{ k: 0, x: pos[1] }]];
+    const hp = [100, 100];
+    let k = 12, ko = -1;
+    // 兩人「正面」之間至少留一點空隙，不會疊在一起
+    const minGap = Math.max(80, A.w / 2 + B.w / 2 + 70);
+    D.moves.forEach((m, mi) => {
+      if (ko >= 0) return;
+      const i = m.who === "B" ? 1 : 0, j = 1 - i, f = D.f[i], g = D.f[j];
+      const anim = f.clips[m.action];
+      if (!anim) return;
+      const dir = i === 0 ? 1 : -1;
+      if (m.action === "move") {
+        const { rate, dur } = framesFor(f, anim, m.slow);
+        const total = Math.max(dur * 2, 24);
+        const gap = Math.abs(pos[1] - pos[0]);
+        const step = Math.max(0, Math.min(110, gap - minGap));
+        D.tracks[i].push({ anim, start: k, end: k + total, rate, loop: true });
+        D.posKeys[i].push({ k, x: pos[i] });
+        pos[i] += dir * step;
+        D.posKeys[i].push({ k: k + total, x: pos[i] });
+        k += total + 4;
+        return;
+      }
+      const reps = Math.max(1, Math.min(8, Math.round(m.repeat || 1)));
+      for (let r = 0; r < reps && ko < 0; r++) {
+        const { rate, dur } = framesFor(f, anim, m.slow);
+        D.tracks[i].push({ anim, start: k, end: k + dur, rate });
+        const hitAt = k + Math.round(dur * hitFrac(f, anim));
+        const dmg = Math.max(1, Math.round((DMG[m.action] || 8) * (0.75 + rnd(mi * 10 + r) * 0.5) / (reps > 1 ? 1.6 : 1)));
+        hp[j] = Math.max(0, hp[j] - dmg);
+        D.events.push({ k: hitAt, target: j, attacker: i, dmg, hp: hp.slice(), ko: hp[j] <= 0 });
+        let kbEnd = hitAt;
+        const kb = g.clips.knockback;
+        if (kb) {
+          const t = framesFor(g, kb, m.slow);
+          D.tracks[j].push({ anim: kb, start: hitAt, end: hitAt + t.dur, rate: t.rate });
+          kbEnd = hitAt + t.dur;
+          D.posKeys[j].push({ k: hitAt, x: pos[j] });
+          pos[j] += dir * (hp[j] <= 0 ? 90 : 30); // 被打的一方往後退（遠離攻擊者）
+          D.posKeys[j].push({ k: hitAt + Math.round(t.dur * 0.6), x: pos[j] });
+        }
+        if (hp[j] <= 0) ko = hitAt;
+        k = r < reps - 1 ? k + Math.round(dur * (reps > 1 ? 0.8 : 1)) : Math.max(k + dur, kbEnd) + 8;
+      }
+    });
+    D.len = k + (ko >= 0 ? 50 : 24);
+    D.ko = ko;
+    // 鏡頭：涵蓋兩人所有走到的位置
+    let X0 = Infinity, X1 = -Infinity;
+    D.posKeys.forEach((keys, i) => {
+      const hw = D.f[i].w / 2;
+      for (const p of keys) { X0 = Math.min(X0, p.x - hw); X1 = Math.max(X1, p.x + hw); }
+    });
+    const bodyH = Math.max(A.h, B.h, 60);
+    D.cam = { cx: (X0 + X1) / 2, w: (X1 - X0) * 1.15 + 40, h: bodyH * 2.0, bodyH };
+    $("duelTotal").textContent = `共 ${D.len} 幀・約 ${(D.len / DFPS).toFixed(1)} 秒${ko >= 0 ? "・" + (D.events.find((e) => e.ko).target === 0 ? "右方" : "左方") + "獲勝" : ""}`;
+    $("dscrub").max = String(D.len - 1);
+  }
+  function posAt(i, k) {
+    const keys = D.posKeys[i];
+    let x = keys[0].x;
+    for (let n = 1; n < keys.length; n++) {
+      const a = keys[n - 1], b = keys[n];
+      if (k <= a.k) break;
+      if (k >= b.k) { x = b.x; continue; }
+      x = a.x + (b.x - a.x) * ((k - a.k) / Math.max(1, b.k - a.k)); break;
+    }
+    return x;
+  }
+  function stateAt(i, k) {
+    const f = D.f[i];
+    let tr = null;
+    for (const t of D.tracks[i]) if (k >= t.start && k < t.end && (!tr || t.start >= tr.start)) tr = t;
+    if (tr) {
+      const n = f.part.animations[tr.anim].frame_count;
+      let idx = Math.floor((k - tr.start) / DFPS * tr.rate);
+      idx = tr.loop ? idx % n : Math.min(n - 1, idx);
+      return { anim: tr.anim, idx, active: true, start: tr.start };
+    }
+    const lastKo = D.ko >= 0 && k >= D.ko && D.events.some((e) => e.ko && e.target === i);
+    if (lastKo && f.clips.knockback) {
+      const n = f.part.animations[f.clips.knockback].frame_count;
+      return { anim: f.clips.knockback, idx: n - 1, active: false, start: 0 };
+    }
+    const idle = f.clips.idle || f.clips.attack;
+    const n = f.part.animations[idle].frame_count;
+    return { anim: idle, idx: Math.floor(k / DFPS * (f.part.anim_rate || 24)) % n, active: false, start: -1 };
+  }
+  function renderDuel(k) {
+    const W = dcv.width, H = dcv.height, c = dctx;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.globalAlpha = 1; c.globalCompositeOperation = "source-over";
+    c.fillStyle = BG[S.bg] || "#ffffff"; c.fillRect(0, 0, W, H);
+    if (!D.f[0] || !D.f[1] || !D.cam) return;
+    let sx = 0, sy = 0, flashT = [false, false], inv = false;
+    for (const e of D.events) {
+      const d = k - e.k;
+      if (d >= 0 && d < 4) flashT[e.target] = true;
+      if (D.shake && d >= 0 && d < 8) { const amp = (e.ko ? 26 : 12) * (1 - d / 8); sx += (hash(k * 1.7) - 0.5) * 2 * amp; sy += (hash(k * 3.1 + 5) - 0.5) * 2 * amp; }
+      if (D.invert && d >= 0 && d < 2) inv = true;
+    }
+    const top = D.bars ? 64 : 16;
+    const sc = Math.min(W * 0.94 / D.cam.w, (H - top - 20) / D.cam.h);
+    c.translate(W / 2 + sx, H - 24 + sy);
+    c.scale(sc, sc);
+    c.translate(-D.cam.cx, 0);
+    // 地面陰影線
+    c.strokeStyle = "rgba(27,32,56,0.12)"; c.lineWidth = 2 / sc;
+    c.beginPath(); c.moveTo(D.cam.cx - D.cam.w, 2); c.lineTo(D.cam.cx + D.cam.w, 2); c.stroke();
+    const st = [stateAt(0, k), stateAt(1, k)];
+    const order = st[0].start > st[1].start ? [1, 0] : [0, 1];
+    for (const i of order) drawFighter(D.f[i], st[i].anim, st[i].idx, posAt(i, k), i === 1, flashT[i]);
+    if (D.numbers) {
+      for (const e of D.events) {
+        const d = k - e.k;
+        if (d < 0 || d >= 26) continue;
+        const x = posAt(e.target, k), y = -D.cam.bodyH * 1.05 - d * 2.2;
+        c.save(); c.translate(x, y); c.scale(1 / sc, 1 / sc);
+        c.globalAlpha = d < 18 ? 1 : 1 - (d - 18) / 8;
+        c.font = `900 ${e.ko ? 40 : 30}px ${getComputedStyle(document.body).fontFamily}`;
+        c.textAlign = "center"; c.lineWidth = 6; c.strokeStyle = "#1b2038"; c.fillStyle = e.ko ? "#ffc814" : "#ffffff";
+        const txt = `-${Math.round(e.dmg * 123)}`;
+        c.strokeText(txt, 0, 0); c.fillText(txt, 0, 0);
+        c.restore();
+      }
+    }
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    if (D.bars) {
+      let hp = [100, 100];
+      for (const e of D.events) if (e.k <= k) hp = e.hp;
+      const bw = W * 0.4, bh = 16, pad = 18;
+      [0, 1].forEach((i) => {
+        const x = i === 0 ? pad : W - pad - bw;
+        c.fillStyle = "#1b2038"; c.fillRect(x - 3, 30 - 3, bw + 6, bh + 6);
+        c.fillStyle = "#3a405e"; c.fillRect(x, 30, bw, bh);
+        const w = bw * hp[i] / 100;
+        c.fillStyle = hp[i] > 30 ? (i === 0 ? "#ff3d7f" : "#2f7cff") : "#ffc814";
+        if (i === 0) c.fillRect(x, 30, w, bh); else c.fillRect(x + bw - w, 30, w, bh);
+        c.font = `700 15px ${getComputedStyle(document.body).fontFamily}`;
+        c.fillStyle = BG[S.bg] === "#000000" ? "#ffffff" : "#1b2038";
+        c.textAlign = i === 0 ? "left" : "right";
+        c.fillText(D.f[i].r.name, i === 0 ? x : x + bw, 22);
+      });
+      c.font = `900 22px ${getComputedStyle(document.body).fontFamily}`;
+      c.textAlign = "center"; c.fillStyle = "#ffc814"; c.strokeStyle = "#1b2038"; c.lineWidth = 4;
+      c.strokeText("VS", W / 2, 46); c.fillText("VS", W / 2, 46);
+    }
+    if (D.ko >= 0 && k >= D.ko + 6) {
+      const d = k - D.ko - 6, s = Math.min(1, d / 8);
+      c.save(); c.translate(W / 2, H * 0.42); c.scale(0.6 + s * 0.4, 0.6 + s * 0.4);
+      c.font = `900 ${Math.round(H * 0.16)}px "Bungee", ${getComputedStyle(document.body).fontFamily}`;
+      c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 10; c.strokeStyle = "#1b2038"; c.fillStyle = "#ffc814";
+      c.strokeText("K.O.", 0, 0); c.fillText("K.O.", 0, 0);
+      c.restore();
+    }
+    if (inv && BG[S.bg]) { c.globalCompositeOperation = "difference"; c.fillStyle = "#ffffff"; c.fillRect(0, 0, W, H); c.globalCompositeOperation = "source-over"; }
+  }
+  function duelTick(dt) {
+    if (D.recording) return;
+    if (D.playing && D.f[0] && D.f[1]) { D.pos += dt * DFPS; if (D.pos >= D.len) D.pos = 0; }
+    renderDuel(Math.floor(D.pos));
+    $("dframeNo").textContent = `${Math.floor(D.pos)} / ${Math.max(0, D.len - 1)}`;
+    if (!dscrubbing) $("dscrub").value = String(Math.floor(D.pos));
+  }
+  let dscrubbing = false;
+
+  /* 招式預設 */
+  function availActions(i) { const f = D.f[i]; return f ? ["move", "attack", "skill1", "skill2"].filter((a) => f.clips[a]) : []; }
+  function presetTrade() {
+    const out = [{ who: "A", action: "move" }, { who: "B", action: "move" }];
+    const pick = (i, list) => list.find((a) => availActions(i).includes(a));
+    const seq = [["attack"], ["attack"], ["skill1", "attack"], ["skill1", "attack"], ["skill2", "skill1", "attack"], ["skill2", "skill1", "attack"], ["skill1", "attack"], ["skill1", "attack"], ["skill2", "skill1"], ["skill2", "skill1"]];
+    seq.forEach((opts, n) => { const who = n % 2 ? "B" : "A"; const a = pick(who === "A" ? 0 : 1, opts); if (a) out.push({ who, action: a }); });
+    return out;
+  }
+  function presetRandomDuel() {
+    D.seed = Math.floor(Math.random() * 1000);
+    const out = [{ who: "A", action: "move" }];
+    for (let n = 0; n < 12; n++) {
+      const who = Math.random() < 0.5 ? "A" : "B";
+      const acts = availActions(who === "A" ? 0 : 1).filter((a) => a !== "move");
+      const a = acts[Math.floor(Math.random() * acts.length)];
+      out.push({ who, action: a, repeat: Math.random() < 0.25 ? 2 + Math.floor(Math.random() * 3) : 1, slow: Math.random() < 0.12 });
+    }
+    return out;
+  }
+
+  /* 介面 */
+  function actionLabel(i, a) {
+    const f = D.f[i]; if (!f) return ACTION_LABEL[a];
+    const sk = a === "skill1" ? f.skills[0] : a === "skill2" ? f.skills[1] : null;
+    return ACTION_LABEL[a] + (sk ? "・" + sk.name : "");
+  }
+  function renderMoves() {
+    const box = $("moves"); box.textContent = "";
+    D.moves.forEach((m, n) => {
+      const i = m.who === "B" ? 1 : 0;
+      const row = document.createElement("div"); row.className = "move " + (i ? "is-b" : "is-a");
+      const no = document.createElement("span"); no.className = "move-no"; no.textContent = n + 1;
+      const who = document.createElement("select"); who.id = `mv${n}_who`; who.setAttribute("aria-label", "出招方");
+      [["A", "左 " + (D.f[0]?.r.name || "")], ["B", "右 " + (D.f[1]?.r.name || "")]].forEach(([v, t]) => { const o = document.createElement("option"); o.value = v; o.textContent = t; who.appendChild(o); });
+      who.value = m.who;
+      const act = document.createElement("select"); act.id = `mv${n}_act`; act.setAttribute("aria-label", "招式");
+      for (const a of availActions(i)) { const o = document.createElement("option"); o.value = a; o.textContent = actionLabel(i, a); act.appendChild(o); }
+      if (![...act.options].some((o) => o.value === m.action)) m.action = act.options[0]?.value || "attack";
+      act.value = m.action;
+      const rep = document.createElement("input"); rep.type = "number"; rep.min = 1; rep.max = 8; rep.value = m.repeat || 1; rep.id = `mv${n}_rep`; rep.title = "連打次數"; rep.setAttribute("aria-label", "連打次數");
+      const slowL = document.createElement("label"); slowL.className = "check";
+      const slow = document.createElement("input"); slow.type = "checkbox"; slow.checked = !!m.slow; slow.id = `mv${n}_slow`;
+      slowL.append(slow, document.createTextNode(" 慢動作"));
+      who.onchange = () => { m.who = who.value; movesChanged(true); };
+      act.onchange = () => { m.action = act.value; movesChanged(); };
+      rep.onchange = () => { m.repeat = clampInt(rep.value, 1, 8); movesChanged(); };
+      slow.onchange = () => { m.slow = slow.checked; movesChanged(); };
+      const tools = document.createElement("span"); tools.className = "move-tools";
+      const tb = (t, fn, label) => { const b = document.createElement("button"); b.className = "btn small"; b.textContent = t; b.setAttribute("aria-label", label); b.onclick = fn; tools.appendChild(b); };
+      tb("↑", () => { if (n > 0) { [D.moves[n - 1], D.moves[n]] = [D.moves[n], D.moves[n - 1]]; movesChanged(true); } }, "上移");
+      tb("↓", () => { if (n < D.moves.length - 1) { [D.moves[n + 1], D.moves[n]] = [D.moves[n], D.moves[n + 1]]; movesChanged(true); } }, "下移");
+      tb("✕", () => { D.moves.splice(n, 1); movesChanged(true); }, "刪除");
+      const repL = document.createElement("label"); repL.className = "rep"; repL.append(document.createTextNode("連打"), rep);
+      tools.prepend(slowL);
+      row.append(no, who, act, repL, tools);
+      box.appendChild(row);
+    });
+  }
+  function movesChanged(rerender) {
+    compileDuel(); saveDuel();
+    if (D.pos >= D.len) D.pos = 0;
+    if (rerender) renderMoves();
+  }
+  function saveDuel() {
+    store.set("duel", { a: D.f[0]?.r.id, b: D.f[1]?.r.id, moves: D.moves, dist: D.dist, speed: D.speed, shake: D.shake, invert: D.invert, numbers: D.numbers, bars: D.bars, seed: D.seed });
+  }
+  function fighterPanel(i) {
+    const f = D.f[i];
+    $(`dname${i}`).textContent = f ? f.r.name : "未選擇";
+    const th = $(`dthumb${i}`); th.textContent = "";
+    if (f) { const img = document.createElement("img"); img.alt = ""; const urls = thumbUrls(f.r.id); let n = 0; img.onerror = () => { if (++n < urls.length) img.src = urls[n]; }; img.src = urls[0]; th.appendChild(img); }
+  }
+  async function setFighter(i, r, keepMoves) {
+    $("doverlay").hidden = false; $("doverlay").textContent = `載入 ${r.name} …`;
+    try {
+      D.f[i] = await loadFighter(r);
+      fighterPanel(i);
+      if (!keepMoves) D.moves = presetTrade();
+      compileDuel(); renderMoves(); saveDuel();
+      D.pos = 0;
+      $("doverlay").hidden = true;
+    } catch (e) {
+      $("doverlay").textContent = `讀取 ${r.name} 失敗：${e.message || e}`;
+    }
+  }
+  function renderDuelResults(i) {
+    const q = $(`dq${i}`).value.trim(), box = $(`dr${i}`);
+    box.textContent = "";
+    if (!q) return;
+    const list = S.index.filter((r) => (r.name || "").includes(q) || r.id.includes(q.toLowerCase())).slice(0, 40);
+    if (!list.length) { box.innerHTML = `<p class="hint">找不到「${escapeHtml(q)}」。</p>`; return; }
+    for (const r of list) box.appendChild(unitCard(r, () => { setFighter(i, r, true); box.textContent = ""; $(`dq${i}`).value = ""; }, { select: false }));
+  }
+  async function recordDuel() {
+    const status = $("dStatus");
+    const mime = pickMime();
+    if (mime === null || !dcv.captureStream) { status.textContent = "這個瀏覽器不支援錄製影片。請改用電腦版 Chrome。"; return; }
+    if (S.bg === "transparent") setBg("white");
+    const stream = dcv.captureStream(DFPS);
+    let audioEl = null, actx = null;
+    if (S.audioUrl) {
+      try {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        audioEl = new Audio(S.audioUrl); audioEl.currentTime = +$("audioStart").value || 0;
+        const src = actx.createMediaElementSource(audioEl), dest = actx.createMediaStreamDestination();
+        src.connect(dest); src.connect(actx.destination);
+        dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+      } catch { audioEl = null; }
+    }
+    let rec;
+    try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined); }
+    catch { status.textContent = "無法啟動錄影。"; return; }
+    const chunks = []; rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    const done = new Promise((r) => (rec.onstop = r));
+    D.recording = true; $("drecBadge").hidden = false; $("dRec").disabled = true;
+    status.textContent = `錄製中…約 ${(D.len / DFPS).toFixed(1)} 秒`;
+    renderDuel(0); rec.start(250);
+    if (audioEl) { try { await audioEl.play(); } catch {} }
+    const t0 = performance.now();
+    await new Promise((resolve) => {
+      const step = () => {
+        const k = Math.floor((performance.now() - t0) / 1000 * DFPS);
+        if (k >= D.len) return resolve();
+        renderDuel(k); $("dframeNo").textContent = `${k} / ${D.len - 1}`;
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    rec.stop(); await done;
+    if (audioEl) audioEl.pause();
+    if (actx) { try { actx.close(); } catch {} }
+    D.recording = false; $("drecBadge").hidden = true; $("dRec").disabled = false;
+    const type = (rec.mimeType || mime || "video/webm").split(";")[0];
+    const ext = type.includes("mp4") ? "mp4" : "webm";
+    await offerFile(new Blob(chunks, { type }), `duel_${D.f[0].r.id}_vs_${D.f[1].r.id}.${ext}`, status);
+    D.pos = 0;
+  }
+  function setDuelSize(sz) {
+    const [w, h] = sz.split("x").map(Number);
+    dcv.width = w; dcv.height = h;
+    document.querySelectorAll("#dsizes .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.size === sz)));
+    store.set("dsize", sz);
+  }
+  async function initDuel() {
+    if (D.inited) return; D.inited = true;
+    const saved = store.get("duel", {});
+    Object.assign(D, { dist: saved.dist || 320, speed: saved.speed || 1, shake: saved.shake !== false, invert: !!saved.invert, numbers: saved.numbers !== false, bars: saved.bars !== false, seed: saved.seed || 1 });
+    $("dDist").value = D.dist; $("dDistOut").textContent = D.dist;
+    $("dSpeed").value = D.speed; $("dSpeedOut").textContent = D.speed.toFixed(2) + "×";
+    $("dShake").checked = D.shake; $("dInvert").checked = D.invert; $("dNumbers").checked = D.numbers; $("dBars").checked = D.bars;
+    setDuelSize(store.get("dsize", "1280x720"));
+    const find = (id) => S.index.find((r) => r.id === id);
+    const a = find(saved.a) || S.unit || find(DEFAULT_UNIT) || S.index[0];
+    const b = find(saved.b) || find("u1001u-brown") || S.index.find((r) => r.id !== a.id);
+    $("doverlay").hidden = false; $("doverlay").textContent = "載入角色中…";
+    const [fa, fb] = await Promise.all([loadFighter(a), loadFighter(b)]);
+    D.f = [fa, fb]; fighterPanel(0); fighterPanel(1);
+    D.moves = saved.moves && saved.moves.length ? saved.moves : presetTrade();
+    compileDuel(); renderMoves(); $("doverlay").hidden = true;
+  }
+  function setApp(mode) {
+    S.app = mode;
+    $("appSingle").setAttribute("aria-pressed", String(mode === "single"));
+    $("appDuel").setAttribute("aria-pressed", String(mode === "duel"));
+    document.querySelectorAll("[data-app]").forEach((el) => (el.hidden = el.dataset.app !== mode));
+    store.set("app", mode);
+    if (mode === "duel") initDuel();
+  }
+
+  $("appSingle").onclick = () => setApp("single");
+  $("appDuel").onclick = () => setApp("duel");
+  [0, 1].forEach((i) => {
+    let t; $(`dq${i}`).addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => renderDuelResults(i), 250); });
+    $(`dq${i}`).addEventListener("keydown", (e) => { if (e.key === "Enter") renderDuelResults(i); });
+  });
+  $("dSwap").onclick = () => { D.f.reverse(); fighterPanel(0); fighterPanel(1); D.moves.forEach((m) => (m.who = m.who === "A" ? "B" : "A")); movesChanged(true); };
+  $("dPlay").onclick = () => { D.playing = !D.playing; $("dPlay").textContent = D.playing ? "❚❚" : "▶"; $("dPlay").setAttribute("aria-label", D.playing ? "暫停" : "播放"); };
+  $("dscrub").addEventListener("input", () => { dscrubbing = true; D.pos = +$("dscrub").value; D.playing = false; $("dPlay").textContent = "▶"; });
+  $("dscrub").addEventListener("change", () => { dscrubbing = false; });
+  $("dAddA").onclick = () => { D.moves.push({ who: "A", action: availActions(0).includes("skill1") ? "skill1" : "attack" }); movesChanged(true); };
+  $("dAddB").onclick = () => { D.moves.push({ who: "B", action: availActions(1).includes("skill1") ? "skill1" : "attack" }); movesChanged(true); };
+  $("dPresetTrade").onclick = () => { D.moves = presetTrade(); D.pos = 0; D.playing = true; movesChanged(true); };
+  $("dPresetRandom").onclick = () => { D.moves = presetRandomDuel(); D.pos = 0; D.playing = true; movesChanged(true); };
+  $("dDist").addEventListener("input", () => { D.dist = +$("dDist").value; $("dDistOut").textContent = D.dist; movesChanged(); });
+  $("dSpeed").addEventListener("input", () => { D.speed = +$("dSpeed").value; $("dSpeedOut").textContent = D.speed.toFixed(2) + "×"; movesChanged(); });
+  [["dShake", "shake"], ["dInvert", "invert"], ["dNumbers", "numbers"], ["dBars", "bars"]].forEach(([id, key]) => ($(id).onchange = () => { D[key] = $(id).checked; saveDuel(); }));
+  document.querySelectorAll("#dsizes .chip").forEach((c) => (c.onclick = () => setDuelSize(c.dataset.size)));
+  $("dRec").onclick = recordDuel;
+  $("dAudio").onchange = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (S.audioUrl) URL.revokeObjectURL(S.audioUrl);
+    S.audioUrl = f ? URL.createObjectURL(f) : null;
+    $("dStatus").textContent = f ? `已載入音樂：${f.name}` : "";
+  };
+
   /* ---------- 啟動 ---------- */
   (async () => {
     setSize(store.get("size", "720x720"));
@@ -1160,6 +1961,7 @@ footer a { color: inherit; }
     if (r) await selectUnit(r, { clip: "skill1" });
     else showOverlay("目前無法讀取角色資料。");
     setMode("remix");
+    setApp(store.get("app", "single"));
     requestAnimationFrame(loop);
   })();
 })();

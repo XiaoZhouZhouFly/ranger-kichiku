@@ -32,6 +32,7 @@ from pathlib import Path
 
 RES_REPO = "https://github.com/mti0224/rangerbook_res.git"
 INDEX_URL = "https://raw.githubusercontent.com/mti0224/rangerbook/main/res/Ranger_index.json"
+RANGERS_DATA_URL = "https://raw.githubusercontent.com/mti0224/rangerbook/main/res/Rangers_data.json"
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
@@ -39,10 +40,12 @@ UNITS = DATA / "units"
 RES = DATA / "res"
 STATE = DATA / "sync_state.json"
 UNIT_LIST = DATA / "units.json"
+SKILLS = DATA / "skills.json"
 
 META_RE = re.compile(r"^animation_meta/(u[^/]+)\.json$")
 PNG_RE = re.compile(r"^(u[^/]+)/\1-(body|bul\d?)\.png$")
 THUMB_RE = re.compile(r"^(u[^/]+)/\1-thum(-140)?\.png$")
+ICON_RE = re.compile(r"^skill_icon/[^/]+\.png$")
 
 
 def log(msg: str) -> None:
@@ -125,7 +128,7 @@ def sync_resources(state: dict) -> dict:
         log(f"⚠ 連不到上游素材庫，這次跳過（現有資料不受影響）：{e}")
         return state
     old = state.get("res_commit")
-    if old == head and any(UNITS.glob("*.json.gz")):
+    if old == head and any(UNITS.glob("*.json.gz")) and any((RES / "skill_icon").glob("*.png")):
         log(f"素材庫沒有更新（{head[:7]}）")
         return state
 
@@ -140,7 +143,7 @@ def sync_resources(state: dict) -> dict:
         git("config", "maintenance.auto", "false", cwd=up)
         all_files = git("ls-tree", "-r", "--name-only", head, cwd=up).splitlines()
         all_set = set(all_files)
-        wanted = lambda f: META_RE.match(f) or PNG_RE.match(f) or THUMB_RE.match(f)
+        wanted = lambda f: META_RE.match(f) or PNG_RE.match(f) or THUMB_RE.match(f) or ICON_RE.match(f)
 
         changed = None
         if old:
@@ -154,9 +157,10 @@ def sync_resources(state: dict) -> dict:
         if full:
             changed = [f for f in all_files if wanted(f)]
             log(f"完整同步：{len(changed)} 個檔案（第一次會比較久）")
-        # 本地缺的縮圖也補上
+        # 本地缺的縮圖與技能圖標也補上
         changed_set = set(changed)
-        changed += [f for f in all_files if THUMB_RE.match(f) and not (RES / f).exists() and f not in changed_set]
+        changed += [f for f in all_files if (THUMB_RE.match(f) or ICON_RE.match(f))
+                    and not (RES / f).exists() and f not in changed_set]
 
         patterns = FULL_PATTERNS if full else ["/" + f for f in sorted(set(changed))]
         sparse(up, "set", patterns, head)
@@ -199,7 +203,8 @@ def sync_resources(state: dict) -> dict:
     return state
 
 
-FULL_PATTERNS = ["/animation_meta/u*.json", "/u*/*-body.png", "/u*/*-bul*.png", "/u*/*-thum*.png"]
+FULL_PATTERNS = ["/animation_meta/u*.json", "/u*/*-body.png", "/u*/*-bul*.png", "/u*/*-thum*.png",
+                 "/skill_icon/*.png"]
 
 
 def sparse(up: Path, mode: str, patterns: list[str], commit: str) -> None:
@@ -214,7 +219,23 @@ def sparse(up: Path, mode: str, patterns: list[str], commit: str) -> None:
 
 
 # ---------- 角色名稱 ----------
-def sync_names() -> None:
+FIELDS = ("id", "name", "star", "type", "element", "date")
+
+
+def fetch_rangers_data():
+    """角色資料表（技能、登場時間）。連不到就回傳 None，沿用舊資料。"""
+    try:
+        with urllib.request.urlopen(RANGERS_DATA_URL, timeout=120) as resp:
+            rows = json.loads(resp.read().decode("utf-8"))
+        if isinstance(rows, list) and len(rows) > 100:
+            return rows
+        log("⚠ 角色資料表內容異常，沿用舊的")
+    except Exception as e:
+        log(f"⚠ 連不到角色資料表，沿用舊的：{e}")
+    return None
+
+
+def sync_names(rows) -> None:
     names = {r["id"]: r for r in load_json(UNIT_LIST, [])} if UNIT_LIST.exists() else {}
     try:
         with urllib.request.urlopen(INDEX_URL, timeout=60) as resp:
@@ -222,20 +243,55 @@ def sync_names() -> None:
         if isinstance(index, list) and len(index) > 100:
             for r in index:
                 if isinstance(r, dict) and r.get("id"):
-                    names[r["id"]] = {k: r.get(k, "") for k in ("id", "name", "star", "type", "element")}
+                    old = names.get(r["id"], {})
+                    names[r["id"]] = {**old, **{k: r.get(k, "") for k in ("id", "name", "star", "type", "element")}}
             log(f"角色名稱表：{len(index)} 筆")
         else:
             log("⚠ 名稱表內容異常，沿用舊的")
     except Exception as e:
         log(f"⚠ 連不到名稱表，沿用舊的：{e}")
+    for r in rows or []:
+        uid = r.get("ranger_id")
+        if uid and r.get("登場時間"):
+            names.setdefault(uid, {"id": uid})["date"] = str(r["登場時間"]).strip()
 
     out = []
     for p in sorted(UNITS.glob("*.json.gz")):
         uid = p.name[:-len(".json.gz")]
-        r = names.get(uid, {"id": uid, "name": "", "star": "", "type": "", "element": ""})
-        out.append({k: r.get(k, "") for k in ("id", "name", "star", "type", "element")})
+        r = names.get(uid, {})
+        out.append({k: (uid if k == "id" else r.get(k, "")) for k in FIELDS})
     write_if_changed(UNIT_LIST, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode())
     log(f"可用角色：{len(out)} 隻（有中文名稱 {sum(1 for r in out if r['name'])} 隻）")
+
+
+def sync_skills(rows) -> None:
+    """從角色資料表整理出每隻角色的技能名稱、圖標與說明。"""
+    if not rows:
+        return
+    skills = load_json(SKILLS, {})
+    text = lambda v: str(v or "").replace("\\n", "\n").strip()
+    for r in rows:
+        uid = r.get("ranger_id")
+        if not uid:
+            continue
+        lst = []
+        for slot in ("技能1", "技能2"):
+            sk = r.get(slot)
+            if not isinstance(sk, dict) or not sk.get("技能名稱"):
+                lst.append(None)
+                continue
+            lst.append({
+                "name": text(sk.get("技能名稱")),
+                "icon": text(sk.get("icon")),
+                "rate": text(sk.get("發動機率")),
+                "trigger": text(sk.get("觸發基準")),
+                "cooldown": text(sk.get("技能冷卻時間")),
+                "desc": text(sk.get("技能敘述")),
+            })
+        if any(lst):
+            skills[uid] = lst
+    write_if_changed(SKILLS, json.dumps(skills, ensure_ascii=False, separators=(",", ":")).encode())
+    log(f"技能資料：{len(skills)} 隻角色")
 
 
 def main() -> int:
@@ -243,7 +299,9 @@ def main() -> int:
     state = load_json(STATE, {})
     before = state.get("res_commit")
     state = sync_resources(state)
-    sync_names()
+    rows = fetch_rangers_data()
+    sync_names(rows)
+    sync_skills(rows)
     if state.get("res_commit") != before or not STATE.exists():
         state["synced_at"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         STATE.write_text(json.dumps(state, indent=1), encoding="utf-8")
