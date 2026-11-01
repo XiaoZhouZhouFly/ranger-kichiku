@@ -384,7 +384,7 @@ def sync_stats(rows) -> None:
             "hit": _num(r.get("命中率")), "dg": _num(r.get("閃避機率")),
             "sh": _num(r.get("技能命中率")), "sdg": _num(r.get("技能閃避機率")),
             "ai": _num(r.get("攻擊速度"), 2.5), "mv": _num(r.get("移動速度"), 100),
-            "rg": _num(r.get("攻擊範圍"), 100),
+            "rg": _num(r.get("攻擊範圍"), 100), "sr": _num(r.get("技能抗性")),
         })
         skills = []
         for slot in ("技能1", "技能2"):

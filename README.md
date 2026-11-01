@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.1-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.1"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.2-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.2"></a>
 </p>
 
 ### 👉 [點這裡開啟網站](https://xiaozhouzhoufly.github.io/ranger-kichiku/)
@@ -11,10 +11,10 @@
 
 非官方粉絲工具，與 LINE 無關。角色美術版權屬於 LINE；動畫資料每日同步自 [LINE Rangers 資料站](https://rangerbook.warmycat.com/)（蚯蚓貓）的公開素材庫。
 
-## 最近更新（v4.1）
+## 最近更新（v4.2）
 
-- 修正原始數值模式中角色數值顯示為 0。
-- 真實力對戰：輔助技能不再打對手，改為強化下一擊或回血；持續傷害可以疊加。
+- 原始數值加入技能抗性：受到的技能傷害照 % 減少，不影響普通攻擊。
+- 金手指可以分別調整普攻與技能的閃避、命中，以及技能抗性。
 
 📜 [完整版本更新日誌](CHANGELOG.md)
 

@@ -483,7 +483,7 @@ footer a { color: inherit; }
                 <label class="field">左方等級<span class="lv"><input type="number" id="rLv0" min="1" step="1"><span id="rLvMax0"></span></span></label>
                 <label class="field">右方等級<span class="lv"><input type="number" id="rLv1" min="1" step="1"><span id="rLvMax1"></span></span></label>
               </div>
-              <p class="hint">傷害 =（攻擊 − 對方防禦）× 倍率，最少 1 點，物理、魔法分開計算。照攻擊速度自動出招：先判定技能 1、再判定技能 2，都沒發動就普通攻擊。爆擊只算普通攻擊；持續傷害每秒結算。不使用距離補償。<br>純輔助技能（沒有傷害倍率）發動時：50% 機率下一次攻擊 +50%，50% 機率回復 20% 體力。</p>
+              <p class="hint">傷害 =（攻擊 − 對方防禦）× 倍率，最少 1 點，物理、魔法分開計算。照攻擊速度自動出招：先判定技能 1、再判定技能 2，都沒發動就普通攻擊。普通攻擊看「普攻閃避 − 普攻命中」，技能看「技能閃避 − 技能命中」。技能抗性會讓受到的技能傷害（含持續傷害）減少同樣的 %，不影響普通攻擊。爆擊只算普通攻擊；持續傷害每秒結算，多次附加可以疊加。不使用距離補償。<br>純輔助技能（沒有傷害倍率）發動時：50% 機率下一次攻擊 +50%，50% 機率回復 20% 體力。</p>
               <div class="row"><button class="btn small primary" id="rRerun">重新對戰（重抽機率）</button></div>
               <details class="more" id="cheatBox"><summary>金手指（直接改數值）</summary><div class="cheat-grid" id="cheatGrid"></div></details>
             </div>
@@ -2367,7 +2367,8 @@ footer a { color: inherit; }
   const STAT5 = ["hp", "pa", "ma", "pd", "md"];
   const CHEAT_FIELDS = [
     ["hp", "體力"], ["pa", "物攻"], ["ma", "魔攻"], ["pd", "物防"], ["md", "魔防"],
-    ["ai", "攻擊間隔（秒）"], ["cr", "爆擊率 %"], ["cd", "爆擊傷害 %"], ["dg", "閃避率 %"], ["hit", "命中率 %"],
+    ["ai", "攻擊間隔（秒）"], ["cr", "爆擊率 %"], ["cd", "爆擊傷害 %"], ["dg", "普攻閃避 %"], ["hit", "普攻命中 %"],
+    ["sdg", "技能閃避 %"], ["sh", "技能命中 %"], ["sr", "技能抗性 %"],
     ["rg", "攻擊距離"], ["mv", "移動速度"],
   ];
   function mulberry32(a) {
@@ -2397,7 +2398,7 @@ footer a { color: inherit; }
     const lv = Math.max(1, Math.min(lim.max, D.level[i] || lim.max));
     const out = { level: lv, maxLevel: lim.max };
     for (const k of STAT5) out[k] = Math.round(statAt(st[k], lv, lim.cap));
-    Object.assign(out, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, dg: st.dg || 0, hit: st.hit || 0, sh: st.sh || 0, sdg: st.sdg || 0, rg: rangeOf(i), mv: st.mv || f.proj.speed || 100 });
+    Object.assign(out, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, dg: st.dg || 0, hit: st.hit || 0, sh: st.sh || 0, sdg: st.sdg || 0, sr: st.sr || 0, rg: rangeOf(i), mv: st.mv || f.proj.speed || 100 });
     const ov = D.cheat[i] || {};
     for (const [k] of CHEAT_FIELDS) if (ov[k] !== undefined && ov[k] !== "" && isFinite(+ov[k])) out[k] = +ov[k];
     out.sk = st.sk || [];
@@ -2474,14 +2475,15 @@ footer a { color: inherit; }
       } else {
         const sk = sa.sk[h.action === "skill1" ? 0 : 1] || { e: [] };
         if (rng() < Math.max(0, stt.sdg - sa.sh) / 100) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
-        const mult = a.buff ? 1.5 : 1;
+        // 技能抗性：技能傷害（單次與持續）照比例減少
+        const mult = (a.buff ? 1.5 : 1) * (1 - Math.max(0, Math.min(100, stt.sr || 0)) / 100);
         for (const e of sk.e) {
           const v = dmgCalc(sa, stt, e.c, e.b) * mult;
           if (e.t === "dot") t.dots.push({ per: Math.max(1, v), next: k + DFPS, until: k + Math.max(1, e.d) * DFPS + 1, from: h.i });
           else dmg += v;
         }
         a.buff = false;
-        if (dmg <= 0) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "持續傷害", fx: "dot", noFx: true }); return; }
+        if (!sk.e.some((e) => e.t !== "dot")) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "持續傷害", fx: "dot", noFx: true }); return; }
         dmg = Math.max(1, dmg);
         label = "-" + Math.round(dmg).toLocaleString();
       }
