@@ -99,6 +99,7 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 .cheat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
 .cheat-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; padding: 10px; border-radius: 10px; background: var(--paper); border: 1.5px solid var(--line); border-top: 5px solid var(--hot); align-content: start; }
 .cheat-col.is-b { border-top-color: var(--cool); }
+.hint.warn { color: var(--hot); font-weight: 700; }
 .cheat-col > strong, .cheat-col > .cheat-mult, .cheat-col > button { grid-column: 1 / -1; }
 .cheat-col strong { font-size: 13px; }
 .cheat-col .field.changed { color: var(--hot); font-weight: 700; }
@@ -475,6 +476,8 @@ footer a { color: inherit; }
             <div class="row"><button class="btn small" id="rRangeReset">攻擊距離恢復預設</button></div>
             <p class="hint" id="rCompHint">距離補償：攻擊距離較短的一方傷害較高，例如距離 1：2 時傷害 2：1。</p>
             <label class="check"><input type="checkbox" id="rRaw"> 原始數值（照資料庫真實數值自動對戰）</label>
+            <p class="hint warn" id="rRawMissing" hidden>網站上還沒有原始數值資料（data/stats.json），所以暫時不能用。請確認 GitHub 上的 sync.py 已換成新版，並等同步跑完再重新整理。</p>
+            <p class="hint warn" id="rZeroWarn" hidden></p>
             <div id="rawBox" hidden class="group">
               <div class="real-grid">
                 <label class="field">左方等級<span class="lv"><input type="number" id="rLv0" min="1" step="1"><span id="rLvMax0"></span></span></label>
@@ -1808,6 +1811,15 @@ footer a { color: inherit; }
     D.simLen = D.len;
     buildReplay();
   }
+  // 真實力對戰用。純輔助技能：資料庫裡這招沒有任何傷害倍率（例如只有攻擊力提升、無敵、回血）。
+  // 沒有數值資料時無法判斷，當作攻擊技能。
+  function isSupport(i, action) {
+    if (action !== "skill1" && action !== "skill2") return false;
+    const f = D.f[i], st = f && S.stats && S.stats[f.r.id];
+    if (!st || !Array.isArray(st.sk)) return false;
+    const sk = st.sk[action === "skill1" ? 0 : 1];
+    return !!sk && !(sk.e && sk.e.length);
+  }
   function compileOnce() {
     const [A, B] = D.f;
     D.tracks = [[], []]; D.events = []; D.projs = []; D.len = 30;
@@ -2113,7 +2125,7 @@ footer a { color: inherit; }
   function actionLabel(i, a) {
     const f = D.f[i]; if (!f) return ACTION_LABEL[a];
     const sk = a === "skill1" ? f.skills[0] : a === "skill2" ? f.skills[1] : null;
-    return ACTION_LABEL[a] + (sk ? "・" + sk.name : "");
+    return ACTION_LABEL[a] + (sk ? "・" + sk.name : "") + (D.kind === "real" && isSupport(i, a) ? "（輔助）" : "");
   }
   function renderMoves() {
     const box = $("moves"); box.textContent = "";
@@ -2409,7 +2421,7 @@ footer a { color: inherit; }
     D.ko = -1; D.resultK = -1; D.resultText = ""; D.timeMap = null;
     if (!A || !B) return;
     const rng = mulberry32(D.seed * 7919 + 13);
-    const raw = D.raw;
+    const raw = D.raw && !!(S.stats && Object.keys(S.stats).length);
     const st = [0, 1].map((i) => (raw ? rawStats(i) : basicStats(i)));
     const maxHp = raw ? [st[0].hp, st[1].hp] : [100, 100];
     D.maxHp = maxHp;
@@ -2443,8 +2455,15 @@ footer a { color: inherit; }
       if (t.dead) return;
       const sa = st[h.i], stt = st[h.j];
       let dmg = 0, label = "", crit = false;
+      if (h.action !== "attack" && (isSupport(h.i, h.action) || (raw && !(sa.sk[h.action === "skill1" ? 0 : 1] || { e: [] }).e.length))) {
+        // 純輔助技能：不打對手、不會被閃避。一半機率下一擊 +50%，一半機率回復 20% 體力
+        if (rng() < 0.5) { a.buff = true; pushEvent({ k, target: h.i, attacker: h.i, dmg: 0, label: "下一擊 +50%", fx: "buff", noFx: true }); }
+        else { a.hp = Math.min(maxHp[h.i], a.hp + maxHp[h.i] * 0.2); pushEvent({ k, target: h.i, attacker: h.i, dmg: 0, label: "回復 20%", fx: "heal", noFx: true }); }
+        return;
+      }
       if (!raw) {
-        dmg = (DMG[h.action] || 8) * (0.75 + rng() * 0.5) * comp[h.i] / (h.reps > 1 ? 1.6 : 1);
+        dmg = (DMG[h.action] || 8) * (0.75 + rng() * 0.5) * comp[h.i] / (h.reps > 1 ? 1.6 : 1) * (a.buff ? 1.5 : 1);
+        a.buff = false;
         label = `-${Math.round(dmg * 123)}`;
       } else if (h.action === "attack") {
         if (rng() < Math.max(0, stt.dg - sa.hit) / 100) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
@@ -2455,12 +2474,6 @@ footer a { color: inherit; }
       } else {
         const sk = sa.sk[h.action === "skill1" ? 0 : 1] || { e: [] };
         if (rng() < Math.max(0, stt.sdg - sa.sh) / 100) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
-        if (!sk.e.length) {
-          // 純輔助技能：一半機率強化下一擊，一半機率回血
-          if (rng() < 0.5) { a.buff = true; pushEvent({ k, target: h.i, attacker: h.i, dmg: 0, label: "下一擊 +50%", fx: "buff", noFx: true }); }
-          else { a.hp = Math.min(maxHp[h.i], a.hp + maxHp[h.i] * 0.2); pushEvent({ k, target: h.i, attacker: h.i, dmg: 0, label: "回復 20%", fx: "heal", noFx: true }); }
-          return;
-        }
         const mult = a.buff ? 1.5 : 1;
         for (const e of sk.e) {
           const v = dmgCalc(sa, stt, e.c, e.b) * mult;
@@ -2553,7 +2566,7 @@ footer a { color: inherit; }
         const dur = startAnim(i, anim, k, false);
         me.busy = k + dur + (raw ? 0 : 4);
         let hitAt = k + Math.round(dur * hitFrac(f, anim));
-        const cfg = D.projOn ? f.proj[{ attack: "n", skill1: "s1", skill2: "s2" }[action]] : null;
+        const cfg = D.projOn && !isSupport(i, action) ? f.proj[{ attack: "n", skill1: "s1", skill2: "s2" }[action]] : null;
         const drp = cfg && f.bul[cfg.p];
         const flight = drp && pickAnim(drp.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
         if (drp && flight) {
@@ -2614,6 +2627,13 @@ footer a { color: inherit; }
     const real = D.kind === "real";
     document.querySelectorAll("#dKinds .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.kind === D.kind)));
     $("realBox").hidden = !real;
+    const hasStats = !!(S.stats && Object.keys(S.stats).length);
+    if (!hasStats) D.raw = false;
+    $("rRaw").disabled = !hasStats;
+    $("rRawMissing").hidden = !(real && !hasStats);
+    const zero = [0, 1].filter((i) => D.f[i] && hasStats && real && D.raw && !(statAt((S.stats[D.f[i].r.id] || {}).hp, 1, 1) > 1)).map((i) => D.f[i].r.name);
+    $("rZeroWarn").hidden = !zero.length;
+    $("rZeroWarn").textContent = zero.length ? `「${zero.join("」「")}」在資料庫裡沒有自己的體力數值（多半是召喚物或主角），原始數值對戰會一碰就倒。可以用金手指自己填數值。` : "";
     $("rawBox").hidden = !(real && D.raw);
     $("rCompHint").hidden = !!D.raw;
     $("movesBox").hidden = real && D.raw;

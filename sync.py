@@ -43,6 +43,7 @@ STATE = DATA / "sync_state.json"
 UNIT_LIST = DATA / "units.json"
 SKILLS = DATA / "skills.json"
 PROJECTILES = DATA / "projectiles.json"
+STATS = DATA / "stats.json"
 
 META_RE = re.compile(r"^animation_meta/(u[^/]+)\.json$")
 PNG_RE = re.compile(r"^(u[^/]+)/\1-(body|bul\d?)\.png$")
@@ -350,6 +351,66 @@ def sync_projectiles() -> None:
     log(f"投射物資料：{len(out)} 隻角色")
 
 
+def _num(v, default=0.0):
+    """從「45.0%」「普通(2.5秒/下)」「快(130點/秒)」這類字串取出數字。"""
+    if isinstance(v, (int, float)):
+        return float(v)
+    m = re.search(r"-?\d+(?:\.\d+)?", str(v or ""))
+    return float(m.group()) if m else default
+
+
+def sync_stats(rows) -> None:
+    """真實力對戰用的原始數值：等級成長、爆擊閃避、攻速移速、技能倍率。"""
+    if not rows:
+        return
+    out = load_json(STATS, {})
+    growth = {
+        "hp": ("體力", "hpIncreaseAmount", "hpIncreaseAmountMax"),
+        "pa": ("物理攻擊力", "attackIncreaseAmount", "attackIncreaseAmountMax"),
+        "ma": ("魔法攻擊力", "specialAttackDelta", "specialAttackDeltaMax"),
+        "pd": ("物理防禦力", "generalDefenceDelta", "generalDefenceDeltaMax"),
+        "md": ("魔法防禦力", "specialDefenceDelta", "specialDefenceDeltaMax"),
+    }
+    for r in rows:
+        uid = r.get("ranger_id")
+        if not uid:
+            continue
+        st = {"s": str(r.get("Ranger星數") or "")}
+        for key, (base, g, gm) in growth.items():
+            b, n = _num(r.get(base)), _num(r.get(g))
+            st[key] = [b, n, _num(r.get(gm), n) if r.get(gm) is not None else n]
+        st.update({
+            "cr": _num(r.get("爆擊機率")), "cd": _num(r.get("爆擊傷害"), 100),
+            "hit": _num(r.get("命中率")), "dg": _num(r.get("閃避機率")),
+            "sh": _num(r.get("技能命中率")), "sdg": _num(r.get("技能閃避機率")),
+            "ai": _num(r.get("攻擊速度"), 2.5), "mv": _num(r.get("移動速度"), 100),
+            "rg": _num(r.get("攻擊範圍"), 100),
+        })
+        skills = []
+        for slot in ("技能1", "技能2"):
+            sk = r.get(slot)
+            if not isinstance(sk, dict) or not sk.get("技能名稱"):
+                skills.append(None)
+                continue
+            effects = []
+            for e in sk.get("技能組") or []:
+                kind = str(e.get("效果") or "")
+                coef = str(e.get("係數") or "")
+                if "傷害" not in kind or "*" not in coef:
+                    continue
+                effects.append({
+                    "t": "dot" if "持續" in kind else "hit",
+                    "c": _num(coef.split("*", 1)[1]) / 100,
+                    "b": "hp" if coef.startswith("體力") else "atk",
+                    "d": _num(e.get("有效時間")),
+                })
+            skills.append({"r": _num(sk.get("發動機率")), "cd": _num(sk.get("技能冷卻時間")), "e": effects})
+        st["sk"] = skills
+        out[uid] = st
+    write_if_changed(STATS, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode())
+    log(f"原始數值：{len(out)} 隻角色")
+
+
 def main() -> int:
     DATA.mkdir(exist_ok=True)
     state = load_json(STATE, {})
@@ -358,6 +419,7 @@ def main() -> int:
     rows = fetch_rangers_data()
     sync_names(rows)
     sync_skills(rows)
+    sync_stats(rows)
     sync_projectiles()
     if state.get("res_commit") != before or not STATE.exists():
         state["synced_at"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
