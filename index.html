@@ -316,6 +316,7 @@ footer a { color: inherit; }
           <div class="row">
             <label class="check"><input type="checkbox" id="follow"> 鏡頭跟隨角色</label>
             <label class="check"><input type="checkbox" id="loop" checked> 循環播放</label>
+            <label class="check"><input type="checkbox" id="singleProj" checked> 投射物</label>
           </div>
         </div>
         <div class="group">
@@ -434,15 +435,16 @@ footer a { color: inherit; }
         <div class="tab-body">
           <div class="group">
             <span class="lbl">招式編排</span>
-            <div class="chips">
-              <button class="chip" id="dPresetTrade">你來我往</button>
-              <button class="chip" id="dPresetRandom">隨機對打</button>
+            <div class="chips" id="dModes">
+              <button class="chip" id="dPresetTrade" data-dmode="trade" aria-pressed="true">你來我往</button>
+              <button class="chip" id="dPresetRandom" data-dmode="random" aria-pressed="false">隨機對打</button>
+              <button class="chip" id="dPresetCustom" data-dmode="custom" aria-pressed="false">自定義</button>
             </div>
-            <p class="hint">由上往下依序出招，被打中的一方會自動播放被擊退。血量歸零就 K.O.，後面的招式不再執行。</p>
-            <span class="total" id="duelTotal"></span>
+            <p class="hint" id="dModeHint"></p>
+            <span class="total" id="duelTotal" hidden></span>
           </div>
-          <div class="moves" id="moves"></div>
-          <div class="row">
+          <div class="moves" id="moves" hidden></div>
+          <div class="row" id="dAddRow" hidden>
             <button class="btn small primary" id="dAddA">＋ 左方出招</button>
             <button class="btn small primary" id="dAddB">＋ 右方出招</button>
           </div>
@@ -456,6 +458,7 @@ footer a { color: inherit; }
               <label class="check"><input type="checkbox" id="dInvert"> 命中負片閃光</label>
               <label class="check"><input type="checkbox" id="dNumbers" checked> 傷害數字</label>
               <label class="check"><input type="checkbox" id="dBars" checked> 血條</label>
+              <label class="check"><input type="checkbox" id="dProj" checked> 投射物</label>
             </div>
             <div class="chips">
               <button class="chip" data-bg="white" aria-pressed="true">白</button>
@@ -508,7 +511,7 @@ footer a { color: inherit; }
   const ctx = cv.getContext("2d");
 
   const S = {
-    index: [], skills: {},
+    index: [], skills: {}, proj: {}, projOn: true, projPlan: null, clipN: 0, bul: {},
     unit: null, meta: null, partKey: "body", part: null, animName: null,
     atlas: null, sprites: new Map(), hueCache: new Map(),
     bounds: null, centers: [],
@@ -572,6 +575,7 @@ footer a { color: inherit; }
     try { S.index = await fetchFirst([LOCAL + "units.json"], "json"); } catch { S.index = []; }
     S.index.forEach((r) => { if (!r.name) r.name = r.id; });
     try { S.skills = await fetchFirst([LOCAL + "skills.json"], "json"); } catch { S.skills = {}; }
+    try { S.proj = await fetchFirst([LOCAL + "projectiles.json"], "json"); } catch { S.proj = {}; }
     let when = "";
     try {
       const st = await fetchFirst([LOCAL + "sync_state.json"], "json");
@@ -690,6 +694,10 @@ footer a { color: inherit; }
       try { meta = await fetchGzJson(`${LOCAL}units/${r.id}.json.gz`); }
       catch { meta = await fetchFirst([`${LOCAL}units/${r.id}.json`], "json"); }
       S.unit = r; S.meta = meta;
+      S.bul = {};
+      await Promise.all(Object.keys(meta.parts).filter((k) => k !== "body").map(async (k) => {
+        try { S.bul[k] = { part: meta.parts[k], atlas: await blobToImage(await fetchFirst([LOCAL + meta.parts[k].png], "blob")), sprites: new Map() }; } catch {}
+      }));
       $("unitName").textContent = r.name;
       $("unitTag").textContent = [r.id, r.star, r.type, r.element].filter(Boolean).join("・");
       store.set("unit", r.id);
@@ -837,16 +845,97 @@ footer a { color: inherit; }
     const frames = anim().frames;
     computeBounds(frames);
     S.centers = frames.map(bodyCenter);
+    planSingleProj();
     S.pos = 0; S.panX = 0; S.panY = 0;
     buildComps();
     const saved = store.get("segs:" + S.unit.id + ":" + S.partKey + ":" + name, null);
-    S.segs = saved && saved.length ? saved : presetDemo1(frames.length);
+    S.segs = saved && saved.length ? saved : presetDemo1(clipN());
     renderSegs();
     rebuildTimeline();
     updateScrub();
     drawCurrent();
   }
   const anim = () => S.part.animations[S.animName];
+  // 播放長度：有投射物時延長到投射物飛完、命中特效播完（角色停在最後一幀）
+  const clipN = () => S.clipN || (anim() ? anim().frames.length : 1);
+  function partBounds(frames, alphaMin) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const fr of frames) for (const t of itemsOf(fr)) {
+      if (t.alpha < alphaMin) continue;
+      for (const [px, py] of [[0, 0], [t.w, 0], [0, t.h], [t.w, t.h]]) {
+        const x = t.A * px + t.B * py + t.C, y = t.D * px + t.E * py + t.F;
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      }
+    }
+    return isFinite(x0) ? { x0, x1, y0, y1 } : { x0: -40, x1: 40, y0: -100, y1: 0 };
+  }
+  function planSingleProj() {
+    const n = anim().frames.length;
+    S.projPlan = null; S.clipN = n;
+    if (!S.projOn || S.partKey !== "body" || !S.unit) return;
+    const short = { attack: "n", skill1: "s1", skill2: "s2" }[currentClipKey()];
+    const info = S.proj[S.unit.id] || {};
+    const cfg = short && info[short];
+    const dr = cfg && S.bul && S.bul[cfg.p];
+    const flight = dr && pickAnim(dr.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
+    if (!flight) return;
+    const finish = pickAnim(dr.part, ["finish", "hit", "end"]);
+    const rate = S.part.anim_rate || 24, bulRate = dr.part.anim_rate || 24;
+    const toBody = (fr) => Math.max(1, Math.round(fr / bulRate * rate));
+    const ready = S.part.animations[S.animName.replace(/_all$/, "_ready")];
+    const spawn = S.animName.endsWith("_all") && ready ? ready.frame_count : 0;
+    const idleName = ["idle", "wait"].find((x) => S.part.animations[x]) || S.animName;
+    const lb = partBounds(S.part.animations[idleName].frames, 0.3);
+    const h = lb.y1 - lb.y0, ground = lb.y1;
+    const target = { x: (lb.x0 + lb.x1) / 2 + Math.max(120, info.range || 300), ground, h };
+    let plan;
+    if ((cfg.m === "LINEAR" || cfg.m === "CURVE") && cfg.v > 0 && cfg.e) {
+      const st = { x: cfg.x * 0.5, y: -cfg.y * 0.5 };
+      const en = { x: target.x, y: ground - h * (cfg.m === "CURVE" ? 0.05 : 0.3) };
+      const dist = Math.hypot(en.x - st.x, en.y - st.y);
+      plan = { spawn, fl: Math.max(2, Math.round(dist / (cfg.v * 60) * rate)), st, en, curve: cfg.m === "CURVE", dr, flight, finish, rot: !!cfg.r, a0: cfg.a0, a1: cfg.a1, loop: !!cfg.l, dist };
+    } else {
+      plan = { direct: true, spawn, fl: toBody(dr.part.animations[flight].frame_count), en: { x: target.x, y: ground - h * 0.45 }, dr, flight, finish };
+    }
+    plan.target = target; plan.rate = rate; plan.bulRate = bulRate;
+    plan.finLen = finish ? toBody(dr.part.animations[finish].frame_count) : 0;
+    S.clipN = Math.max(n, plan.spawn + plan.fl + plan.finLen + 4);
+    S.projPlan = plan;
+    const b = S.bounds;
+    b.x1 = Math.max(b.x1, target.x + 70);
+    const top = Math.min(plan.st ? plan.st.y : 0, plan.en.y) - (plan.curve ? plan.dist * 0.3 : 0) - 30;
+    b.y0 = Math.min(b.y0, top); b.y1 = Math.max(b.y1, ground + 10);
+    b.cx = (b.x0 + b.x1) / 2; b.cy = (b.y0 + b.y1) / 2;
+  }
+  function drawSingleProj(k) {
+    const p = S.projPlan;
+    if (!p) return;
+    const c = ctx, tg = p.target;
+    // 假想的目標位置
+    c.save();
+    c.fillStyle = "rgba(27,32,56,0.10)";
+    c.beginPath(); c.ellipse(tg.x, tg.ground, 34, 7, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "rgba(255,61,127,0.55)"; c.lineWidth = 2; c.setLineDash([6, 6]);
+    c.beginPath(); c.moveTo(tg.x, tg.ground); c.lineTo(tg.x, tg.ground - tg.h * 0.9); c.stroke();
+    c.restore();
+    const age = k - p.spawn;
+    if (age < 0) return;
+    const bi = (a, anim, loop) => { const nn = p.dr.part.animations[anim].frame_count; const i = Math.floor(a / p.rate * p.bulRate); return loop ? i % nn : Math.min(nn - 1, i); };
+    if (age < p.fl) {
+      if (p.direct) { drawPartCtx(c, p.dr, p.flight, bi(age, p.flight, false), p.en.x, p.en.y, false, 0); return; }
+      const t = age / p.fl;
+      let x = p.st.x + (p.en.x - p.st.x) * t, y = p.st.y + (p.en.y - p.st.y) * t;
+      if (p.curve) {
+        const hh = p.dist * 0.4, u = 1 - t;
+        const c2x = (p.st.x + p.en.x) / 2 + hh, c2y = (p.st.y + p.en.y) / 2 - hh;
+        x = u * u * u * p.st.x + 3 * u * u * t * p.st.x + 3 * u * t * t * c2x + t * t * t * p.en.x;
+        y = u * u * u * p.st.y + 3 * u * u * t * p.st.y + 3 * u * t * t * c2y + t * t * t * p.en.y;
+      }
+      drawPartCtx(c, p.dr, p.flight, bi(age, p.flight, p.loop), x, y, false, p.rot ? p.a0 + (p.a1 - p.a0) * t : 0);
+    } else if (p.finish && age - p.fl < p.finLen) {
+      drawPartCtx(c, p.dr, p.finish, bi(age - p.fl, p.finish, false), p.en.x, p.en.y, false, 0);
+    }
+  }
 
   /* ---------- 幾何 ---------- */
   function spriteOf(name) {
@@ -933,6 +1022,7 @@ footer a { color: inherit; }
     return { x: xs[xs.length >> 1], y: ys[ys.length >> 1] };
   }
   function centerAt(i) {
+    i = Math.max(0, Math.min(S.centers.length - 1, i));
     const c = S.centers[i];
     if (c) return c;
     for (let d = 1; d < S.centers.length; d++) { const a = S.centers[i - d] || S.centers[i + d]; if (a) return a; }
@@ -980,6 +1070,7 @@ footer a { color: inherit; }
       ctx.drawImage(img, 0, 0);
       ctx.restore();
     }
+    drawSingleProj(frameIdx);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (fx.invert && bg) {
       ctx.globalCompositeOperation = "difference";
@@ -996,7 +1087,7 @@ footer a { color: inherit; }
   // 「角色（固定鏡頭）」：取這段用到的幀的角色平均位置，鏡頭不跟著零件晃動
   const fixedCache = new WeakMap();
   function fixedCenter(s) {
-    const n = anim().frames.length;
+    const n = clipN();
     const key = `${S.unit?.id}|${S.animName}|${s.start}|${s.end}|${s.hold}`;
     const hit = fixedCache.get(s);
     if (hit && hit.key === key) return hit.c;
@@ -1054,14 +1145,14 @@ footer a { color: inherit; }
     return out;
   }
   function rebuildTimeline() {
-    const n = anim() ? anim().frames.length : 1;
+    const n = anim() ? clipN() : 1;
     S.timeline = expandSegs(S.segs, n);
     $("segTotal").textContent = `共 ${S.timeline.length} 幀・約 ${(S.timeline.length / FPS_OUT).toFixed(1)} 秒`;
   }
   function clampInt(v, lo, hi) { v = Math.round(+v); if (!isFinite(v)) v = lo; return Math.max(lo, Math.min(hi, v)); }
 
   /* ---------- 播放迴圈 ---------- */
-  function totalLen() { return S.mode === "remix" ? S.timeline.length : (anim() ? anim().frames.length : 0); }
+  function totalLen() { return S.mode === "remix" ? S.timeline.length : (anim() ? clipN() : 0); }
   function rate() { return S.mode === "remix" ? FPS_OUT : (S.part?.anim_rate || 24) * S.speed; }
   function drawCurrent() {
     if (!S.part) return;
@@ -1232,7 +1323,7 @@ footer a { color: inherit; }
   }
   function renderSegs() {
     const box = $("segs"); box.textContent = "";
-    const n = anim() ? anim().frames.length : 1;
+    const n = anim() ? clipN() : 1;
     S.segs.forEach((s, i) => {
       const el = document.createElement("div"); el.className = "seg";
       const head = document.createElement("div"); head.className = "seg-head";
@@ -1331,7 +1422,7 @@ footer a { color: inherit; }
     if (S.bg === "transparent") { setBg("white"); }
     setMode(kind);
     const loops = kind === "orig" ? +$("origLoops").value : 1;
-    const len = kind === "remix" ? S.timeline.length : anim().frames.length * loops;
+    const len = kind === "remix" ? S.timeline.length : clipN() * loops;
     const fps = kind === "remix" ? FPS_OUT : Math.round((S.part.anim_rate || 24) * S.speed) || 30;
     const stream = cv.captureStream(fps);
     let audioEl = null, actx = null;
@@ -1383,7 +1474,7 @@ footer a { color: inherit; }
   }
   function firstArgs(kind, k) {
     if (kind === "remix") { const st = remixState(k); return [st.idx, st.cam, st.fx, k]; }
-    const n = anim().frames.length, i = k % n;
+    const n = clipN(), i = k % n;
     return [i, origCam(i), {}, k];
   }
   async function savePng() {
@@ -1425,6 +1516,7 @@ footer a { color: inherit; }
   bindRange("audioStart", "audioStartOut", (v) => v.toFixed(1) + "s", () => {});
   bindRange("origLoops", "origLoopsOut", (v) => v + " 次", () => {});
   $("follow").onchange = (e) => { S.follow = e.target.checked; drawCurrent(); };
+  $("singleProj").onchange = (e) => { S.projOn = e.target.checked; store.set("singleProj", S.projOn); if (S.part) selectAnim(S.animName); };
   $("loop").onchange = (e) => { S.loop = e.target.checked; if (S.loop && !S.playing) setPlaying(true); };
   document.querySelectorAll("[data-bg]").forEach((c) => (c.onclick = () => setBg(c.dataset.bg)));
   document.querySelectorAll("#sizes .chip").forEach((c) => (c.onclick = () => setSize(c.dataset.size)));
@@ -1434,12 +1526,12 @@ footer a { color: inherit; }
     if (b.dataset.tab === "remix" && S.mode !== "remix") setMode("remix");
   }));
   document.querySelectorAll("[data-preset]").forEach((b) => (b.onclick = () => {
-    const n = anim().frames.length;
+    const n = clipN();
     S.segs = { plain: presetPlain, spam: presetSpam, demo1: presetDemo1, demo2: presetDemo2, random: presetRandom }[b.dataset.preset](n);
     segsChanged(); setMode("remix"); setPlaying(true);
   }));
   $("remixAnim").onchange = (e) => { selectAnim(e.target.value); setMode("remix"); setPlaying(true); };
-  $("segAdd").onclick = () => { const n = anim().frames.length; S.segs.push(defSeg(n)); segsChanged(); };
+  $("segAdd").onclick = () => { const n = clipN(); S.segs.push(defSeg(n)); segsChanged(); };
   $("compReset").onclick = () => { for (const k in S.comps) S.comps[k] = defComp(); buildComps(); drawCurrent(); };
   $("compShowAll").onclick = () => { for (const k in S.comps) S.comps[k].show = true; buildComps(); drawCurrent(); };
   $("compChaos").onclick = () => {
@@ -1483,7 +1575,7 @@ footer a { color: inherit; }
   const DMG = { attack: 15, skill1: 30, skill2: 40 };
   const ACTION_LABEL = { move: "移動接近", attack: "一般攻擊", skill1: "技能1", skill2: "技能2" };
   const D = {
-    f: [null, null], moves: [], dist: 320, speed: 1, shake: true, invert: false, numbers: true, bars: true,
+    f: [null, null], moves: [], dist: 320, speed: 1, shake: true, invert: false, numbers: true, bars: true, projOn: true, projs: [],
     tracks: [[], []], events: [], posKeys: [[], []], len: 1, cam: null,
     pos: 0, playing: true, recording: false, seed: 1,
   };
@@ -1498,6 +1590,14 @@ footer a { color: inherit; }
     const clip = (key) => { const c = CLIPS.find((x) => x.key === key); return c ? c.names.find((n) => part.animations[n]?.frames?.length) || null : null; };
     f.clips = { idle: clip("idle"), move: clip("move"), attack: clip("attack"), skill1: clip("skill1"), skill2: clip("skill2"), knockback: clip("knockback") };
     f.skills = S.skills[r.id] || [];
+    f.proj = S.proj[r.id] || {};
+    f.bul = {};
+    await Promise.all(Object.keys(meta.parts).filter((k) => k !== "body").map(async (k) => {
+      try {
+        const bp = meta.parts[k];
+        f.bul[k] = { part: bp, atlas: await blobToImage(await fetchFirst([LOCAL + bp.png], "blob")), sprites: new Map() };
+      } catch {}
+    }));
     f.lb = fBounds(f, f.clips.idle || f.clips.attack);
     // 讓角色以身體中心站位、腳踩在地面上（原始素材的原點不在腳底中央）
     f.ox = -(f.lb.x0 + f.lb.x1) / 2; f.oy = -f.lb.y1;
@@ -1565,6 +1665,36 @@ footer a { color: inherit; }
     dctx.restore();
   }
 
+  function pickAnim(part, names) { return names.find((n) => part.animations[n]?.frames?.length) || null; }
+  function drawPartAt(dr, anim, idx, x, y, faceLeft, rotDeg) { drawPartCtx(dctx, dr, anim, idx, x, y, faceLeft, rotDeg); }
+  function drawPartCtx(c, dr, anim, idx, x, y, faceLeft, rotDeg) {
+    const a = dr.part.animations[anim];
+    if (!a) return;
+    const frame = a.frames[Math.max(0, Math.min(a.frames.length - 1, idx))];
+    c.save();
+    c.translate(x, y);
+    if (faceLeft) c.scale(-1, 1);
+    if (rotDeg) c.rotate(rotDeg * Math.PI / 180);
+    for (const t of fItems(dr, frame)) {
+      const img = fSprite(dr, t.name);
+      if (!img) continue;
+      c.save();
+      c.globalAlpha = Math.min(1, t.alpha);
+      c.transform(t.A, t.D, t.B, t.E, t.C, t.F);
+      c.drawImage(img, 0, 0);
+      c.restore();
+    }
+    c.restore();
+  }
+  function animIdx(dr, anim, ageFrames, loop) {
+    const n = dr.part.animations[anim].frame_count;
+    const i = Math.floor(ageFrames / DFPS * (dr.part.anim_rate || 24) * D.speed);
+    return loop ? i % n : Math.min(n - 1, i);
+  }
+  function animOutFrames(dr, anim) {
+    return Math.max(1, Math.round(dr.part.animations[anim].frame_count / ((dr.part.anim_rate || 24) * D.speed) * DFPS));
+  }
+
   /* 招式編排 → 逐幀時間軸 */
   function rnd(n) { return hash(n * 7.13 + D.seed * 3.7); }
   function hitFrac(f, anim) {
@@ -1583,7 +1713,7 @@ footer a { color: inherit; }
   }
   function compileDuel() {
     const [A, B] = D.f;
-    D.tracks = [[], []]; D.events = []; D.len = 30;
+    D.tracks = [[], []]; D.events = []; D.projs = []; D.len = 30;
     if (!A || !B) return;
     const pos = [-D.dist / 2, D.dist / 2];
     D.posKeys = [[{ k: 0, x: pos[0] }], [{ k: 0, x: pos[1] }]];
@@ -1613,7 +1743,29 @@ footer a { color: inherit; }
       for (let r = 0; r < reps && ko < 0; r++) {
         const { rate, dur } = framesFor(f, anim, m.slow);
         D.tracks[i].push({ anim, start: k, end: k + dur, rate });
-        const hitAt = k + Math.round(dur * hitFrac(f, anim));
+        let hitAt = k + Math.round(dur * hitFrac(f, anim));
+        // 投射物：從角色手上射出，飛到對手身上才算命中
+        const cfg = D.projOn ? f.proj[{ attack: "n", skill1: "s1", skill2: "s2" }[m.action]] : null;
+        const dr = cfg && f.bul[cfg.p];
+        const flight = dr && pickAnim(dr.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
+        if (dr && flight) {
+          const finish = pickAnim(dr.part, ["finish", "hit", "end"]);
+          const face = i === 0 ? 1 : -1;
+          const ready = f.part.animations[anim.replace(/_all$/, "_ready")];
+          const total = f.part.animations[anim].frame_count;
+          const spawn = k + Math.round(dur * (ready && anim.endsWith("_all") ? ready.frame_count / total : 0.3));
+          if ((cfg.m === "LINEAR" || cfg.m === "CURVE") && cfg.v > 0 && cfg.e) {
+            const st = { x: pos[i] + face * (f.ox + cfg.x * 0.5), y: f.oy - cfg.y * 0.5 };
+            const en = { x: pos[j], y: -g.h * (cfg.m === "CURVE" ? 0.05 : 0.3) };
+            const dist = Math.hypot(en.x - st.x, en.y - st.y);
+            const fl = Math.max(2, Math.round(dist / (cfg.v * 60) * DFPS / D.speed));
+            hitAt = spawn + fl;
+            D.projs.push({ spawn, fl, st, en, curve: cfg.m === "CURVE", face, dr, flight, finish, a0: cfg.a0, a1: cfg.a1, rot: !!cfg.r, loop: !!cfg.l, dist });
+          } else {
+            // 近戰或沒有飛行資料：在對手身上播放命中特效
+            D.projs.push({ direct: true, spawn: hitAt, en: { x: pos[j], y: -g.h * 0.45 }, face, dr, flight, finish });
+          }
+        }
         const dmg = Math.max(1, Math.round((DMG[m.action] || 8) * (0.75 + rnd(mi * 10 + r) * 0.5) / (reps > 1 ? 1.6 : 1)));
         hp[j] = Math.max(0, hp[j] - dmg);
         D.events.push({ k: hitAt, target: j, attacker: i, dmg, hp: hp.slice(), ko: hp[j] <= 0 });
@@ -1698,6 +1850,32 @@ footer a { color: inherit; }
     const st = [stateAt(0, k), stateAt(1, k)];
     const order = st[0].start > st[1].start ? [1, 0] : [0, 1];
     for (const i of order) drawFighter(D.f[i], st[i].anim, st[i].idx, posAt(i, k), i === 1, flashT[i]);
+    for (const p of D.projs) {
+      const age = k - p.spawn;
+      if (age < 0) continue;
+      if (p.direct) {
+        const n1 = animOutFrames(p.dr, p.flight);
+        if (age < n1) drawPartAt(p.dr, p.flight, animIdx(p.dr, p.flight, age, false), p.en.x, p.en.y, p.face < 0, 0);
+        else if (p.finish && age - n1 < animOutFrames(p.dr, p.finish)) drawPartAt(p.dr, p.finish, animIdx(p.dr, p.finish, age - n1, false), p.en.x, p.en.y, p.face < 0, 0);
+        continue;
+      }
+      if (age < p.fl) {
+        const t = age / p.fl;
+        let x = p.st.x + (p.en.x - p.st.x) * t, y = p.st.y + (p.en.y - p.st.y) * t;
+        if (p.curve) {
+          // 遊戲原生的拋物線：貝茲曲線，控制點在中點往前上方 0.4 倍距離
+          const h = p.dist * 0.4, u = 1 - t;
+          const c2x = (p.st.x + p.en.x) / 2 + p.face * h, c2y = (p.st.y + p.en.y) / 2 - h;
+          x = u * u * u * p.st.x + 3 * u * u * t * p.st.x + 3 * u * t * t * c2x + t * t * t * p.en.x;
+          y = u * u * u * p.st.y + 3 * u * u * t * p.st.y + 3 * u * t * t * c2y + t * t * t * p.en.y;
+        }
+        const rot = p.rot ? p.a0 + (p.a1 - p.a0) * t : 0;
+        drawPartAt(p.dr, p.flight, animIdx(p.dr, p.flight, age, p.loop), x, y, p.face < 0, rot);
+      } else if (p.finish) {
+        const fa = age - p.fl;
+        if (fa < animOutFrames(p.dr, p.finish)) drawPartAt(p.dr, p.finish, animIdx(p.dr, p.finish, fa, false), p.en.x, p.en.y, p.face < 0, 0);
+      }
+    }
     if (D.numbers) {
       for (const e of D.events) {
         const d = k - e.k;
@@ -1817,7 +1995,7 @@ footer a { color: inherit; }
     if (rerender) renderMoves();
   }
   function saveDuel() {
-    store.set("duel", { a: D.f[0]?.r.id, b: D.f[1]?.r.id, moves: D.moves, dist: D.dist, speed: D.speed, shake: D.shake, invert: D.invert, numbers: D.numbers, bars: D.bars, seed: D.seed });
+    store.set("duel", { a: D.f[0]?.r.id, b: D.f[1]?.r.id, moves: D.moves, dist: D.dist, speed: D.speed, shake: D.shake, invert: D.invert, numbers: D.numbers, bars: D.bars, seed: D.seed, projOn: D.projOn, mode: D.mode });
   }
   function fighterPanel(i) {
     const f = D.f[i];
@@ -1830,7 +2008,7 @@ footer a { color: inherit; }
     try {
       D.f[i] = await loadFighter(r);
       fighterPanel(i);
-      if (!keepMoves) D.moves = presetTrade();
+      if (!keepMoves || D.mode !== "custom") D.moves = D.mode === "random" ? presetRandomDuel() : presetTrade();
       compileDuel(); renderMoves(); saveDuel();
       D.pos = 0;
       $("doverlay").hidden = true;
@@ -1900,19 +2078,22 @@ footer a { color: inherit; }
   async function initDuel() {
     if (D.inited) return; D.inited = true;
     const saved = store.get("duel", {});
-    Object.assign(D, { dist: saved.dist || 320, speed: saved.speed || 1, shake: saved.shake !== false, invert: !!saved.invert, numbers: saved.numbers !== false, bars: saved.bars !== false, seed: saved.seed || 1 });
+    Object.assign(D, { dist: saved.dist || 320, speed: saved.speed || 1, shake: saved.shake !== false, invert: !!saved.invert, numbers: saved.numbers !== false, bars: saved.bars !== false, seed: saved.seed || 1, projOn: saved.projOn !== false });
+    $("dProj").checked = D.projOn;
     $("dDist").value = D.dist; $("dDistOut").textContent = D.dist;
     $("dSpeed").value = D.speed; $("dSpeedOut").textContent = D.speed.toFixed(2) + "×";
     $("dShake").checked = D.shake; $("dInvert").checked = D.invert; $("dNumbers").checked = D.numbers; $("dBars").checked = D.bars;
     setDuelSize(store.get("dsize", "1280x720"));
     const find = (id) => S.index.find((r) => r.id === id);
     const a = find(saved.a) || S.unit || find(DEFAULT_UNIT) || S.index[0];
-    const b = find(saved.b) || find("u1001u-brown") || S.index.find((r) => r.id !== a.id);
+    const b = find(saved.b) || find("u010u-clara") || find("u1001u-brown") || S.index.find((r) => r.id !== a.id);
     $("doverlay").hidden = false; $("doverlay").textContent = "載入角色中…";
     const [fa, fb] = await Promise.all([loadFighter(a), loadFighter(b)]);
     D.f = [fa, fb]; fighterPanel(0); fighterPanel(1);
+    D.mode = saved.mode || "trade";
     D.moves = saved.moves && saved.moves.length ? saved.moves : presetTrade();
-    compileDuel(); renderMoves(); $("doverlay").hidden = true;
+    $("doverlay").hidden = true;
+    setDuelMode(D.mode, false);
   }
   function setApp(mode) {
     S.app = mode;
@@ -1935,11 +2116,30 @@ footer a { color: inherit; }
   $("dscrub").addEventListener("change", () => { dscrubbing = false; });
   $("dAddA").onclick = () => { D.moves.push({ who: "A", action: availActions(0).includes("skill1") ? "skill1" : "attack" }); movesChanged(true); };
   $("dAddB").onclick = () => { D.moves.push({ who: "B", action: availActions(1).includes("skill1") ? "skill1" : "attack" }); movesChanged(true); };
-  $("dPresetTrade").onclick = () => { D.moves = presetTrade(); D.pos = 0; D.playing = true; movesChanged(true); };
-  $("dPresetRandom").onclick = () => { D.moves = presetRandomDuel(); D.pos = 0; D.playing = true; movesChanged(true); };
+  const MODE_HINT = {
+    trade: "雙方輪流出招、逐步換大招。結果要看到最後才知道；想自己排招或先看勝負，請選「自定義」。",
+    random: "每按一次「隨機對打」就重新抽一套招式，誰會贏看了才知道。",
+    custom: "由上往下依序出招，被打中的一方會自動播放被擊退。血量歸零就 K.O.，後面的招式不再執行。可以從你來我往或隨機的招式接著改。",
+  };
+  function setDuelMode(mode, regenerate) {
+    D.mode = mode;
+    document.querySelectorAll("#dModes .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.dmode === mode)));
+    const custom = mode === "custom";
+    $("moves").hidden = !custom; $("dAddRow").hidden = !custom; $("duelTotal").hidden = !custom;
+    $("dModeHint").textContent = MODE_HINT[mode];
+    if (regenerate && mode === "trade") D.moves = presetTrade();
+    if (regenerate && mode === "random") D.moves = presetRandomDuel();
+    D.pos = 0; D.playing = true;
+    $("dPlay").textContent = "❚❚"; $("dPlay").setAttribute("aria-label", "暫停");
+    movesChanged(true);
+  }
+  $("dPresetTrade").onclick = () => setDuelMode("trade", true);
+  $("dPresetRandom").onclick = () => setDuelMode("random", true);
+  $("dPresetCustom").onclick = () => setDuelMode("custom", false);
   $("dDist").addEventListener("input", () => { D.dist = +$("dDist").value; $("dDistOut").textContent = D.dist; movesChanged(); });
   $("dSpeed").addEventListener("input", () => { D.speed = +$("dSpeed").value; $("dSpeedOut").textContent = D.speed.toFixed(2) + "×"; movesChanged(); });
   [["dShake", "shake"], ["dInvert", "invert"], ["dNumbers", "numbers"], ["dBars", "bars"]].forEach(([id, key]) => ($(id).onchange = () => { D[key] = $(id).checked; saveDuel(); }));
+  $("dProj").onchange = () => { D.projOn = $("dProj").checked; movesChanged(); };
   document.querySelectorAll("#dsizes .chip").forEach((c) => (c.onclick = () => setDuelSize(c.dataset.size)));
   $("dRec").onclick = recordDuel;
   $("dAudio").onchange = (e) => {
@@ -1952,6 +2152,7 @@ footer a { color: inherit; }
   /* ---------- 啟動 ---------- */
   (async () => {
     setSize(store.get("size", "720x720"));
+    S.projOn = store.get("singleProj", true); $("singleProj").checked = S.projOn;
     setBg(store.get("bg", "white"));
     await loadIndex();
     const want = store.get("unit", DEFAULT_UNIT);

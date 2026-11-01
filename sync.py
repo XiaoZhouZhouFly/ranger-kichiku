@@ -33,6 +33,7 @@ from pathlib import Path
 RES_REPO = "https://github.com/mti0224/rangerbook_res.git"
 INDEX_URL = "https://raw.githubusercontent.com/mti0224/rangerbook/main/res/Ranger_index.json"
 RANGERS_DATA_URL = "https://raw.githubusercontent.com/mti0224/rangerbook/main/res/Rangers_data.json"
+PROJECTILE_URL = "https://raw.githubusercontent.com/mti0224/rangerbook/main/res/projectile_data.json"
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
@@ -41,6 +42,7 @@ RES = DATA / "res"
 STATE = DATA / "sync_state.json"
 UNIT_LIST = DATA / "units.json"
 SKILLS = DATA / "skills.json"
+PROJECTILES = DATA / "projectiles.json"
 
 META_RE = re.compile(r"^animation_meta/(u[^/]+)\.json$")
 PNG_RE = re.compile(r"^(u[^/]+)/\1-(body|bul\d?)\.png$")
@@ -294,6 +296,60 @@ def sync_skills(rows) -> None:
     log(f"技能資料：{len(skills)} 隻角色")
 
 
+def _motion(cfg: dict) -> str:
+    explicit = str((cfg.get("motion") or {}).get("type") or "").upper()
+    if explicit in ("LINEAR", "CURVE", "RETURN", "BEAM", "DIRECT", "NONE"):
+        return explicit
+    t = str(cfg.get("attackType") or "").upper()
+    if t in ("ENERGY", "WEAPON", "DOUBLE"):
+        return "LINEAR"
+    if t in ("ENERGYC", "WEAPONC", "DOUBLEC"):
+        return "CURVE"
+    if t in ("PUNCH", "KICK", "SWING", "STAB"):
+        return "DIRECT"
+    return "NONE"
+
+
+def sync_projectiles() -> None:
+    """投射物資料：發射位置、飛行方式、速度、角度（雙人對打用）。"""
+    try:
+        with urllib.request.urlopen(PROJECTILE_URL, timeout=180) as resp:
+            units = json.loads(resp.read().decode("utf-8")).get("units") or {}
+        if len(units) < 100:
+            log("⚠ 投射物資料內容異常，沿用舊的")
+            return
+    except Exception as e:
+        log(f"⚠ 連不到投射物資料，沿用舊的：{e}")
+        return
+    out = load_json(PROJECTILES, {})
+    num = lambda v, d=0: v if isinstance(v, (int, float)) else d
+    for uid, u in units.items():
+        entry = {}
+        for key, short in (("normal", "n"), ("skill1", "s1"), ("skill2", "s2")):
+            cfg = u.get(key) or {}
+            m = _motion(cfg)
+            if m == "NONE" or not cfg.get("animationPart"):
+                continue
+            st, ang, mo = cfg.get("start") or {}, cfg.get("angle") or {}, cfg.get("motion") or {}
+            entry[short] = {
+                "p": cfg.get("animationPart"), "m": m,
+                "x": num(st.get("x")), "y": num(st.get("y")),
+                "a0": num(ang.get("start")), "a1": num(ang.get("end"), num(ang.get("start"))),
+                "v": num(cfg.get("moveSpeed")), "e": 1 if mo.get("enabled", True) else 0,
+                "r": 1 if mo.get("rotation") == "ANGLE_LERP" else 0,
+                "l": 1 if mo.get("loopNormal") else 0,
+            }
+            if key == "normal":
+                entry["range"] = num(cfg.get("attackRange"))
+        mv = num((u.get("movement") or {}).get("movingSpeed"))
+        if mv:
+            entry["speed"] = mv
+        if entry:
+            out[uid] = entry
+    write_if_changed(PROJECTILES, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode())
+    log(f"投射物資料：{len(out)} 隻角色")
+
+
 def main() -> int:
     DATA.mkdir(exist_ok=True)
     state = load_json(STATE, {})
@@ -302,6 +358,7 @@ def main() -> int:
     rows = fetch_rangers_data()
     sync_names(rows)
     sync_skills(rows)
+    sync_projectiles()
     if state.get("res_commit") != before or not STATE.exists():
         state["synced_at"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         STATE.write_text(json.dumps(state, indent=1), encoding="utf-8")
