@@ -93,8 +93,24 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 .f-thumb img { width: 100%; height: 100%; object-fit: contain; }
 .f-name { font-size: 15px; font-weight: 900; line-height: 1.25; overflow-wrap: anywhere; }
 .swap { align-self: center; }
+.real-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.real-grid input { width: 100%; padding: 5px 7px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-family: var(--font-mono); }
+.real-grid .lv { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; font-family: var(--font-mono); }
+.cheat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
+.cheat-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; padding: 10px; border-radius: 10px; background: var(--paper); border: 1.5px solid var(--line); border-top: 5px solid var(--hot); align-content: start; }
+.cheat-col.is-b { border-top-color: var(--cool); }
+.cheat-col > strong, .cheat-col > .cheat-mult, .cheat-col > button { grid-column: 1 / -1; }
+.cheat-col strong { font-size: 13px; }
+.cheat-col .field.changed { color: var(--hot); font-weight: 700; }
+.cheat-mult { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.cheat-mult input { width: 72px; padding: 4px 6px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); }
+.moves-side { margin: 6px 0 0; font-size: 12px; font-weight: 900; color: var(--muted); }
+.f-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.bg-upload { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.bg-upload .field { flex: 1; min-width: 0; }
+.bg-upload input[type="file"] { max-width: 100%; }
 .fighter .results .r-card { width: 80px; }
-.duel-transport { grid-template-columns: auto minmax(0, 1fr) auto; }
+.transport.duel-transport { grid-template-columns: auto minmax(0, 1fr) auto; }
 .moves { display: grid; gap: 6px; }
 .move { display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1.3fr); gap: 6px 8px; align-items: center; padding: 8px; border-radius: 10px; background: var(--paper); border: 1.5px solid var(--line); border-left: 6px solid var(--hot); }
 .move.is-b { border-left-color: var(--cool); }
@@ -125,15 +141,16 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 /* 主區 */
 .main { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 900px) {
-  .main { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; }
+  .main { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .main > .stage-col { width: min(calc(64vh * var(--ar, 1)), 58vw); }
   .stage-col { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
 }
 .stage-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
 .now { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .now h1 { font-size: 20px; margin: 0; font-weight: 900; text-wrap: balance; }
 .now .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
-.stage { position: relative; border: 2px solid var(--ink); border-radius: 14px; background: var(--stage); overflow: hidden; display: grid; place-items: center; box-shadow: 4px 4px 0 var(--shadow); }
-.stage canvas { display: block; width: auto; height: auto; max-width: 100%; max-height: 62vh; touch-action: none; cursor: grab; }
+.stage { position: relative; width: 100%; border: 2px solid var(--ink); border-radius: 14px; background: var(--stage); overflow: hidden; box-shadow: 4px 4px 0 var(--shadow); }
+.stage canvas { display: block; width: 100%; height: auto; touch-action: none; cursor: grab; }
 .stage canvas.checker { background-color: var(--check-a); background-image: linear-gradient(45deg, var(--check-b) 25%, transparent 25%), linear-gradient(-45deg, var(--check-b) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--check-b) 75%), linear-gradient(-45deg, transparent 75%, var(--check-b) 75%); background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0; }
 .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--stage) 80%, transparent); font-weight: 700; text-align: center; padding: 16px; }
 .rec-badge { position: absolute; top: 10px; left: 10px; background: var(--hot); color: #fff; font-weight: 900; font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); }
@@ -246,7 +263,7 @@ footer a { color: inherit; }
     <div class="results" id="results" role="list"></div>
     <div class="lib" id="library" hidden>
       <div class="lib-head">
-        <strong>角色庫</strong>
+        <strong id="libTitle">角色庫</strong>
         <span class="lib-count" id="libCount"></span>
         <button class="btn small" id="libClose">收起</button>
       </div>
@@ -402,7 +419,10 @@ footer a { color: inherit; }
           <div class="f-thumb" id="dthumb0"></div>
           <strong class="f-name" id="dname0">未選擇</strong>
         </div>
-        <input id="dq0" type="search" placeholder="搜尋左方角色" autocomplete="off">
+        <div class="f-search">
+          <input id="dq0" type="search" placeholder="搜尋左方角色" autocomplete="off">
+          <button class="btn small" data-lib-side="0">角色庫</button>
+        </div>
         <div class="results" id="dr0" role="list"></div>
       </div>
       <button class="btn small swap" id="dSwap" aria-label="左右交換">⇄</button>
@@ -412,11 +432,15 @@ footer a { color: inherit; }
           <div class="f-thumb" id="dthumb1"></div>
           <strong class="f-name" id="dname1">未選擇</strong>
         </div>
-        <input id="dq1" type="search" placeholder="搜尋右方角色" autocomplete="off">
+        <div class="f-search">
+          <input id="dq1" type="search" placeholder="搜尋右方角色" autocomplete="off">
+          <button class="btn small" data-lib-side="1">角色庫</button>
+        </div>
         <div class="results" id="dr1" role="list"></div>
       </div>
     </div>
 
+    <div id="dLibHolder"></div>
     <div class="main">
       <div class="stage-col">
         <div class="stage">
@@ -434,6 +458,35 @@ footer a { color: inherit; }
       <div class="panel">
         <div class="tab-body">
           <div class="group">
+            <span class="lbl">對戰類型</span>
+            <div class="chips" id="dKinds">
+              <button class="chip" data-kind="classic" aria-pressed="true">經典對戰</button>
+              <button class="chip" data-kind="real" aria-pressed="false">真實力對戰</button>
+            </div>
+          </div>
+          <div class="group" id="realBox" hidden>
+            <span class="lbl">真實力設定</span>
+            <p class="hint">雙方同時行動，對手在自己的攻擊距離內就出手，打不到會自動走過去。開場距離 = 較長的攻擊距離 + 100。被打中不會中斷正在出的招。</p>
+            <div class="real-grid">
+              <label class="field"><span id="rName0">左方</span>攻擊距離<input type="number" id="rRange0" min="0" step="5"></label>
+              <label class="field"><span id="rName1">右方</span>攻擊距離<input type="number" id="rRange1" min="0" step="5"></label>
+              <label class="field">時間上限（秒）<input type="number" id="rTime" min="5" max="600" step="5" value="60"></label>
+            </div>
+            <div class="row"><button class="btn small" id="rRangeReset">攻擊距離恢復預設</button></div>
+            <p class="hint" id="rCompHint">距離補償：攻擊距離較短的一方傷害較高，例如距離 1：2 時傷害 2：1。</p>
+            <label class="check"><input type="checkbox" id="rRaw"> 原始數值（照資料庫真實數值自動對戰）</label>
+            <div id="rawBox" hidden class="group">
+              <div class="real-grid">
+                <label class="field">左方等級<span class="lv"><input type="number" id="rLv0" min="1" step="1"><span id="rLvMax0"></span></span></label>
+                <label class="field">右方等級<span class="lv"><input type="number" id="rLv1" min="1" step="1"><span id="rLvMax1"></span></span></label>
+              </div>
+              <p class="hint">傷害 =（攻擊 − 對方防禦）× 倍率，最少 1 點，物理、魔法分開計算。照攻擊速度自動出招：先判定技能 1、再判定技能 2，都沒發動就普通攻擊。爆擊只算普通攻擊；持續傷害每秒結算。不使用距離補償。<br>純輔助技能（沒有傷害倍率）發動時：50% 機率下一次攻擊 +50%，50% 機率回復 20% 體力。</p>
+              <div class="row"><button class="btn small primary" id="rRerun">重新對戰（重抽機率）</button></div>
+              <details class="more" id="cheatBox"><summary>金手指（直接改數值）</summary><div class="cheat-grid" id="cheatGrid"></div></details>
+            </div>
+          </div>
+          <div id="movesBox" class="group">
+          <div class="group">
             <span class="lbl">招式編排</span>
             <div class="chips" id="dModes">
               <button class="chip" id="dPresetTrade" data-dmode="trade" aria-pressed="true">你來我往</button>
@@ -448,6 +501,7 @@ footer a { color: inherit; }
             <button class="btn small primary" id="dAddA">＋ 左方出招</button>
             <button class="btn small primary" id="dAddB">＋ 右方出招</button>
           </div>
+          </div>
 
           <div class="group">
             <span class="lbl">設定</span>
@@ -459,12 +513,19 @@ footer a { color: inherit; }
               <label class="check"><input type="checkbox" id="dNumbers" checked> 傷害數字</label>
               <label class="check"><input type="checkbox" id="dBars" checked> 血條</label>
               <label class="check"><input type="checkbox" id="dProj" checked> 投射物</label>
+              <label class="check"><input type="checkbox" id="dFinale" checked> K.O. 後慢動作重播最後一擊（淡灰）</label>
             </div>
             <div class="chips">
               <button class="chip" data-bg="white" aria-pressed="true">白</button>
               <button class="chip" data-bg="black" aria-pressed="false">黑</button>
               <button class="chip" data-bg="green" aria-pressed="false">綠幕</button>
             </div>
+            <div class="bg-upload">
+              <label class="field">自訂競技場背景<input type="file" id="dBgFile" accept="image/*"></label>
+              <button class="btn small" id="dBgClear" hidden>移除背景圖</button>
+            </div>
+            <label class="slider" id="dGroundRow" hidden>地面高度 <input type="range" id="dGround" min="0" max="45" step="1" value="8"><output id="dGroundOut">8%</output></label>
+            <p class="hint" id="dBgHint" hidden>拖動「地面高度」讓角色的腳踩在背景圖的地面上。背景圖只存在這台裝置的瀏覽器裡。</p>
           </div>
 
           <div class="group">
@@ -511,7 +572,7 @@ footer a { color: inherit; }
   const ctx = cv.getContext("2d");
 
   const S = {
-    index: [], skills: {}, proj: {}, projOn: true, projPlan: null, clipN: 0, bul: {},
+    index: [], skills: {}, proj: {}, stats: {}, projOn: true, projPlan: null, clipN: 0, bul: {},
     unit: null, meta: null, partKey: "body", part: null, animName: null,
     atlas: null, sprites: new Map(), hueCache: new Map(),
     bounds: null, centers: [],
@@ -576,6 +637,7 @@ footer a { color: inherit; }
     S.index.forEach((r) => { if (!r.name) r.name = r.id; });
     try { S.skills = await fetchFirst([LOCAL + "skills.json"], "json"); } catch { S.skills = {}; }
     try { S.proj = await fetchFirst([LOCAL + "projectiles.json"], "json"); } catch { S.proj = {}; }
+    try { S.stats = await fetchFirst([LOCAL + "stats.json"], "json"); } catch { S.stats = {}; }
     let when = "";
     try {
       const st = await fetchFirst([LOCAL + "sync_state.json"], "json");
@@ -672,13 +734,29 @@ footer a { color: inherit; }
     $("libCount").textContent = `共 ${list.length} 隻`;
     if (!list.length) { grid.innerHTML = `<p class="hint">沒有符合條件的角色，試著放寬篩選。</p>`; }
     const pick = () => document.querySelector(".stage").scrollIntoView({ behavior: "smooth", block: "center" });
-    for (const r of list.slice(0, lib.shown)) grid.appendChild(unitCard(r, pick));
+    for (const r of list.slice(0, lib.shown)) grid.appendChild(lib.onPick ? unitCard(r, (rr) => lib.onPick(rr), { select: false }) : unitCard(r, pick));
     $("libMore").hidden = list.length <= lib.shown;
     $("libMore").textContent = `顯示更多（還有 ${Math.max(0, list.length - lib.shown)} 隻）`;
     store.set("lib", { star: $("fStar").value, type: $("fType").value, sort: $("fSort").value, named: $("fNamed").checked, elem: lib.elem });
   }
   function resetLib() { lib.shown = LIB_PAGE; renderLib(); $("libGrid").scrollTop = 0; }
+  function homeLib() {
+    // 角色庫放回單人模式的搜尋區
+    const libEl = $("library");
+    if (libEl.parentElement !== $("results").parentElement) $("results").after(libEl);
+    lib.onPick = null; $("libTitle").textContent = "角色庫";
+  }
+  function openLibFor(side) {
+    const libEl = $("library");
+    $("dLibHolder").appendChild(libEl);
+    $("libTitle").textContent = side === 0 ? "角色庫・選擇左方" : "角色庫・選擇右方";
+    lib.onPick = (r) => { setFighter(side, r, true); libEl.hidden = true; homeLib(); };
+    libEl.hidden = false;
+    buildLibFilters(); resetLib();
+    libEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   function toggleLib(open) {
+    homeLib();
     $("library").hidden = !open; $("results").hidden = open;
     $("libBtn").setAttribute("aria-expanded", String(open));
     $("libBtn").classList.toggle("primary", open); $("qBtn").classList.toggle("primary", !open);
@@ -847,6 +925,7 @@ footer a { color: inherit; }
     S.centers = frames.map(bodyCenter);
     planSingleProj();
     S.pos = 0; S.panX = 0; S.panY = 0;
+    if (S.mode !== "orig") setMode("orig"); // 換角色或動作時先看原版；惡搞分頁的選單會再切回惡搞
     buildComps();
     const saved = store.get("segs:" + S.unit.id + ":" + S.partKey + ":" + name, null);
     S.segs = saved && saved.length ? saved : presetDemo1(clipN());
@@ -1155,7 +1234,7 @@ footer a { color: inherit; }
   function totalLen() { return S.mode === "remix" ? S.timeline.length : (anim() ? clipN() : 0); }
   function rate() { return S.mode === "remix" ? FPS_OUT : (S.part?.anim_rate || 24) * S.speed; }
   function drawCurrent() {
-    if (!S.part) return;
+    if (!S.part || !anim() || !S.atlas) return; // 切換角色載入中時先不畫
     const k = Math.floor(S.pos);
     if (S.mode === "remix") {
       const st = remixState(k);
@@ -1495,13 +1574,15 @@ footer a { color: inherit; }
   function setSize(sz) {
     const [w, h] = sz.split("x").map(Number);
     cv.width = w; cv.height = h;
+    cv.closest(".stage-col").style.setProperty("--ar", String(w / h));
     document.querySelectorAll("#sizes .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.size === sz)));
     store.set("size", sz); drawCurrent();
   }
 
   $("qBtn").onclick = () => { toggleLib(false); renderResults($("q").value); };
   $("libBtn").onclick = () => toggleLib($("library").hidden);
-  $("libClose").onclick = () => toggleLib(false);
+  $("libClose").onclick = () => { if (lib.onPick) { $("library").hidden = true; homeLib(); } else toggleLib(false); };
+  document.querySelectorAll("[data-lib-side]").forEach((b) => (b.onclick = () => openLibFor(+b.dataset.libSide)));
   $("libMore").onclick = () => { lib.shown += LIB_PAGE; renderLib(); };
   $("q").addEventListener("keydown", (e) => { if (e.key === "Enter") renderResults($("q").value); });
   let qTimer; $("q").addEventListener("input", () => { clearTimeout(qTimer); qTimer = setTimeout(() => { toggleLib(false); renderResults($("q").value); }, 250); });
@@ -1576,6 +1657,9 @@ footer a { color: inherit; }
   const ACTION_LABEL = { move: "移動接近", attack: "一般攻擊", skill1: "技能1", skill2: "技能2" };
   const D = {
     f: [null, null], moves: [], dist: 320, speed: 1, shake: true, invert: false, numbers: true, bars: true, projOn: true, projs: [],
+    finale: true, finalKey: null, koInfo: null, finalStart: 0, finalTarget: 1, bgImg: null, ground: 8, mode: "trade",
+    kind: "classic", raw: false, timeLimit: 60, range: [null, null], level: [null, null], cheat: [{}, {}],
+    frames: [[], []], timeMap: null, maxHp: [100, 100], resultK: -1, resultText: "", winner: -1, simLen: 0,
     tracks: [[], []], events: [], posKeys: [[], []], len: 1, cam: null,
     pos: 0, playing: true, recording: false, seed: 1,
   };
@@ -1708,10 +1792,23 @@ footer a { color: inherit; }
   }
   function framesFor(f, anim, slow) {
     const a = f.part.animations[anim];
-    const rate = (f.part.anim_rate || 24) * D.speed * (slow ? 0.5 : 1);
+    const sf = typeof slow === "number" ? slow : (slow ? 0.5 : 1);
+    const rate = (f.part.anim_rate || 24) * D.speed * sf;
     return { rate, dur: Math.max(1, Math.round(a.frame_count / rate * DFPS)) };
   }
+  // 你來我往／隨機：先排一次找出致命一擊，再把那一擊改成慢動作重新排
   function compileDuel() {
+    D.finalKey = null; D.koInfo = null;
+    if (D.kind === "real") { compileReal(); return; }
+    D.timeMap = null; D.maxHp = [100, 100];
+    compileOnce();
+    D.resultK = D.ko; D.resultText = D.ko >= 0 ? "K.O." : "";
+    const koEv = D.events.find((e) => e.ko);
+    D.finalStart = koEv && koEv.start != null ? koEv.start : D.ko - 20;
+    D.simLen = D.len;
+    buildReplay();
+  }
+  function compileOnce() {
     const [A, B] = D.f;
     D.tracks = [[], []]; D.events = []; D.projs = []; D.len = 30;
     if (!A || !B) return;
@@ -1741,7 +1838,10 @@ footer a { color: inherit; }
       }
       const reps = Math.max(1, Math.min(8, Math.round(m.repeat || 1)));
       for (let r = 0; r < reps && ko < 0; r++) {
-        const { rate, dur } = framesFor(f, anim, m.slow);
+        const isFinal = !!(D.finalKey && D.finalKey.mi === mi && D.finalKey.r === r);
+        const sf = isFinal ? 0.35 : (m.slow ? 0.5 : 1);
+        if (isFinal) { D.finalStart = k; D.finalTarget = j; }
+        const { rate, dur } = framesFor(f, anim, sf);
         D.tracks[i].push({ anim, start: k, end: k + dur, rate });
         let hitAt = k + Math.round(dur * hitFrac(f, anim));
         // 投射物：從角色手上射出，飛到對手身上才算命中
@@ -1758,7 +1858,7 @@ footer a { color: inherit; }
             const st = { x: pos[i] + face * (f.ox + cfg.x * 0.5), y: f.oy - cfg.y * 0.5 };
             const en = { x: pos[j], y: -g.h * (cfg.m === "CURVE" ? 0.05 : 0.3) };
             const dist = Math.hypot(en.x - st.x, en.y - st.y);
-            const fl = Math.max(2, Math.round(dist / (cfg.v * 60) * DFPS / D.speed));
+            const fl = Math.max(2, Math.round(dist / (cfg.v * 60) * DFPS / D.speed / sf));
             hitAt = spawn + fl;
             D.projs.push({ spawn, fl, st, en, curve: cfg.m === "CURVE", face, dr, flight, finish, a0: cfg.a0, a1: cfg.a1, rot: !!cfg.r, loop: !!cfg.l, dist });
           } else {
@@ -1768,22 +1868,22 @@ footer a { color: inherit; }
         }
         const dmg = Math.max(1, Math.round((DMG[m.action] || 8) * (0.75 + rnd(mi * 10 + r) * 0.5) / (reps > 1 ? 1.6 : 1)));
         hp[j] = Math.max(0, hp[j] - dmg);
-        D.events.push({ k: hitAt, target: j, attacker: i, dmg, hp: hp.slice(), ko: hp[j] <= 0 });
+        D.events.push({ k: hitAt, target: j, attacker: i, dmg, hp: hp.slice(), ko: hp[j] <= 0, start: k });
         let kbEnd = hitAt;
         const kb = g.clips.knockback;
         if (kb) {
-          const t = framesFor(g, kb, m.slow);
+          const t = framesFor(g, kb, sf);
           D.tracks[j].push({ anim: kb, start: hitAt, end: hitAt + t.dur, rate: t.rate });
           kbEnd = hitAt + t.dur;
           D.posKeys[j].push({ k: hitAt, x: pos[j] });
           pos[j] += dir * (hp[j] <= 0 ? 90 : 30); // 被打的一方往後退（遠離攻擊者）
           D.posKeys[j].push({ k: hitAt + Math.round(t.dur * 0.6), x: pos[j] });
         }
-        if (hp[j] <= 0) ko = hitAt;
+        if (hp[j] <= 0) { ko = hitAt; if (!D.finalKey) D.koInfo = { mi, r }; }
         k = r < reps - 1 ? k + Math.round(dur * (reps > 1 ? 0.8 : 1)) : Math.max(k + dur, kbEnd) + 8;
       }
     });
-    D.len = k + (ko >= 0 ? 50 : 24);
+    D.len = k + (ko >= 0 ? (D.finalKey ? 66 : 50) : 24);
     D.ko = ko;
     // 鏡頭：涵蓋兩人所有走到的位置
     let X0 = Infinity, X1 = -Infinity;
@@ -1797,6 +1897,7 @@ footer a { color: inherit; }
     $("dscrub").max = String(D.len - 1);
   }
   function posAt(i, k) {
+    if (D.kind === "real") { const fr = D.frames[i]; return fr.length ? fr[Math.max(0, Math.min(fr.length - 1, k))].x : 0; }
     const keys = D.posKeys[i];
     let x = keys[0].x;
     for (let n = 1; n < keys.length; n++) {
@@ -1808,6 +1909,7 @@ footer a { color: inherit; }
     return x;
   }
   function stateAt(i, k) {
+    if (D.kind === "real") { const fr = D.frames[i]; const s2 = fr[Math.max(0, Math.min(fr.length - 1, k))]; if (s2) return { anim: s2.anim, idx: s2.idx, active: s2.start >= 0, start: s2.start }; }
     const f = D.f[i];
     let tr = null;
     for (const t of D.tracks[i]) if (k >= t.start && k < t.end && (!tr || t.start >= tr.start)) tr = t;
@@ -1827,26 +1929,39 @@ footer a { color: inherit; }
     return { anim: idle, idx: Math.floor(k / DFPS * (f.part.anim_rate || 24)) % n, active: false, start: -1 };
   }
   function renderDuel(k) {
+    const kOut = k;
+    if (D.timeMap && D.timeMap.length) k = D.timeMap[Math.max(0, Math.min(D.timeMap.length - 1, k))];
     const W = dcv.width, H = dcv.height, c = dctx;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.globalAlpha = 1; c.globalCompositeOperation = "source-over";
     c.fillStyle = BG[S.bg] || "#ffffff"; c.fillRect(0, 0, W, H);
+    if (D.bgImg) {
+      const im = D.bgImg, s2 = Math.max(W / im.width, H / im.height);
+      c.drawImage(im, (W - im.width * s2) / 2, (H - im.height * s2) / 2, im.width * s2, im.height * s2);
+    }
     if (!D.f[0] || !D.f[1] || !D.cam) return;
+    // 最後一擊特寫的進度
+    const fin = D.finale ? finaleState(kOut) : null;
     let sx = 0, sy = 0, flashT = [false, false], inv = false;
     for (const e of D.events) {
+      if (e.noFx) continue;
       const d = k - e.k;
       if (d >= 0 && d < 4) flashT[e.target] = true;
       if (D.shake && d >= 0 && d < 8) { const amp = (e.ko ? 26 : 12) * (1 - d / 8); sx += (hash(k * 1.7) - 0.5) * 2 * amp; sy += (hash(k * 3.1 + 5) - 0.5) * 2 * amp; }
       if (D.invert && d >= 0 && d < 2) inv = true;
     }
     const top = D.bars ? 64 : 16;
-    const sc = Math.min(W * 0.94 / D.cam.w, (H - top - 20) / D.cam.h);
-    c.translate(W / 2 + sx, H - 24 + sy);
+    const groundY = D.bgImg ? H * (1 - D.ground / 100) : H - 24;
+    let sc = Math.min(W * 0.94 / D.cam.w, (groundY - top - 4) / D.cam.h);
+    let cx = D.cam.cx;
+    c.translate(W / 2 + sx, groundY + sy);
     c.scale(sc, sc);
-    c.translate(-D.cam.cx, 0);
+    c.translate(-cx, 0);
     // 地面陰影線
-    c.strokeStyle = "rgba(27,32,56,0.12)"; c.lineWidth = 2 / sc;
-    c.beginPath(); c.moveTo(D.cam.cx - D.cam.w, 2); c.lineTo(D.cam.cx + D.cam.w, 2); c.stroke();
+    if (!D.bgImg) {
+      c.strokeStyle = "rgba(27,32,56,0.12)"; c.lineWidth = 2 / sc;
+      c.beginPath(); c.moveTo(D.cam.cx - D.cam.w * 2, 2); c.lineTo(D.cam.cx + D.cam.w * 2, 2); c.stroke();
+    }
     const st = [stateAt(0, k), stateAt(1, k)];
     const order = st[0].start > st[1].start ? [1, 0] : [0, 1];
     for (const i of order) drawFighter(D.f[i], st[i].anim, st[i].idx, posAt(i, k), i === 1, flashT[i]);
@@ -1883,43 +1998,86 @@ footer a { color: inherit; }
         const x = posAt(e.target, k), y = -D.cam.bodyH * 1.05 - d * 2.2;
         c.save(); c.translate(x, y); c.scale(1 / sc, 1 / sc);
         c.globalAlpha = d < 18 ? 1 : 1 - (d - 18) / 8;
-        c.font = `900 ${e.ko ? 40 : 30}px ${getComputedStyle(document.body).fontFamily}`;
-        c.textAlign = "center"; c.lineWidth = 6; c.strokeStyle = "#1b2038"; c.fillStyle = e.ko ? "#ffc814" : "#ffffff";
-        const txt = `-${Math.round(e.dmg * 123)}`;
+        const big = e.ko || e.crit;
+        c.font = `900 ${big ? 40 : e.dotTick ? 22 : 30}px ${getComputedStyle(document.body).fontFamily}`;
+        c.textAlign = "center"; c.lineWidth = 6; c.strokeStyle = "#1b2038";
+        c.fillStyle = e.fx === "heal" ? "#3cd070" : e.fx === "buff" ? "#ffc814" : e.miss ? "#c9cede" : e.dotTick || e.fx === "dot" ? "#c79bff" : big ? "#ffc814" : "#ffffff";
+        const txt = e.label || `-${Math.round(e.dmg * 123)}`;
         c.strokeText(txt, 0, 0); c.fillText(txt, 0, 0);
         c.restore();
       }
     }
     c.setTransform(1, 0, 0, 1, 0, 0);
+    if (fin) drawFinale(c, W, H, k, fin);
     if (D.bars) {
-      let hp = [100, 100];
+      let hp = D.maxHp.slice();
       for (const e of D.events) if (e.k <= k) hp = e.hp;
       const bw = W * 0.4, bh = 16, pad = 18;
       [0, 1].forEach((i) => {
         const x = i === 0 ? pad : W - pad - bw;
         c.fillStyle = "#1b2038"; c.fillRect(x - 3, 30 - 3, bw + 6, bh + 6);
         c.fillStyle = "#3a405e"; c.fillRect(x, 30, bw, bh);
-        const w = bw * hp[i] / 100;
-        c.fillStyle = hp[i] > 30 ? (i === 0 ? "#ff3d7f" : "#2f7cff") : "#ffc814";
+        const ratio = Math.max(0, hp[i] / (D.maxHp[i] || 100));
+        const w = bw * ratio;
+        c.fillStyle = ratio > 0.3 ? (i === 0 ? "#ff3d7f" : "#2f7cff") : "#ffc814";
         if (i === 0) c.fillRect(x, 30, w, bh); else c.fillRect(x + bw - w, 30, w, bh);
         c.font = `700 15px ${getComputedStyle(document.body).fontFamily}`;
-        c.fillStyle = BG[S.bg] === "#000000" ? "#ffffff" : "#1b2038";
         c.textAlign = i === 0 ? "left" : "right";
+        if (D.bgImg || BG[S.bg] === "#000000") { c.lineWidth = 4; c.strokeStyle = "#1b2038"; c.strokeText(D.f[i].r.name, i === 0 ? x : x + bw, 22); c.fillStyle = "#ffffff"; }
+        else c.fillStyle = "#1b2038";
         c.fillText(D.f[i].r.name, i === 0 ? x : x + bw, 22);
+        if (D.kind === "real" && D.raw) {
+          c.font = `700 12px ${getComputedStyle(document.body).fontFamily}`;
+          const t2 = `${Math.round(hp[i]).toLocaleString()} / ${Math.round(D.maxHp[i]).toLocaleString()}`;
+          c.lineWidth = 3; c.strokeStyle = "#1b2038"; c.strokeText(t2, i === 0 ? x : x + bw, 60); c.fillStyle = "#ffffff"; c.fillText(t2, i === 0 ? x : x + bw, 60);
+        }
       });
       c.font = `900 22px ${getComputedStyle(document.body).fontFamily}`;
       c.textAlign = "center"; c.fillStyle = "#ffc814"; c.strokeStyle = "#1b2038"; c.lineWidth = 4;
       c.strokeText("VS", W / 2, 46); c.fillText("VS", W / 2, 46);
     }
-    if (D.ko >= 0 && k >= D.ko + 6) {
-      const d = k - D.ko - 6, s = Math.min(1, d / 8);
+    if (D.resultK >= 0 && k >= D.resultK + 6) {
+      const d = k - D.resultK - 6, s = Math.min(1, d / 8);
       c.save(); c.translate(W / 2, H * 0.42); c.scale(0.6 + s * 0.4, 0.6 + s * 0.4);
       c.font = `900 ${Math.round(H * 0.16)}px "Bungee", ${getComputedStyle(document.body).fontFamily}`;
       c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 10; c.strokeStyle = "#1b2038"; c.fillStyle = "#ffc814";
-      c.strokeText("K.O.", 0, 0); c.fillText("K.O.", 0, 0);
+      c.strokeText(D.resultText, 0, 0); c.fillText(D.resultText, 0, 0);
+      if (D.resultText === "TIME UP") {
+        c.font = `900 ${Math.round(H * 0.06)}px ${getComputedStyle(document.body).fontFamily}`; c.lineWidth = 6;
+        const wt = D.winner === -1 ? "平手" : `${D.f[D.winner].r.name} 獲勝`;
+        c.strokeText(wt, 0, H * 0.12); c.fillStyle = "#ffffff"; c.fillText(wt, 0, H * 0.12);
+      }
       c.restore();
     }
     if (inv && BG[S.bg]) { c.globalCompositeOperation = "difference"; c.fillStyle = "#ffffff"; c.fillRect(0, 0, W, H); c.globalCompositeOperation = "source-over"; }
+  }
+  // 最後一擊：K.O. 之後畫面慢慢轉成些微黑白
+  // K.O. 特效：先正常速度打完並顯示 K.O.，接著慢動作重播最後一擊、畫面淡灰
+  function buildReplay() {
+    const n = Math.max(1, D.simLen || D.len);
+    const map = [];
+    for (let t = 0; t < n; t++) map.push(t);
+    D.replayFrom = -1;
+    if (D.finale && D.ko >= 0) {
+      D.replayFrom = map.length;
+      const rs = Math.max(0, D.finalStart - 8), re = Math.min(n - 1, D.ko + 30);
+      for (let t = rs; t <= re; t += 0.4) map.push(Math.floor(t));
+      for (let h = 0; h < 24; h++) map.push(re);
+    }
+    D.timeMap = map;
+    D.len = map.length;
+    $("dscrub").max = String(D.len - 1);
+    if (D.kind !== "real") $("duelTotal").textContent = `共 ${D.len} 幀・約 ${(D.len / DFPS).toFixed(1)} 秒${D.ko >= 0 ? "・" + (D.events.find((e) => e.ko).target === 0 ? "右方" : "左方") + "獲勝" : ""}`;
+  }
+  function finaleState(kOut) {
+    if (!(D.replayFrom >= 0) || kOut < D.replayFrom) return null;
+    const t = Math.min(1, (kOut - D.replayFrom) / 10);
+    return { gray: t * t * (3 - 2 * t) };
+  }
+  function drawFinale(c, W, H, k, fin) {
+    if (!(fin.gray > 0)) return;
+    c.save(); c.globalCompositeOperation = "saturation"; c.globalAlpha = 0.6 * fin.gray;
+    c.fillStyle = "#808080"; c.fillRect(0, 0, W, H); c.restore();
   }
   function duelTick(dt) {
     if (D.recording) return;
@@ -1931,7 +2089,7 @@ footer a { color: inherit; }
   let dscrubbing = false;
 
   /* 招式預設 */
-  function availActions(i) { const f = D.f[i]; return f ? ["move", "attack", "skill1", "skill2"].filter((a) => f.clips[a]) : []; }
+  function availActions(i) { const f = D.f[i]; return f ? ["move", "attack", "skill1", "skill2"].filter((a) => f.clips[a] && !(a === "move" && D.kind === "real")) : []; }
   function presetTrade() {
     const out = [{ who: "A", action: "move" }, { who: "B", action: "move" }];
     const pick = (i, list) => list.find((a) => availActions(i).includes(a));
@@ -1946,7 +2104,7 @@ footer a { color: inherit; }
       const who = Math.random() < 0.5 ? "A" : "B";
       const acts = availActions(who === "A" ? 0 : 1).filter((a) => a !== "move");
       const a = acts[Math.floor(Math.random() * acts.length)];
-      out.push({ who, action: a, repeat: Math.random() < 0.25 ? 2 + Math.floor(Math.random() * 3) : 1, slow: Math.random() < 0.12 });
+      out.push({ who, action: a, repeat: Math.random() < 0.25 ? 2 + Math.floor(Math.random() * 3) : 1 });
     }
     return out;
   }
@@ -1959,7 +2117,17 @@ footer a { color: inherit; }
   }
   function renderMoves() {
     const box = $("moves"); box.textContent = "";
-    D.moves.forEach((m, n) => {
+    const real = D.kind === "real";
+    const order = real ? [...D.moves.keys()].filter((n) => D.moves[n].who !== "B" && D.moves[n].action !== "move").concat([...D.moves.keys()].filter((n) => D.moves[n].who === "B" && D.moves[n].action !== "move")) : [...D.moves.keys()];
+    let lastSide = null;
+    order.forEach((n) => {
+      const m = D.moves[n];
+      if (real && m.who !== lastSide) {
+        lastSide = m.who;
+        const h = document.createElement("p"); h.className = "moves-side";
+        h.textContent = (m.who === "B" ? "右方・" + (D.f[1]?.r.name || "") : "左方・" + (D.f[0]?.r.name || "")) + "（由上往下循環出招）";
+        box.appendChild(h);
+      }
       const i = m.who === "B" ? 1 : 0;
       const row = document.createElement("div"); row.className = "move " + (i ? "is-b" : "is-a");
       const no = document.createElement("span"); no.className = "move-no"; no.textContent = n + 1;
@@ -1980,8 +2148,9 @@ footer a { color: inherit; }
       slow.onchange = () => { m.slow = slow.checked; movesChanged(); };
       const tools = document.createElement("span"); tools.className = "move-tools";
       const tb = (t, fn, label) => { const b = document.createElement("button"); b.className = "btn small"; b.textContent = t; b.setAttribute("aria-label", label); b.onclick = fn; tools.appendChild(b); };
-      tb("↑", () => { if (n > 0) { [D.moves[n - 1], D.moves[n]] = [D.moves[n], D.moves[n - 1]]; movesChanged(true); } }, "上移");
-      tb("↓", () => { if (n < D.moves.length - 1) { [D.moves[n + 1], D.moves[n]] = [D.moves[n], D.moves[n + 1]]; movesChanged(true); } }, "下移");
+      const sameSide = (from, step) => { for (let q = from + step; q >= 0 && q < D.moves.length; q += step) if (!real || (D.moves[q].who === m.who && D.moves[q].action !== "move")) return q; return -1; };
+      tb("↑", () => { const q = sameSide(n, -1); if (q >= 0) { [D.moves[q], D.moves[n]] = [D.moves[n], D.moves[q]]; movesChanged(true); } }, "上移");
+      tb("↓", () => { const q = sameSide(n, 1); if (q >= 0) { [D.moves[q], D.moves[n]] = [D.moves[n], D.moves[q]]; movesChanged(true); } }, "下移");
       tb("✕", () => { D.moves.splice(n, 1); movesChanged(true); }, "刪除");
       const repL = document.createElement("label"); repL.className = "rep"; repL.append(document.createTextNode("連打"), rep);
       tools.prepend(slowL);
@@ -1995,7 +2164,8 @@ footer a { color: inherit; }
     if (rerender) renderMoves();
   }
   function saveDuel() {
-    store.set("duel", { a: D.f[0]?.r.id, b: D.f[1]?.r.id, moves: D.moves, dist: D.dist, speed: D.speed, shake: D.shake, invert: D.invert, numbers: D.numbers, bars: D.bars, seed: D.seed, projOn: D.projOn, mode: D.mode });
+    store.set("duel", { a: D.f[0]?.r.id, b: D.f[1]?.r.id, moves: D.moves, dist: D.dist, speed: D.speed, shake: D.shake, invert: D.invert, numbers: D.numbers, bars: D.bars, seed: D.seed, projOn: D.projOn, mode: D.mode, finale: D.finale, ground: D.ground,
+      kind: D.kind, raw: D.raw, timeLimit: D.timeLimit, range: D.range, level: D.level, cheat: D.cheat });
   }
   function fighterPanel(i) {
     const f = D.f[i];
@@ -2007,9 +2177,10 @@ footer a { color: inherit; }
     $("doverlay").hidden = false; $("doverlay").textContent = `載入 ${r.name} …`;
     try {
       D.f[i] = await loadFighter(r);
+      D.range[i] = null; D.level[i] = null; D.cheat[i] = {};
       fighterPanel(i);
       if (!keepMoves || D.mode !== "custom") D.moves = D.mode === "random" ? presetRandomDuel() : presetTrade();
-      compileDuel(); renderMoves(); saveDuel();
+      compileDuel(); renderMoves(); saveDuel(); renderRealPanel();
       D.pos = 0;
       $("doverlay").hidden = true;
     } catch (e) {
@@ -2072,6 +2243,7 @@ footer a { color: inherit; }
   function setDuelSize(sz) {
     const [w, h] = sz.split("x").map(Number);
     dcv.width = w; dcv.height = h;
+    dcv.closest(".stage-col").style.setProperty("--ar", String(w / h));
     document.querySelectorAll("#dsizes .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.size === sz)));
     store.set("dsize", sz);
   }
@@ -2080,6 +2252,11 @@ footer a { color: inherit; }
     const saved = store.get("duel", {});
     Object.assign(D, { dist: saved.dist || 320, speed: saved.speed || 1, shake: saved.shake !== false, invert: !!saved.invert, numbers: saved.numbers !== false, bars: saved.bars !== false, seed: saved.seed || 1, projOn: saved.projOn !== false });
     $("dProj").checked = D.projOn;
+    D.finale = saved.finale !== false; $("dFinale").checked = D.finale;
+    D.kind = saved.kind || "classic"; D.raw = !!saved.raw; D.timeLimit = saved.timeLimit || 60;
+    D.range = saved.range || [null, null]; D.level = saved.level || [null, null]; D.cheat = saved.cheat || [{}, {}];
+    D.ground = saved.ground ?? 8; $("dGround").value = D.ground; $("dGroundOut").textContent = D.ground + "%";
+    try { const u = localStorage.getItem("rk_duelBg"); if (u) applyDuelBg(await loadDuelBg(u)); } catch {}
     $("dDist").value = D.dist; $("dDistOut").textContent = D.dist;
     $("dSpeed").value = D.speed; $("dSpeedOut").textContent = D.speed.toFixed(2) + "×";
     $("dShake").checked = D.shake; $("dInvert").checked = D.invert; $("dNumbers").checked = D.numbers; $("dBars").checked = D.bars;
@@ -2094,8 +2271,10 @@ footer a { color: inherit; }
     D.moves = saved.moves && saved.moves.length ? saved.moves : presetTrade();
     $("doverlay").hidden = true;
     setDuelMode(D.mode, false);
+    renderRealPanel();
   }
   function setApp(mode) {
+    if (lib.onPick) { $("library").hidden = true; homeLib(); }
     S.app = mode;
     $("appSingle").setAttribute("aria-pressed", String(mode === "single"));
     $("appDuel").setAttribute("aria-pressed", String(mode === "duel"));
@@ -2110,7 +2289,7 @@ footer a { color: inherit; }
     let t; $(`dq${i}`).addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => renderDuelResults(i), 250); });
     $(`dq${i}`).addEventListener("keydown", (e) => { if (e.key === "Enter") renderDuelResults(i); });
   });
-  $("dSwap").onclick = () => { D.f.reverse(); fighterPanel(0); fighterPanel(1); D.moves.forEach((m) => (m.who = m.who === "A" ? "B" : "A")); movesChanged(true); };
+  $("dSwap").onclick = () => { D.f.reverse(); D.range.reverse(); D.level.reverse(); D.cheat.reverse(); renderRealPanel(); fighterPanel(0); fighterPanel(1); D.moves.forEach((m) => (m.who = m.who === "A" ? "B" : "A")); movesChanged(true); };
   $("dPlay").onclick = () => { D.playing = !D.playing; $("dPlay").textContent = D.playing ? "❚❚" : "▶"; $("dPlay").setAttribute("aria-label", D.playing ? "暫停" : "播放"); };
   $("dscrub").addEventListener("input", () => { dscrubbing = true; D.pos = +$("dscrub").value; D.playing = false; $("dPlay").textContent = "▶"; });
   $("dscrub").addEventListener("change", () => { dscrubbing = false; });
@@ -2126,7 +2305,7 @@ footer a { color: inherit; }
     document.querySelectorAll("#dModes .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.dmode === mode)));
     const custom = mode === "custom";
     $("moves").hidden = !custom; $("dAddRow").hidden = !custom; $("duelTotal").hidden = !custom;
-    $("dModeHint").textContent = MODE_HINT[mode];
+    $("dModeHint").textContent = MODE_HINT[mode] + (D.kind === "real" ? " 真實力：雙方同時行動，打不到會自動走過去，「移動接近」不再需要。" : "");
     if (regenerate && mode === "trade") D.moves = presetTrade();
     if (regenerate && mode === "random") D.moves = presetRandomDuel();
     D.pos = 0; D.playing = true;
@@ -2140,6 +2319,29 @@ footer a { color: inherit; }
   $("dSpeed").addEventListener("input", () => { D.speed = +$("dSpeed").value; $("dSpeedOut").textContent = D.speed.toFixed(2) + "×"; movesChanged(); });
   [["dShake", "shake"], ["dInvert", "invert"], ["dNumbers", "numbers"], ["dBars", "bars"]].forEach(([id, key]) => ($(id).onchange = () => { D[key] = $(id).checked; saveDuel(); }));
   $("dProj").onchange = () => { D.projOn = $("dProj").checked; movesChanged(); };
+  $("dFinale").onchange = () => { D.finale = $("dFinale").checked; movesChanged(); };
+  function applyDuelBg(img) {
+    D.bgImg = img;
+    $("dBgClear").hidden = !img; $("dGroundRow").hidden = !img; $("dBgHint").hidden = !img;
+  }
+  function loadDuelBg(url) {
+    return new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
+  }
+  $("dBgFile").onchange = async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const raw = await loadDuelBg(URL.createObjectURL(f));
+    if (!raw) { $("dStatus").textContent = "這張圖片讀不出來，請換一張 JPG 或 PNG。"; return; }
+    // 縮小到 1600 寬存起來，下次打開還在
+    const s = Math.min(1, 1600 / raw.width), cvs = document.createElement("canvas");
+    cvs.width = Math.round(raw.width * s); cvs.height = Math.round(raw.height * s);
+    cvs.getContext("2d").drawImage(raw, 0, 0, cvs.width, cvs.height);
+    const url = cvs.toDataURL("image/jpeg", 0.85);
+    applyDuelBg(await loadDuelBg(url));
+    try { localStorage.setItem("rk_duelBg", url); } catch {}
+  };
+  $("dBgClear").onclick = () => { applyDuelBg(null); $("dBgFile").value = ""; try { localStorage.removeItem("rk_duelBg"); } catch {} };
+  $("dGround").addEventListener("input", () => { D.ground = +$("dGround").value; $("dGroundOut").textContent = D.ground + "%"; saveDuel(); });
   document.querySelectorAll("#dsizes .chip").forEach((c) => (c.onclick = () => setDuelSize(c.dataset.size)));
   $("dRec").onclick = recordDuel;
   $("dAudio").onchange = (e) => {
@@ -2148,6 +2350,348 @@ footer a { color: inherit; }
     S.audioUrl = f ? URL.createObjectURL(f) : null;
     $("dStatus").textContent = f ? `已載入音樂：${f.name}` : "";
   };
+
+  /* ---------- 真實力對戰 ---------- */
+  const STAT5 = ["hp", "pa", "ma", "pd", "md"];
+  const CHEAT_FIELDS = [
+    ["hp", "體力"], ["pa", "物攻"], ["ma", "魔攻"], ["pd", "物防"], ["md", "魔防"],
+    ["ai", "攻擊間隔（秒）"], ["cr", "爆擊率 %"], ["cd", "爆擊傷害 %"], ["dg", "閃避率 %"], ["hit", "命中率 %"],
+    ["rg", "攻擊距離"], ["mv", "移動速度"],
+  ];
+  function mulberry32(a) {
+    return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  function levelLimits(label) {
+    const m = /(\d+)/.exec(label || ""); const star = m ? +m[1] : 0;
+    const evolved = /超進化|終極進化|究極進化/.test(label || "");
+    let cap = star >= 1 && star <= 5 ? star * 10 + 10 : star >= 6 && star <= 8 ? 60 + (star - 5) * 20 : star === 9 ? 160 : 100;
+    if (evolved) cap += 20;
+    return { cap, max: cap + (evolved ? 100 : 20) };
+  }
+  function statAt(arr, level, cap) {
+    const [b, g, gm] = arr || [0, 0, 0];
+    return b + (Math.min(level, cap) - 1) * g + Math.max(0, level - cap) * gm;
+  }
+  function defaultRange(i) {
+    const f = D.f[i]; if (!f) return 100;
+    const st = S.stats[f.r.id];
+    return Math.round(st?.rg || f.proj.range || 100);
+  }
+  function rangeOf(i) { return D.range[i] != null ? D.range[i] : defaultRange(i); }
+  // 原始數值：等級換算 → 金手指覆蓋
+  function rawStats(i) {
+    const f = D.f[i], st = S.stats[f.r.id] || {};
+    const lim = levelLimits(st.s || f.r.star);
+    const lv = Math.max(1, Math.min(lim.max, D.level[i] || lim.max));
+    const out = { level: lv, maxLevel: lim.max };
+    for (const k of STAT5) out[k] = Math.round(statAt(st[k], lv, lim.cap));
+    Object.assign(out, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, dg: st.dg || 0, hit: st.hit || 0, sh: st.sh || 0, sdg: st.sdg || 0, rg: rangeOf(i), mv: st.mv || f.proj.speed || 100 });
+    const ov = D.cheat[i] || {};
+    for (const [k] of CHEAT_FIELDS) if (ov[k] !== undefined && ov[k] !== "" && isFinite(+ov[k])) out[k] = +ov[k];
+    out.sk = st.sk || [];
+    return out;
+  }
+  function basicStats(i) {
+    const f = D.f[i], st = S.stats[f.r.id] || {};
+    return { rg: rangeOf(i), mv: st.mv || f.proj.speed || 100 };
+  }
+  function realQueues() {
+    // 真實力（非原始數值）：左右各自的招式清單，「移動接近」改由自動走位取代
+    const q = [[], []];
+    for (const m of D.moves) if (m.action !== "move") q[m.who === "B" ? 1 : 0].push(m);
+    for (const i of [0, 1]) if (!q[i].length) q[i].push({ who: i ? "B" : "A", action: "attack" });
+    return q;
+  }
+
+  function compileReal() {
+    const [A, B] = D.f;
+    D.frames = [[], []]; D.events = []; D.projs = []; D.tracks = [[], []];
+    D.ko = -1; D.resultK = -1; D.resultText = ""; D.timeMap = null;
+    if (!A || !B) return;
+    const rng = mulberry32(D.seed * 7919 + 13);
+    const raw = D.raw;
+    const st = [0, 1].map((i) => (raw ? rawStats(i) : basicStats(i)));
+    const maxHp = raw ? [st[0].hp, st[1].hp] : [100, 100];
+    D.maxHp = maxHp;
+    const r0 = st[0].rg, r1 = st[1].rg;
+    const comp = [2 * r1 / Math.max(1, r0 + r1), 2 * r0 / Math.max(1, r0 + r1)]; // 距離補償
+    const gap0 = Math.max(r0, r1) + 100;
+    const cd0 = gap0 + (A.w + B.w) / 2;
+    const F = [0, 1].map((i) => ({
+      x: i ? cd0 / 2 : -cd0 / 2, hp: maxHp[i], busy: 0, pendingKb: false, kbKo: false, qi: 0, nextAtk: 0,
+      skillCd: [0, 0], buff: false, dots: [], cur: null, dead: false,
+    }));
+    const queues = realQueues();
+    const limitK = Math.max(5, D.timeLimit || 60) * DFPS;
+    const hits = [];
+    let endK = -1, timeUp = false;
+    const dmgCalc = (a, t, coef, base) => {
+      if (base === "hp") return Math.max(0, a.hp - (a.pa > 0 ? t.pd : t.md)) * coef;
+      return (Math.max(0, a.pa - t.pd) + Math.max(0, a.ma - t.md)) * coef;
+    };
+    const startAnim = (i, anim, k, loop) => {
+      const f = D.f[i];
+      const rate = (f.part.anim_rate || 24) * D.speed;
+      const dur = Math.max(1, Math.round(f.part.animations[anim].frame_count / rate * DFPS));
+      F[i].cur = { anim, start: k, rate, loop, dur };
+      return dur;
+    };
+    const pushEvent = (e) => { e.hp = [F[0].hp, F[1].hp]; D.events.push(e); };
+
+    const applyHit = (h, k) => {
+      const a = F[h.i], t = F[h.j];
+      if (t.dead) return;
+      const sa = st[h.i], stt = st[h.j];
+      let dmg = 0, label = "", crit = false;
+      if (!raw) {
+        dmg = (DMG[h.action] || 8) * (0.75 + rng() * 0.5) * comp[h.i] / (h.reps > 1 ? 1.6 : 1);
+        label = `-${Math.round(dmg * 123)}`;
+      } else if (h.action === "attack") {
+        if (rng() < Math.max(0, stt.dg - sa.hit) / 100) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
+        crit = rng() < sa.cr / 100;
+        dmg = Math.max(1, dmgCalc(sa, stt, 1, "atk") * (crit ? sa.cd / 100 : 1) * (a.buff ? 1.5 : 1));
+        a.buff = false;
+        label = (crit ? "爆擊 " : "") + "-" + Math.round(dmg).toLocaleString();
+      } else {
+        const sk = sa.sk[h.action === "skill1" ? 0 : 1] || { e: [] };
+        if (rng() < Math.max(0, stt.sdg - sa.sh) / 100) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
+        if (!sk.e.length) {
+          // 純輔助技能：一半機率強化下一擊，一半機率回血
+          if (rng() < 0.5) { a.buff = true; pushEvent({ k, target: h.i, attacker: h.i, dmg: 0, label: "下一擊 +50%", fx: "buff", noFx: true }); }
+          else { a.hp = Math.min(maxHp[h.i], a.hp + maxHp[h.i] * 0.2); pushEvent({ k, target: h.i, attacker: h.i, dmg: 0, label: "回復 20%", fx: "heal", noFx: true }); }
+          return;
+        }
+        const mult = a.buff ? 1.5 : 1;
+        for (const e of sk.e) {
+          const v = dmgCalc(sa, stt, e.c, e.b) * mult;
+          if (e.t === "dot") t.dots.push({ per: Math.max(1, v), next: k + DFPS, until: k + Math.max(1, e.d) * DFPS + 1, from: h.i });
+          else dmg += v;
+        }
+        a.buff = false;
+        if (dmg <= 0) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "持續傷害", fx: "dot", noFx: true }); return; }
+        dmg = Math.max(1, dmg);
+        label = "-" + Math.round(dmg).toLocaleString();
+      }
+      t.hp = Math.max(0, t.hp - dmg);
+      t.pendingKb = true;
+      const ko = t.hp <= 0;
+      if (ko) { t.kbKo = true; }
+      pushEvent({ k, target: h.j, attacker: h.i, dmg: raw ? dmg : dmg, label, crit, ko, start: h.start });
+    };
+
+    const maxK = limitK + 400;
+    for (let k = 0; k < maxK; k++) {
+      // 命中與持續傷害
+      for (let n = hits.length - 1; n >= 0; n--) if (hits[n].k === k) { const h = hits.splice(n, 1)[0]; if (D.ko < 0 || h.k === D.ko) applyHit(h, k); }
+      for (const j of [0, 1]) {
+        const t = F[j];
+        for (const d of t.dots) {
+          if (k >= d.next && k < d.until && !t.dead && D.ko < 0) {
+            const v = Math.max(1, d.per);
+            t.hp = Math.max(0, t.hp - v); d.next += DFPS;
+            pushEvent({ k, target: j, attacker: d.from, dmg: v, label: "-" + Math.round(v).toLocaleString(), dotTick: true, noFx: true, ko: t.hp <= 0 });
+          }
+        }
+      }
+      // 勝負判定
+      if (D.ko < 0 && endK < 0) {
+        const dead = [F[0].hp <= 0, F[1].hp <= 0];
+        if (dead[0] || dead[1]) {
+          D.ko = k; D.resultK = k;
+          D.resultText = dead[0] && dead[1] ? "DRAW" : "K.O.";
+          D.winner = dead[0] && dead[1] ? -1 : dead[0] ? 1 : 0;
+          dead.forEach((x, i) => { if (x) { F[i].dead = true; F[i].pendingKb = true; F[i].kbKo = true; } });
+          endK = k + 60;
+          const last = [...D.events].reverse().find((e) => e.ko);
+          D.finalStart = last && last.start != null ? last.start : k - 20; D.finalTarget = D.winner === 0 ? 1 : 0;
+        } else if (k >= limitK) {
+          timeUp = true; D.resultK = k; D.resultText = "TIME UP";
+          const p0 = F[0].hp / maxHp[0], p1 = F[1].hp / maxHp[1];
+          D.winner = Math.abs(p0 - p1) < 1e-9 ? -1 : p0 > p1 ? 0 : 1;
+          endK = k + 50;
+        }
+      }
+      if (endK >= 0 && k >= endK) { D.simLen = k; break; }
+      const over = D.ko >= 0 || timeUp;
+      // 雙方各自行動
+      for (const i of [0, 1]) {
+        const me = F[i], op = F[1 - i], f = D.f[i];
+        const dir = i === 0 ? 1 : -1;
+        if (k < me.busy) continue;
+        if (me.pendingKb) {
+          me.pendingKb = false;
+          const kb = f.clips.knockback;
+          if (kb) {
+            const dur = startAnim(i, kb, k, false);
+            me.busy = k + dur;
+            me.slide = { from: me.x, to: me.x - dir * (me.kbKo ? 90 : 30), k0: k, k1: k + Math.round(dur * 0.6) };
+          }
+          continue;
+        }
+        if (me.dead || over) { if (!me.dead) { const idle = f.clips.idle || f.clips.attack; if (!me.cur || me.cur.anim !== idle) startAnim(i, idle, k, true); } continue; }
+        const gap = Math.abs(op.x - me.x) - (D.f[0].w + D.f[1].w) / 2;
+        const range = st[i].rg;
+        if (gap > range + 0.5) {
+          const step = Math.min(st[i].mv / DFPS * D.speed, gap - range);
+          me.x += dir * step;
+          if (f.clips.move && (!me.cur || me.cur.anim !== f.clips.move)) startAnim(i, f.clips.move, k, true);
+          continue;
+        }
+        let action = "attack";
+        if (raw) {
+          if (k < me.nextAtk) { const idle = f.clips.idle || f.clips.attack; if (!me.cur || (me.cur.anim !== idle && k >= me.busy)) startAnim(i, idle, k, true); continue; }
+          for (const s of [0, 1]) {
+            const sk = st[i].sk[s];
+            if (sk && k >= me.skillCd[s] && rng() < (sk.r || 0) / 100) { action = s ? "skill2" : "skill1"; me.skillCd[s] = k + (sk.cd || 0) * DFPS; break; }
+          }
+          me.nextAtk = k + Math.max(0.2, st[i].ai) * DFPS / D.speed;
+        } else {
+          const m = queues[i][me.qi % queues[i].length]; me.qi++;
+          action = m.action; me.reps = m.repeat || 1;
+        }
+        const anim = f.clips[action] || f.clips.attack;
+        const dur = startAnim(i, anim, k, false);
+        me.busy = k + dur + (raw ? 0 : 4);
+        let hitAt = k + Math.round(dur * hitFrac(f, anim));
+        const cfg = D.projOn ? f.proj[{ attack: "n", skill1: "s1", skill2: "s2" }[action]] : null;
+        const drp = cfg && f.bul[cfg.p];
+        const flight = drp && pickAnim(drp.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
+        if (drp && flight) {
+          const finish = pickAnim(drp.part, ["finish", "hit", "end"]);
+          const ready = f.part.animations[anim.replace(/_all$/, "_ready")];
+          const spawn = k + Math.round(dur * (ready && anim.endsWith("_all") ? ready.frame_count / f.part.animations[anim].frame_count : 0.3));
+          const g = D.f[1 - i];
+          if ((cfg.m === "LINEAR" || cfg.m === "CURVE") && cfg.v > 0 && cfg.e) {
+            const stp = { x: me.x + dir * (f.ox + cfg.x * 0.5), y: f.oy - cfg.y * 0.5 };
+            const en = { x: op.x, y: -g.h * (cfg.m === "CURVE" ? 0.05 : 0.3) };
+            const dist = Math.hypot(en.x - stp.x, en.y - stp.y);
+            const fl = Math.max(2, Math.round(dist / (cfg.v * 60) * DFPS / D.speed));
+            hitAt = spawn + fl;
+            D.projs.push({ spawn, fl, st: stp, en, curve: cfg.m === "CURVE", face: dir, dr: drp, flight, finish, a0: cfg.a0, a1: cfg.a1, rot: !!cfg.r, loop: !!cfg.l, dist });
+          } else {
+            D.projs.push({ direct: true, spawn: hitAt, en: { x: op.x, y: -g.h * 0.45 }, face: dir, dr: drp, flight, finish });
+          }
+        }
+        hits.push({ k: Math.max(k + 1, hitAt), i, j: 1 - i, action, start: k, reps: me.reps || 1 });
+      }
+      // 記錄這一幀兩人的姿勢與位置
+      for (const i of [0, 1]) {
+        const me = F[i], f = D.f[i];
+        if (me.slide) {
+          const s2 = me.slide;
+          me.x = k >= s2.k1 ? s2.to : s2.from + (s2.to - s2.from) * ((k - s2.k0) / Math.max(1, s2.k1 - s2.k0));
+          if (k >= s2.k1) me.slide = null;
+        }
+        let anim, idx, start = -1;
+        if (me.cur && (me.cur.loop || k < me.cur.start + me.cur.dur)) {
+          const n = f.part.animations[me.cur.anim].frame_count;
+          idx = Math.floor((k - me.cur.start) / DFPS * me.cur.rate);
+          idx = me.cur.loop ? idx % n : Math.min(n - 1, idx);
+          anim = me.cur.anim; start = me.cur.loop ? -1 : me.cur.start;
+        } else if (me.dead && f.clips.knockback) {
+          anim = f.clips.knockback; idx = f.part.animations[anim].frame_count - 1;
+        } else {
+          anim = f.clips.idle || f.clips.attack;
+          idx = Math.floor(k / DFPS * (f.part.anim_rate || 24)) % f.part.animations[anim].frame_count;
+        }
+        D.frames[i].push({ anim, idx, x: me.x, start });
+      }
+      D.simLen = k + 1;
+    }
+    buildReplay();
+    let X0 = Infinity, X1 = -Infinity;
+    D.frames.forEach((fr, i) => { const hw = D.f[i].w / 2; for (const s of fr) { X0 = Math.min(X0, s.x - hw); X1 = Math.max(X1, s.x + hw); } });
+    const bodyH = Math.max(A.h, B.h, 60);
+    D.cam = { cx: (X0 + X1) / 2, w: (X1 - X0) * 1.1 + 40, h: bodyH * 2.0, bodyH };
+    const who = D.winner === 0 ? "左方" : D.winner === 1 ? "右方" : "";
+    $("duelTotal").textContent = `共 ${D.len} 幀・約 ${(D.len / DFPS).toFixed(1)} 秒・` + (D.resultText === "TIME UP" ? `時間到，${who ? who + "獲勝" : "平手"}` : D.winner === -1 ? "平手" : who + "獲勝");
+    $("dscrub").max = String(D.len - 1);
+    if (raw) renderCheat();
+  }
+
+  /* 真實力設定面板 */
+  function renderRealPanel() {
+    const real = D.kind === "real";
+    document.querySelectorAll("#dKinds .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.kind === D.kind)));
+    $("realBox").hidden = !real;
+    $("rawBox").hidden = !(real && D.raw);
+    $("rCompHint").hidden = !!D.raw;
+    $("movesBox").hidden = real && D.raw;
+    $("rRaw").checked = !!D.raw;
+    $("rTime").value = D.timeLimit;
+    for (const i of [0, 1]) {
+      if (!D.f[i]) continue;
+      $(`rRange${i}`).value = rangeOf(i);
+      $(`rRange${i}`).placeholder = defaultRange(i);
+      const lim = levelLimits((S.stats[D.f[i].r.id] || {}).s || D.f[i].r.star);
+      $(`rLv${i}`).max = lim.max;
+      $(`rLv${i}`).value = Math.min(lim.max, D.level[i] || lim.max);
+      $(`rLvMax${i}`).textContent = `／${lim.max}`;
+      $(`rName${i}`).textContent = D.f[i].r.name;
+    }
+    if (real && D.raw) renderCheat();
+  }
+  function renderCheat() {
+    const box = $("cheatGrid"); if (!box || !D.f[0] || !D.f[1]) return;
+    box.textContent = "";
+    for (const i of [0, 1]) {
+      const sv = rawStats(i);
+      const col = document.createElement("div"); col.className = "cheat-col " + (i ? "is-b" : "is-a");
+      const h = document.createElement("strong"); h.textContent = (i ? "右方・" : "左方・") + D.f[i].r.name + `（Lv ${sv.level}）`;
+      col.appendChild(h);
+      for (const [k, label] of CHEAT_FIELDS) {
+        const l = document.createElement("label"); l.className = "field";
+        l.textContent = label;
+        const inp = document.createElement("input"); inp.type = "number"; inp.id = `ch${i}_${k}`; inp.step = "any";
+        inp.value = Number.isInteger(sv[k]) ? sv[k] : +(+sv[k]).toFixed(2);
+        if ((D.cheat[i] || {})[k] !== undefined) l.classList.add("changed");
+        inp.onchange = () => {
+          D.cheat[i] = D.cheat[i] || {};
+          if (k === "rg") { D.range[i] = inp.value === "" ? null : +inp.value; delete D.cheat[i].rg; }
+          else D.cheat[i][k] = inp.value === "" ? undefined : +inp.value;
+          realChanged();
+        };
+        l.appendChild(inp); col.appendChild(l);
+      }
+      const mult = document.createElement("div"); mult.className = "cheat-mult";
+      const lab = document.createElement("span"); lab.textContent = "體力／攻防 ×"; mult.appendChild(lab);
+      for (const n of [10, 100, 1000]) {
+        const b = document.createElement("button"); b.className = "btn small"; b.textContent = "×" + n;
+        b.onclick = () => applyMult(i, n); mult.appendChild(b);
+      }
+      const ni = document.createElement("input"); ni.type = "number"; ni.min = "0"; ni.step = "any"; ni.placeholder = "自訂"; ni.id = `chMul${i}`; ni.setAttribute("aria-label", "自訂倍率");
+      const go = document.createElement("button"); go.className = "btn small"; go.textContent = "套用";
+      go.onclick = () => { if (+ni.value > 0) applyMult(i, +ni.value); };
+      mult.append(ni, go); col.appendChild(mult);
+      const reset = document.createElement("button"); reset.className = "btn small"; reset.textContent = "恢復資料庫數值";
+      reset.onclick = () => { D.cheat[i] = {}; D.range[i] = null; realChanged(); };
+      col.appendChild(reset);
+      box.appendChild(col);
+    }
+  }
+  function applyMult(i, n) {
+    const sv = rawStats(i);
+    D.cheat[i] = D.cheat[i] || {};
+    for (const k of STAT5) D.cheat[i][k] = Math.round(sv[k] * n);
+    realChanged();
+  }
+  function realChanged() { compileDuel(); saveDuel(); renderRealPanel(); D.pos = 0; }
+  function setKind(kind) { D.kind = kind; realChanged(); renderMoves(); setDuelMode(D.mode, false); }
+
+
+  document.querySelectorAll("#dKinds .chip").forEach((c) => (c.onclick = () => setKind(c.dataset.kind)));
+  $("rRaw").onchange = () => { D.raw = $("rRaw").checked; realChanged(); };
+  $("rTime").onchange = () => { D.timeLimit = Math.max(5, Math.min(600, +$("rTime").value || 60)); realChanged(); };
+  for (const i of [0, 1]) {
+    $(`rRange${i}`).onchange = () => { const v = $(`rRange${i}`).value; D.range[i] = v === "" ? null : Math.max(0, +v); realChanged(); };
+    $(`rLv${i}`).onchange = () => {
+      D.level[i] = Math.max(1, +$(`rLv${i}`).value || 1);
+      if (D.cheat[i]) for (const k of STAT5) delete D.cheat[i][k]; // 換等級時，體力攻防改回依等級計算
+      realChanged();
+    };
+  }
+  $("rRangeReset").onclick = () => { D.range = [null, null]; realChanged(); };
+  $("rRerun").onclick = () => { D.seed = Math.floor(Math.random() * 100000); realChanged(); D.playing = true; };
 
   /* ---------- 啟動 ---------- */
   (async () => {
@@ -2161,7 +2705,7 @@ footer a { color: inherit; }
     renderResults($("q").value);
     if (r) await selectUnit(r, { clip: "skill1" });
     else showOverlay("目前無法讀取角色資料。");
-    setMode("remix");
+    setMode("orig");
     setApp(store.get("app", "single"));
     requestAnimationFrame(loop);
   })();
