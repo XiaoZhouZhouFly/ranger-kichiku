@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.2-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.2"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.3-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.3"></a>
 </p>
 
 ### 👉 [點這裡開啟網站](https://xiaozhouzhoufly.github.io/ranger-kichiku/)
@@ -11,10 +11,11 @@
 
 非官方粉絲工具，與 LINE 無關。角色美術版權屬於 LINE；動畫資料每日同步自 [LINE Rangers 資料站](https://rangerbook.warmycat.com/)（蚯蚓貓）的公開素材庫。
 
-## 最近更新（v4.2）
+## 最近更新（v4.3）
 
-- 原始數值加入技能抗性：受到的技能傷害照 % 減少，不影響普通攻擊。
-- 金手指可以分別調整普攻與技能的閃避、命中，以及技能抗性。
+- 對戰類型分成三種：經典對戰、真距離對戰、原始數值對戰。
+- 真距離與原始數值對戰：只有體力跌破一半與倒下時才會擊退，並立刻打斷正在出的招。
+- 經典對戰：新增說明，輔助技能在經典對戰中同樣會造成傷害。
 
 📜 [完整版本更新日誌](CHANGELOG.md)
 

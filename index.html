@@ -462,12 +462,14 @@ footer a { color: inherit; }
             <span class="lbl">對戰類型</span>
             <div class="chips" id="dKinds">
               <button class="chip" data-kind="classic" aria-pressed="true">經典對戰</button>
-              <button class="chip" data-kind="real" aria-pressed="false">真實力對戰</button>
+              <button class="chip" data-kind="real" aria-pressed="false">真距離對戰</button>
+              <button class="chip" data-kind="raw" aria-pressed="false">原始數值對戰</button>
             </div>
+            <p class="hint" id="classicHint">經典對戰：所有技能都當作攻擊，包含沒有傷害倍率的輔助技能（例如加攻、回血、無敵），出招就會打到對手。想看輔助技能改成強化下一擊或回血的效果，請用真距離對戰或原始數值對戰。</p>
           </div>
           <div class="group" id="realBox" hidden>
-            <span class="lbl">真實力設定</span>
-            <p class="hint">雙方同時行動，對手在自己的攻擊距離內就出手，打不到會自動走過去。開場距離 = 較長的攻擊距離 + 100。被打中不會中斷正在出的招。</p>
+            <span class="lbl" id="realLbl">真距離設定</span>
+            <p class="hint">雙方同時行動，對手在自己的攻擊距離內就出手，打不到會自動走過去。開場距離 = 較長的攻擊距離 + 100。平常被打中不會擊退、也不會中斷出招；體力跌破一半、以及倒下時，會立刻被擊退並打斷正在出的招（還沒放出去的攻擊取消，已射出的投射物照常命中）。</p>
             <div class="real-grid">
               <label class="field"><span id="rName0">左方</span>攻擊距離<input type="number" id="rRange0" min="0" step="5"></label>
               <label class="field"><span id="rName1">右方</span>攻擊距離<input type="number" id="rRange1" min="0" step="5"></label>
@@ -475,8 +477,7 @@ footer a { color: inherit; }
             </div>
             <div class="row"><button class="btn small" id="rRangeReset">攻擊距離恢復預設</button></div>
             <p class="hint" id="rCompHint">距離補償：攻擊距離較短的一方傷害較高，例如距離 1：2 時傷害 2：1。</p>
-            <label class="check"><input type="checkbox" id="rRaw"> 原始數值（照資料庫真實數值自動對戰）</label>
-            <p class="hint warn" id="rRawMissing" hidden>網站上還沒有原始數值資料（data/stats.json），所以暫時不能用。請確認 GitHub 上的 sync.py 已換成新版，並等同步跑完再重新整理。</p>
+            <p class="hint warn" id="rRawMissing" hidden>網站上還沒有原始數值資料（data/stats.json），所以原始數值對戰暫時不能用。請確認 GitHub 上的 sync.py 已換成新版，並等同步跑完再重新整理。</p>
             <p class="hint warn" id="rZeroWarn" hidden></p>
             <div id="rawBox" hidden class="group">
               <div class="real-grid">
@@ -1811,7 +1812,7 @@ footer a { color: inherit; }
     D.simLen = D.len;
     buildReplay();
   }
-  // 真實力對戰用。純輔助技能：資料庫裡這招沒有任何傷害倍率（例如只有攻擊力提升、無敵、回血）。
+  // 真距離／原始數值對戰用。純輔助技能：資料庫裡這招沒有任何傷害倍率（例如只有攻擊力提升、無敵、回血）。
   // 沒有數值資料時無法判斷，當作攻擊技能。
   function isSupport(i, action) {
     if (action !== "skill1" && action !== "skill2") return false;
@@ -2317,7 +2318,7 @@ footer a { color: inherit; }
     document.querySelectorAll("#dModes .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.dmode === mode)));
     const custom = mode === "custom";
     $("moves").hidden = !custom; $("dAddRow").hidden = !custom; $("duelTotal").hidden = !custom;
-    $("dModeHint").textContent = MODE_HINT[mode] + (D.kind === "real" ? " 真實力：雙方同時行動，打不到會自動走過去，「移動接近」不再需要。" : "");
+    $("dModeHint").textContent = MODE_HINT[mode] + (D.kind === "real" ? " 真距離：雙方同時行動，打不到會自動走過去，「移動接近」不再需要；只有體力跌破一半與倒下時才會被擊退。" : "");
     if (regenerate && mode === "trade") D.moves = presetTrade();
     if (regenerate && mode === "random") D.moves = presetRandomDuel();
     D.pos = 0; D.playing = true;
@@ -2363,7 +2364,7 @@ footer a { color: inherit; }
     $("dStatus").textContent = f ? `已載入音樂：${f.name}` : "";
   };
 
-  /* ---------- 真實力對戰 ---------- */
+  /* ---------- 真距離／原始數值對戰（內部 kind = "real"，原始數值為 D.raw） ---------- */
   const STAT5 = ["hp", "pa", "ma", "pd", "md"];
   const CHEAT_FIELDS = [
     ["hp", "體力"], ["pa", "物攻"], ["ma", "魔攻"], ["pd", "物防"], ["md", "魔防"],
@@ -2409,7 +2410,7 @@ footer a { color: inherit; }
     return { rg: rangeOf(i), mv: st.mv || f.proj.speed || 100 };
   }
   function realQueues() {
-    // 真實力（非原始數值）：左右各自的招式清單，「移動接近」改由自動走位取代
+    // 真距離：左右各自的招式清單，「移動接近」改由自動走位取代
     const q = [[], []];
     for (const m of D.moves) if (m.action !== "move") q[m.who === "B" ? 1 : 0].push(m);
     for (const i of [0, 1]) if (!q[i].length) q[i].push({ who: i ? "B" : "A", action: "attack" });
@@ -2449,6 +2450,12 @@ footer a { color: inherit; }
       F[i].cur = { anim, start: k, rate, loop, dur };
       return dur;
     };
+    // 擊退只在「體力跌破一半」與「倒下」時發生，會立刻打斷正在出的招
+    const checkKb = (j, before) => {
+      const t = F[j], half = maxHp[j] / 2;
+      if (t.hp <= 0) { t.pendingKb = true; t.kbKo = true; }
+      else if (before >= half && t.hp < half) t.pendingKb = true;
+    };
     const pushEvent = (e) => { e.hp = [F[0].hp, F[1].hp]; D.events.push(e); };
 
     const applyHit = (h, k) => {
@@ -2487,10 +2494,10 @@ footer a { color: inherit; }
         dmg = Math.max(1, dmg);
         label = "-" + Math.round(dmg).toLocaleString();
       }
+      const before = t.hp;
       t.hp = Math.max(0, t.hp - dmg);
-      t.pendingKb = true;
       const ko = t.hp <= 0;
-      if (ko) { t.kbKo = true; }
+      checkKb(h.j, before);
       pushEvent({ k, target: h.j, attacker: h.i, dmg: raw ? dmg : dmg, label, crit, ko, start: h.start });
     };
 
@@ -2502,8 +2509,9 @@ footer a { color: inherit; }
         const t = F[j];
         for (const d of t.dots) {
           if (k >= d.next && k < d.until && !t.dead && D.ko < 0) {
-            const v = Math.max(1, d.per);
+            const v = Math.max(1, d.per), before = t.hp;
             t.hp = Math.max(0, t.hp - v); d.next += DFPS;
+            checkKb(j, before);
             pushEvent({ k, target: j, attacker: d.from, dmg: v, label: "-" + Math.round(v).toLocaleString(), dotTick: true, noFx: true, ko: t.hp <= 0 });
           }
         }
@@ -2532,9 +2540,11 @@ footer a { color: inherit; }
       for (const i of [0, 1]) {
         const me = F[i], op = F[1 - i], f = D.f[i];
         const dir = i === 0 ? 1 : -1;
-        if (k < me.busy) continue;
         if (me.pendingKb) {
           me.pendingKb = false;
+          // 打斷：還沒放出去的攻擊（近戰還沒打到、投射物還沒射出）全部取消
+          for (let n = hits.length - 1; n >= 0; n--) if (hits[n].i === i && hits[n].rel > k) hits.splice(n, 1);
+          D.projs = D.projs.filter((p) => !(p.own === i && p.spawn > k));
           const kb = f.clips.knockback;
           if (kb) {
             const dur = startAnim(i, kb, k, false);
@@ -2543,6 +2553,7 @@ footer a { color: inherit; }
           }
           continue;
         }
+        if (k < me.busy) continue;
         if (me.dead || over) { if (!me.dead) { const idle = f.clips.idle || f.clips.attack; if (!me.cur || me.cur.anim !== idle) startAnim(i, idle, k, true); } continue; }
         const gap = Math.abs(op.x - me.x) - (D.f[0].w + D.f[1].w) / 2;
         const range = st[i].rg;
@@ -2567,7 +2578,7 @@ footer a { color: inherit; }
         const anim = f.clips[action] || f.clips.attack;
         const dur = startAnim(i, anim, k, false);
         me.busy = k + dur + (raw ? 0 : 4);
-        let hitAt = k + Math.round(dur * hitFrac(f, anim));
+        let hitAt = k + Math.round(dur * hitFrac(f, anim)), rel = hitAt;
         const cfg = D.projOn && !isSupport(i, action) ? f.proj[{ attack: "n", skill1: "s1", skill2: "s2" }[action]] : null;
         const drp = cfg && f.bul[cfg.p];
         const flight = drp && pickAnim(drp.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
@@ -2581,13 +2592,13 @@ footer a { color: inherit; }
             const en = { x: op.x, y: -g.h * (cfg.m === "CURVE" ? 0.05 : 0.3) };
             const dist = Math.hypot(en.x - stp.x, en.y - stp.y);
             const fl = Math.max(2, Math.round(dist / (cfg.v * 60) * DFPS / D.speed));
-            hitAt = spawn + fl;
-            D.projs.push({ spawn, fl, st: stp, en, curve: cfg.m === "CURVE", face: dir, dr: drp, flight, finish, a0: cfg.a0, a1: cfg.a1, rot: !!cfg.r, loop: !!cfg.l, dist });
+            hitAt = spawn + fl; rel = spawn;
+            D.projs.push({ own: i, spawn, fl, st: stp, en, curve: cfg.m === "CURVE", face: dir, dr: drp, flight, finish, a0: cfg.a0, a1: cfg.a1, rot: !!cfg.r, loop: !!cfg.l, dist });
           } else {
-            D.projs.push({ direct: true, spawn: hitAt, en: { x: op.x, y: -g.h * 0.45 }, face: dir, dr: drp, flight, finish });
+            D.projs.push({ own: i, direct: true, spawn: hitAt, en: { x: op.x, y: -g.h * 0.45 }, face: dir, dr: drp, flight, finish });
           }
         }
-        hits.push({ k: Math.max(k + 1, hitAt), i, j: 1 - i, action, start: k, reps: me.reps || 1 });
+        hits.push({ k: Math.max(k + 1, hitAt), rel: Math.max(k + 1, rel), i, j: 1 - i, action, start: k, reps: me.reps || 1 });
       }
       // 記錄這一幀兩人的姿勢與位置
       for (const i of [0, 1]) {
@@ -2624,22 +2635,23 @@ footer a { color: inherit; }
     if (raw) renderCheat();
   }
 
-  /* 真實力設定面板 */
+  /* 真距離／原始數值設定面板 */
+  function kindChip() { return D.kind === "real" ? (D.raw ? "raw" : "real") : "classic"; }
   function renderRealPanel() {
-    const real = D.kind === "real";
-    document.querySelectorAll("#dKinds .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.kind === D.kind)));
-    $("realBox").hidden = !real;
     const hasStats = !!(S.stats && Object.keys(S.stats).length);
-    if (!hasStats) D.raw = false;
-    $("rRaw").disabled = !hasStats;
-    $("rRawMissing").hidden = !(real && !hasStats);
+    const wantRaw = D.kind === "real" && D.raw;
+    const real = D.kind === "real";
+    document.querySelectorAll("#dKinds .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.kind === (wantRaw ? "raw" : kindChip()))));
+    $("realBox").hidden = !real;
+    $("realLbl").textContent = wantRaw ? "原始數值設定" : "真距離設定";
+    $("classicHint").hidden = real;
+    $("rRawMissing").hidden = !(wantRaw && !hasStats);
     const zero = [0, 1].filter((i) => D.f[i] && hasStats && real && D.raw && !(statAt((S.stats[D.f[i].r.id] || {}).hp, 1, 1) > 1)).map((i) => D.f[i].r.name);
     $("rZeroWarn").hidden = !zero.length;
     $("rZeroWarn").textContent = zero.length ? `「${zero.join("」「")}」在資料庫裡沒有自己的體力數值（多半是召喚物或主角），原始數值對戰會一碰就倒。可以用金手指自己填數值。` : "";
-    $("rawBox").hidden = !(real && D.raw);
+    $("rawBox").hidden = !(wantRaw && hasStats);
     $("rCompHint").hidden = !!D.raw;
     $("movesBox").hidden = real && D.raw;
-    $("rRaw").checked = !!D.raw;
     $("rTime").value = D.timeLimit;
     for (const i of [0, 1]) {
       if (!D.f[i]) continue;
@@ -2698,11 +2710,14 @@ footer a { color: inherit; }
     realChanged();
   }
   function realChanged() { compileDuel(); saveDuel(); renderRealPanel(); D.pos = 0; }
-  function setKind(kind) { D.kind = kind; realChanged(); renderMoves(); setDuelMode(D.mode, false); }
+  function setKind(kind) {
+    D.kind = kind === "classic" ? "classic" : "real";
+    D.raw = kind === "raw";
+    realChanged(); renderMoves(); setDuelMode(D.mode, false);
+  }
 
 
   document.querySelectorAll("#dKinds .chip").forEach((c) => (c.onclick = () => setKind(c.dataset.kind)));
-  $("rRaw").onchange = () => { D.raw = $("rRaw").checked; realChanged(); };
   $("rTime").onchange = () => { D.timeLimit = Math.max(5, Math.min(600, +$("rTime").value || 60)); realChanged(); };
   for (const i of [0, 1]) {
     $(`rRange${i}`).onchange = () => { const v = $(`rRange${i}`).value; D.range[i] = v === "" ? null : Math.max(0, +v); realChanged(); };
