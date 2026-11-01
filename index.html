@@ -100,6 +100,16 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 .cheat-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; padding: 10px; border-radius: 10px; background: var(--paper); border: 1.5px solid var(--line); border-top: 5px solid var(--hot); align-content: start; }
 .cheat-col.is-b { border-top-color: var(--cool); }
 .hint.warn { color: var(--hot); font-weight: 700; }
+.hint-fold > summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--muted); list-style-position: inside; }
+.hint-fold[open] > summary { margin-bottom: 4px; }
+.hint-fold:has(> p[hidden]) { display: none; }
+.sfx-set { display: grid; gap: 6px; }
+.sfx-set > strong { font-size: 13px; }
+.sfx-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 6px; align-items: center; font-size: 13px; }
+.sfx-row select { min-width: 0; width: 100%; padding: 5px 6px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font-size: 13px; }
+.sfx-row input[type="file"], .sfx-row .sfx-note { grid-column: 2 / -1; max-width: 100%; font-size: 12px; }
+.sfx-row .sfx-note:empty { display: none; }
+.sfx-row .sfx-note { color: var(--hot); }
 #rHpMul { align-items: center; }
 #rHpMul input { width: 84px; min-width: 0; padding: 5px 8px; border: 1.5px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font-size: 13px; }
 .cheat-col > strong, .cheat-col > .cheat-mult, .cheat-col > button { grid-column: 1 / -1; }
@@ -395,6 +405,9 @@ footer a { color: inherit; }
             <button class="chip" data-size="1280x720" aria-pressed="false">16:9 橫式</button>
           </div>
         </div>
+        <div class="group" id="sfxSingle">
+          <span class="lbl">音效</span>
+        </div>
         <div class="group">
           <span class="lbl">背景音樂（選用）</span>
           <input type="file" id="audioFile" accept="audio/*">
@@ -531,7 +544,7 @@ footer a { color: inherit; }
               <label class="check"><input type="checkbox" id="dNumbers" checked> 傷害數字</label>
               <label class="check"><input type="checkbox" id="dBars" checked> 血條</label>
               <label class="check"><input type="checkbox" id="dProj" checked> 投射物</label>
-              <label class="check"><input type="checkbox" id="dFinale" checked> K.O. 後慢動作重播最後一擊（淡灰）</label>
+              <label class="check"><input type="checkbox" id="dFinale" checked> K.O. 後慢動作重播最後一擊（黑白 REPLAY）</label>
             </div>
             <div class="chips">
               <button class="chip" data-bg="white" aria-pressed="true">白</button>
@@ -546,6 +559,9 @@ footer a { color: inherit; }
             <p class="hint" id="dBgHint" hidden>拖動「地面高度」讓角色的腳踩在背景圖的地面上。背景圖只存在這台裝置的瀏覽器裡。</p>
           </div>
 
+          <div class="group" id="sfxDuel">
+            <span class="lbl">音效</span>
+          </div>
           <div class="group">
             <span class="lbl">輸出</span>
             <div class="chips" id="dsizes">
@@ -1274,12 +1290,19 @@ footer a { color: inherit; }
     if (!S.part || S.recording) return;
     if (S.playing) {
       const len = totalLen();
+      const before = S.sfxPrev ?? (Math.floor(S.pos) - 1);
       S.pos += dt * rate();
+      let wrapped = false;
       if (S.pos >= len) {
-        if (S.loop || S.mode === "remix") S.pos = S.pos % Math.max(1, len);
+        if (S.loop || S.mode === "remix") { S.pos = S.pos % Math.max(1, len); wrapped = true; }
         else { S.pos = len - 1; setPlaying(false); }
       }
-    }
+      const cur = Math.floor(S.pos);
+      if (wrapped) { singleSfxStep(before, len - 1); singleSfxStep(-1, cur); }
+      else if (cur < before) singleSfxStep(cur - 1, cur);
+      else singleSfxStep(before, cur);
+      S.sfxPrev = cur;
+    } else S.sfxPrev = null;
     drawCurrent();
   }
   function setPlaying(p) {
@@ -1288,7 +1311,7 @@ footer a { color: inherit; }
     $("playBtn").setAttribute("aria-label", p ? "暫停" : "播放");
   }
   function setMode(m) {
-    S.mode = m; S.pos = 0;
+    S.mode = m; S.pos = 0; S.sfxPrev = null;
     $("modeOrig").setAttribute("aria-pressed", String(m === "orig"));
     $("modeRemix").setAttribute("aria-pressed", String(m === "remix"));
     updateScrub(); drawCurrent();
@@ -1506,6 +1529,210 @@ footer a { color: inherit; }
     setTimeout(() => URL.revokeObjectURL(url), 60000);
     status.textContent = `已產生 ${filename}。若沒有自動下載，請改用 Safari 或 Chrome 開啟本頁。`;
   }
+  /* ---------- 音效 ----------
+     普攻在命中時播、技能在發動時播；左右角色與單人各自設定。
+     所有聲音（含背景音樂）都走同一個 AudioContext，錄影時一起混進影片。 */
+  const SFX_PRESETS = [
+    ["none", "無聲"], ["game", "遊戲技能發動聲"], ["punch", "拳擊"], ["slash", "斬擊"], ["magic", "魔法彈"],
+    ["laser", "雷射"], ["boom", "爆炸"], ["thunder", "雷電"], ["shine", "閃光"], ["charge", "蓄力"], ["custom", "自己上傳…"],
+  ];
+  const SFX = {
+    ctx: null, master: null, buffers: {}, custom: {}, voices: {}, ready: null,
+    vol: store.get("sfxVol", 0.7),
+    cfg: Object.assign({ single: { atk: "punch", skill: "game", hit: "boom" }, duel: [{ atk: "punch", skill: "game", hit: "boom" }, { atk: "slash", skill: "game", hit: "thunder" }] }, store.get("sfx", {})),
+  };
+  // 舊設定沒有「技能命中」時補上預設
+  [SFX.cfg.single, ...(SFX.cfg.duel || [])].forEach((c, n) => { if (c && !c.hit) c.hit = n === 2 ? "thunder" : "boom"; });
+  function sfxSave() { store.set("sfx", SFX.cfg); store.set("sfxVol", SFX.vol); }
+  function sfxCtx() {
+    if (!SFX.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      SFX.ctx = new AC();
+      SFX.master = SFX.ctx.createGain(); SFX.master.gain.value = SFX.vol;
+      SFX.master.connect(SFX.ctx.destination);
+      SFX.ready = sfxLoad();
+    }
+    if (SFX.ctx.state === "suspended") SFX.ctx.resume().catch(() => {});
+    return SFX.ctx;
+  }
+  async function sfxLoad() {
+    const ids = SFX_PRESETS.map((p) => p[0]).filter((id) => !["none", "game", "custom"].includes(id));
+    await Promise.all(ids.map(async (id) => { try { SFX.buffers[id] = await sfxSynth(id); } catch {} }));
+    try {
+      const r = await fetch("sfx/skill-game.mp3");
+      if (r.ok) SFX.buffers.game = await sfxDecode(await r.arrayBuffer());
+    } catch {}
+  }
+  function sfxDecode(ab) {
+    return new Promise((ok, bad) => { const p = SFX.ctx.decodeAudioData(ab, ok, bad); if (p && p.then) p.then(ok, bad); });
+  }
+  async function sfxSynth(id) {
+    const sr = 44100;
+    const dur = { punch: 0.24, slash: 0.32, magic: 0.48, laser: 0.26, boom: 1.1, thunder: 1.1, shine: 0.95, charge: 0.8 }[id] || 0.4;
+    const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const oc = new OC(1, Math.ceil(sr * dur), sr);
+    const out = oc.createGain(); out.connect(oc.destination);
+    let seed = 12345;
+    const noise = () => {
+      const b = oc.createBuffer(1, Math.ceil(sr * dur), sr), d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; d[i] = seed / 0x3fffffff - 1; }
+      const n = oc.createBufferSource(); n.buffer = b; return n;
+    };
+    const env = (g, t0, a, peak, d) => {
+      g.gain.setValueAtTime(0.0001, 0); g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(peak, t0 + a); g.gain.exponentialRampToValueAtTime(0.0001, t0 + a + d);
+    };
+    const osc = (type, f0, f1, t0, t1, peak, a, d, dest = out) => {
+      const o = oc.createOscillator(), g = oc.createGain(); o.type = type;
+      o.frequency.setValueAtTime(f0, t0); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t1);
+      env(g, t0, a, peak, d); o.connect(g); g.connect(dest); o.start(t0); o.stop(Math.min(dur, t0 + a + d + 0.02));
+    };
+    const nz = (type, f0, f1, t0, t1, q, peak, a, d) => {
+      const n = noise(), f = oc.createBiquadFilter(), g = oc.createGain(); f.type = type; f.Q.value = q;
+      f.frequency.setValueAtTime(f0, t0); if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, t1);
+      env(g, t0, a, peak, d); n.connect(f); f.connect(g); g.connect(out); n.start(t0);
+    };
+    switch (id) {
+      case "punch": osc("sine", 170, 45, 0, 0.18, 1, 0.003, 0.19); nz("lowpass", 2200, 600, 0, 0.06, 0.7, 0.7, 0.002, 0.06); break;
+      case "slash": nz("bandpass", 7500, 1100, 0, 0.24, 2.2, 1, 0.02, 0.27); nz("highpass", 5000, 5000, 0, 0.1, 0.7, 0.25, 0.005, 0.08); break;
+      case "magic": osc("sine", 480, 1500, 0, 0.32, 0.7, 0.01, 0.42); osc("triangle", 960, 3000, 0, 0.32, 0.22, 0.01, 0.36); osc("sine", 2400, 2400, 0.12, 0.12, 0.15, 0.005, 0.25); break;
+      case "laser": { const f = oc.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 3800; f.connect(out); osc("square", 1700, 170, 0, 0.21, 0.45, 0.003, 0.23, f); break; }
+      case "boom": nz("lowpass", 1600, 110, 0, 1.0, 0.8, 1, 0.006, 1.05); osc("sine", 95, 28, 0, 0.6, 0.9, 0.004, 0.65); break;
+      case "thunder": [0, 0.05, 0.13, 0.2].forEach((t, n) => nz("highpass", 2500, 900, t, t + 0.12, 0.8, 0.8 - n * 0.12, 0.002, 0.1)); nz("lowpass", 420, 120, 0.05, 1.0, 0.8, 0.9, 0.03, 1.0); break;
+      case "shine": [1320, 1980, 2640, 3520].forEach((fq, n) => osc("sine", fq, fq, n * 0.045, n * 0.045, 0.32, 0.004, 0.75 - n * 0.1)); break;
+      case "charge": {
+        const f = oc.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 2600; f.connect(out);
+        const o = oc.createOscillator(), g = oc.createGain(); o.type = "sawtooth";
+        o.frequency.setValueAtTime(170, 0); o.frequency.exponentialRampToValueAtTime(1150, 0.56);
+        g.gain.setValueAtTime(0.03, 0); g.gain.exponentialRampToValueAtTime(0.45, 0.54); g.gain.exponentialRampToValueAtTime(0.0001, 0.6);
+        o.connect(g); g.connect(f); o.start(0); o.stop(0.62);
+        osc("sine", 1760, 1760, 0.56, 0.56, 0.5, 0.004, 0.22); break;
+      }
+    }
+    const buf = await oc.startRendering();
+    const d = buf.getChannelData(0); let pk = 0; for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
+    if (pk > 0) for (let i = 0; i < d.length; i++) d[i] *= 0.9 / pk;
+    return buf;
+  }
+  // 播放：choke = 同一個聲道重播時先切掉上一個（惡搞連發時會有斷音效果）
+  function sfxPlay(id, customKey, opt = {}) {
+    if (!id || id === "none") return;
+    const ctx = sfxCtx(); if (!ctx) return;
+    const buf = id === "custom" ? SFX.custom[customKey] : SFX.buffers[id];
+    if (!buf) return;
+    if (opt.choke && SFX.voices[opt.choke]) { try { SFX.voices[opt.choke].stop(); } catch {} }
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    src.playbackRate.value = Math.max(0.5, Math.min(2, opt.rate || 1));
+    src.connect(SFX.master); src.start();
+    if (opt.choke) SFX.voices[opt.choke] = src;
+  }
+  function sfxSetVol(v) { SFX.vol = Math.max(0, Math.min(1, v)); if (SFX.master) SFX.master.gain.value = SFX.vol; sfxSave(); }
+  // 錄影：音效與背景音樂一起混進同一條音軌
+  async function sfxBeginRecord(bgmUrl, bgmStart) {
+    const ctx = sfxCtx(); if (!ctx) return {};
+    try { await SFX.ready; } catch {}
+    const dest = ctx.createMediaStreamDestination();
+    SFX.master.connect(dest);
+    let audioEl = null;
+    if (bgmUrl) {
+      try {
+        audioEl = new Audio(bgmUrl); audioEl.currentTime = bgmStart || 0;
+        const src = ctx.createMediaElementSource(audioEl);
+        src.connect(dest); src.connect(ctx.destination);
+      } catch { audioEl = null; }
+    }
+    return { dest, audioEl, track: dest.stream.getAudioTracks()[0] };
+  }
+  function sfxEndRecord(mix) {
+    if (!mix) return;
+    if (mix.audioEl) { try { mix.audioEl.pause(); } catch {} }
+    if (mix.dest) { try { SFX.master.disconnect(mix.dest); } catch {} }
+  }
+  // 設定介面：一組「普攻／技能」選單 + 上傳 + 試聽
+  function sfxControls(box, getCfg, keyPrefix, title) {
+    const wrap = document.createElement("div"); wrap.className = "sfx-set";
+    if (title) { const h = document.createElement("strong"); h.textContent = title; wrap.appendChild(h); }
+    for (const [kind, label] of [["atk", "普攻命中"], ["skill", "技能發動"], ["hit", "技能命中"]]) {
+      const row = document.createElement("div"); row.className = "sfx-row";
+      const lab = document.createElement("span"); lab.textContent = label;
+      const sel = document.createElement("select"); sel.setAttribute("aria-label", (title || "") + label);
+      for (const [id, name] of SFX_PRESETS) { const o = document.createElement("option"); o.value = id; o.textContent = name; sel.appendChild(o); }
+      sel.value = getCfg()[kind] || "none";
+      const file = document.createElement("input"); file.type = "file"; file.accept = "audio/*"; file.hidden = sel.value !== "custom";
+      const ck = keyPrefix + "-" + kind;
+      const note = document.createElement("span"); note.className = "sfx-note";
+      const refresh = () => { file.hidden = sel.value !== "custom"; note.textContent = sel.value === "custom" && !SFX.custom[ck] ? "請選擇音效檔" : ""; };
+      sel.onchange = () => { getCfg()[kind] = sel.value; sfxSave(); refresh(); if (sel.value !== "custom") { sfxCtx(); preview(); } };
+      file.onchange = async () => {
+        const f = file.files && file.files[0]; if (!f) return;
+        sfxCtx();
+        try { SFX.custom[ck] = await sfxDecode(await f.arrayBuffer()); note.textContent = ""; preview(); }
+        catch { note.textContent = "這個檔案無法讀取"; }
+      };
+      const test = document.createElement("button"); test.className = "btn small"; test.textContent = "▶ 試聽"; test.type = "button";
+      const preview = async () => { sfxCtx(); try { await SFX.ready; } catch {} sfxPlay(getCfg()[kind], ck); };
+      test.onclick = preview;
+      row.append(lab, sel, test, file, note); wrap.appendChild(row);
+      refresh();
+    }
+    box.appendChild(wrap);
+  }
+  function sfxVolControl(box) {
+    const l = document.createElement("label"); l.className = "slider";
+    l.append("音效音量 ");
+    const r = document.createElement("input"); r.type = "range"; r.min = "0"; r.max = "1"; r.step = "0.05"; r.value = String(SFX.vol); r.className = "sfx-vol";
+    const o = document.createElement("output"); o.textContent = Math.round(SFX.vol * 100) + "%";
+    r.oninput = () => { sfxSetVol(+r.value); document.querySelectorAll(".sfx-vol").forEach((x) => { x.value = r.value; x.nextElementSibling.textContent = Math.round(SFX.vol * 100) + "%"; }); };
+    l.append(r, o); box.appendChild(l);
+  }
+  // 單人：依畫面幀觸發
+  function singleClipKind() {
+    const c = CLIPS.find((x) => x.names.includes(S.animName));
+    return c ? c.key : "";
+  }
+  function singleSfxAt(k) {
+    const kind = singleClipKind();
+    if (kind !== "attack" && kind !== "skill1" && kind !== "skill2") return;
+    const a = S.part && S.part.animations[S.animName]; if (!a) return;
+    const h = Math.min(a.frame_count - 1, Math.floor(hitFrac({ part: S.part }, S.animName) * a.frame_count));
+    const cfg = SFX.cfg.single;
+    if (S.mode === "remix") {
+      const e = S.timeline[k], p = k > 0 ? S.timeline[k - 1] : null; if (!e) return;
+      const segStart = !p || p.seg !== e.seg || p.rep !== e.rep;
+      const rate = +e.seg.speed || 1;
+      const atHit = e.idx === h && (segStart || !p || p.idx !== h);
+      if (kind === "attack") { if (atHit) sfxPlay(cfg.atk, "single-atk", { rate, choke: "single-atk" }); }
+      else {
+        if (segStart) sfxPlay(cfg.skill, "single-skill", { rate, choke: "single-skill" });
+        if (atHit) sfxPlay(cfg.hit, "single-hit", { rate, choke: "single-hit" });
+      }
+    } else {
+      const n = clipN(), i = k % Math.max(1, n);
+      if (kind === "attack" && i === h) sfxPlay(cfg.atk, "single-atk", { choke: "single-atk" });
+      if (kind !== "attack" && i === 0) sfxPlay(cfg.skill, "single-skill", { choke: "single-skill" });
+      if (kind !== "attack" && i === h) sfxPlay(cfg.hit, "single-hit", { choke: "single-hit" });
+    }
+  }
+  function singleSfxStep(from, to) { for (let k = from + 1; k <= to; k++) singleSfxAt(k); }
+  // 雙人：編譯時記下每個出招的音效時間（模擬幀），播放時依 timeMap 換算
+  function duelSfxStep(fromOut, toOut) {
+    if (!D.sfxEv || !D.sfxEv.length) return;
+    const map = D.timeMap && D.timeMap.length ? D.timeMap : null;
+    const simAt = (k) => (map ? map[Math.max(0, Math.min(map.length - 1, k))] : k);
+    for (let k = fromOut + 1; k <= toOut; k++) {
+      const cur = simAt(k), prev = k > 0 ? simAt(k - 1) : -1;
+      if (cur <= prev) continue;
+      const slow = D.replayFrom >= 0 && k >= D.replayFrom;
+      for (const e of D.sfxEv) {
+        if (e.k > prev && e.k <= cur) {
+          const c = SFX.cfg.duel[e.side] || {};
+          const key = e.kind === "skill" ? "skill" : e.kind === "skillhit" ? "hit" : "atk";
+          sfxPlay(c[key], `duel${e.side}-${key}`, { rate: slow ? 0.7 : 1 });
+        }
+      }
+    }
+  }
   /* ---------- 錄影檔補上正確的總長度 ----------
      瀏覽器錄出的 MP4 是分段格式，檔頭總長度寫 0；WebM 則完全沒有總長度。
      播放器只好自己猜，才會出現「顯示 3 秒、實際播十幾秒」。這裡在錄完後把長度寫回檔頭。 */
@@ -1653,7 +1880,7 @@ footer a { color: inherit; }
   }
   function pickMime() {
     if (!window.MediaRecorder) return null;
-    const list = ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    const list = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
     return list.find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || "";
   }
   async function record(kind) {
@@ -1667,17 +1894,9 @@ footer a { color: inherit; }
     const len = kind === "remix" ? S.timeline.length : clipN() * loops;
     const fps = kind === "remix" ? FPS_OUT : Math.round((S.part.anim_rate || 24) * S.speed) || 30;
     const stream = cv.captureStream(fps);
-    let audioEl = null, actx = null;
-    if (S.audioUrl) {
-      try {
-        actx = new (window.AudioContext || window.webkitAudioContext)();
-        audioEl = new Audio(S.audioUrl); audioEl.currentTime = +$("audioStart").value || 0;
-        const src = actx.createMediaElementSource(audioEl);
-        const dest = actx.createMediaStreamDestination();
-        src.connect(dest); src.connect(actx.destination);
-        dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
-      } catch { audioEl = null; }
-    }
+    const mix = await sfxBeginRecord(S.audioUrl, +$("audioStart").value || 0);
+    if (mix.track) stream.addTrack(mix.track);
+    const audioEl = mix.audioEl;
     let rec;
     try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined); }
     catch { status.textContent = "無法啟動錄影。"; return; }
@@ -1691,11 +1910,13 @@ footer a { color: inherit; }
     rec.start(250); const recT0 = performance.now();
     if (audioEl) { try { await audioEl.play(); } catch {} }
     const t0 = performance.now();
+    let sfxK = -1;
     await new Promise((resolve) => {
       const step = () => {
         const k = Math.floor((performance.now() - t0) / 1000 * fps);
         if (k >= len) return resolve();
         render(...firstArgs(kind, k));
+        singleSfxStep(sfxK, k); sfxK = k;
         $("frameNo").textContent = `${k} / ${len - 1}`;
         requestAnimationFrame(step);
       };
@@ -1703,8 +1924,7 @@ footer a { color: inherit; }
     });
     await new Promise((r) => setTimeout(r, 150));
     rec.stop(); await done; const recMs = performance.now() - recT0;
-    if (audioEl) { audioEl.pause(); }
-    if (actx) { try { actx.close(); } catch {} }
+    sfxEndRecord(mix);
     S.recording = false; $("recBadge").hidden = true;
     document.querySelectorAll("#recRemix,#recOrig").forEach((b) => (b.disabled = false));
     const type = (rec.mimeType || mime || "video/webm").split(";")[0];
@@ -1983,7 +2203,7 @@ footer a { color: inherit; }
   }
   function compileOnce() {
     const [A, B] = D.f;
-    D.tracks = [[], []]; D.events = []; D.projs = []; D.len = 30;
+    D.tracks = [[], []]; D.events = []; D.projs = []; D.len = 30; D.sfxEv = [];
     if (!A || !B) return;
     const pos = [-D.dist / 2, D.dist / 2];
     D.posKeys = [[{ k: 0, x: pos[0] }], [{ k: 0, x: pos[1] }]];
@@ -2039,6 +2259,8 @@ footer a { color: inherit; }
             D.projs.push({ direct: true, spawn: hitAt, en: { x: pos[j], y: -g.h * 0.45 }, face, dr, flight, finish });
           }
         }
+        if (m.action === "attack") D.sfxEv.push({ k: hitAt, side: i, kind: "attack" });
+        else D.sfxEv.push({ k, side: i, kind: "skill" }, { k: hitAt, side: i, kind: "skillhit" });
         const dmg = Math.max(1, Math.round((DMG[m.action] || 8) * (0.75 + rnd(mi * 10 + r) * 0.5) / (reps > 1 ? 1.6 : 1)));
         hp[j] = Math.max(0, hp[j] - dmg);
         D.events.push({ k: hitAt, target: j, attacker: i, dmg, hp: hp.slice(), ko: hp[j] <= 0, start: k });
@@ -2222,6 +2444,7 @@ footer a { color: inherit; }
       }
       c.restore();
     }
+    if (fin) drawReplayLabel(c, W, H, kOut, fin);
     if (inv && BG[S.bg]) { c.globalCompositeOperation = "difference"; c.fillStyle = "#ffffff"; c.fillRect(0, 0, W, H); c.globalCompositeOperation = "source-over"; }
   }
   // 最後一擊：K.O. 之後畫面慢慢轉成些微黑白
@@ -2248,13 +2471,45 @@ footer a { color: inherit; }
     return { gray: t * t * (3 - 2 * t) };
   }
   function drawFinale(c, W, H, k, fin) {
-    if (!(fin.gray > 0)) return;
-    c.save(); c.globalCompositeOperation = "saturation"; c.globalAlpha = 0.6 * fin.gray;
-    c.fillStyle = "#808080"; c.fillRect(0, 0, W, H); c.restore();
+    const g = fin.gray; if (!(g > 0)) return;
+    c.save();
+    // 完全黑白 + 稍微壓暗
+    c.globalCompositeOperation = "saturation"; c.globalAlpha = g; c.fillStyle = "#808080"; c.fillRect(0, 0, W, H);
+    c.globalCompositeOperation = "multiply"; c.globalAlpha = 0.22 * g; c.fillStyle = "#3a3f55"; c.fillRect(0, 0, W, H);
+    // 四周暗角
+    c.globalCompositeOperation = "source-over"; c.globalAlpha = 1;
+    const vg = c.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.28, W / 2, H / 2, Math.hypot(W, H) * 0.6);
+    vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, `rgba(0,0,0,${0.6 * g})`);
+    c.fillStyle = vg; c.fillRect(0, 0, W, H);
+    // 細掃描線，有重播畫面的感覺
+    c.globalAlpha = 0.07 * g; c.fillStyle = "#000000";
+    for (let y = 0; y < H; y += 4) c.fillRect(0, y, W, 1);
+    c.restore();
+  }
+  function drawReplayLabel(c, W, H, kOut, fin) {
+    const a = Math.min(1, fin.gray * 1.5); if (!(a > 0)) return;
+    const sz = Math.round(Math.min(W, H) * 0.075), x = 24, y = 30 + 16 + 22 + sz * 0.6;
+    c.save(); c.globalAlpha = a;
+    if (Math.floor(kOut / 15) % 2 === 0) { c.fillStyle = "#ff3040"; c.beginPath(); c.arc(x + sz * 0.3, y, sz * 0.26, 0, Math.PI * 2); c.fill(); }
+    c.font = `900 ${sz}px "Bungee", ${getComputedStyle(document.body).fontFamily}`;
+    c.textAlign = "left"; c.textBaseline = "middle";
+    c.lineWidth = Math.max(4, sz * 0.14); c.strokeStyle = "#1b2038"; c.fillStyle = "#ffffff";
+    c.strokeText("REPLAY", x + sz * 0.75, y); c.fillText("REPLAY", x + sz * 0.75, y);
+    c.restore();
   }
   function duelTick(dt) {
     if (D.recording) return;
-    if (D.playing && D.f[0] && D.f[1]) { D.pos += dt * DFPS; if (D.pos >= D.len) D.pos = 0; }
+    if (D.playing && D.f[0] && D.f[1]) {
+      const before = D.sfxPrev ?? (Math.floor(D.pos) - 1);
+      D.pos += dt * DFPS;
+      let wrapped = false;
+      if (D.pos >= D.len) { D.pos = 0; wrapped = true; }
+      const cur = Math.floor(D.pos);
+      if (wrapped) { duelSfxStep(before, D.len - 1); duelSfxStep(-1, cur); }
+      else if (cur < before) duelSfxStep(cur - 1, cur);
+      else duelSfxStep(before, cur);
+      D.sfxPrev = cur;
+    } else D.sfxPrev = null;
     renderDuel(Math.floor(D.pos));
     $("dframeNo").textContent = `${Math.floor(D.pos)} / ${Math.max(0, D.len - 1)}`;
     if (!dscrubbing) $("dscrub").value = String(Math.floor(D.pos));
@@ -2374,16 +2629,9 @@ footer a { color: inherit; }
     if (mime === null || !dcv.captureStream) { status.textContent = "這個瀏覽器不支援錄製影片。請改用電腦版 Chrome。"; return; }
     if (S.bg === "transparent") setBg("white");
     const stream = dcv.captureStream(DFPS);
-    let audioEl = null, actx = null;
-    if (S.audioUrl) {
-      try {
-        actx = new (window.AudioContext || window.webkitAudioContext)();
-        audioEl = new Audio(S.audioUrl); audioEl.currentTime = +$("audioStart").value || 0;
-        const src = actx.createMediaElementSource(audioEl), dest = actx.createMediaStreamDestination();
-        src.connect(dest); src.connect(actx.destination);
-        dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
-      } catch { audioEl = null; }
-    }
+    const mix = await sfxBeginRecord(S.audioUrl, +$("audioStart").value || 0);
+    if (mix.track) stream.addTrack(mix.track);
+    const audioEl = mix.audioEl;
     let rec;
     try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined); }
     catch { status.textContent = "無法啟動錄影。"; return; }
@@ -2394,19 +2642,20 @@ footer a { color: inherit; }
     renderDuel(0); rec.start(250); const recT0 = performance.now();
     if (audioEl) { try { await audioEl.play(); } catch {} }
     const t0 = performance.now();
+    let sfxK = -1;
     await new Promise((resolve) => {
       const step = () => {
         const k = Math.floor((performance.now() - t0) / 1000 * DFPS);
         if (k >= D.len) return resolve();
-        renderDuel(k); $("dframeNo").textContent = `${k} / ${D.len - 1}`;
+        renderDuel(k);
+        duelSfxStep(sfxK, k); sfxK = k; $("dframeNo").textContent = `${k} / ${D.len - 1}`;
         requestAnimationFrame(step);
       };
       requestAnimationFrame(step);
     });
     await new Promise((r) => setTimeout(r, 150));
     rec.stop(); await done; const recMs = performance.now() - recT0;
-    if (audioEl) audioEl.pause();
-    if (actx) { try { actx.close(); } catch {} }
+    sfxEndRecord(mix);
     D.recording = false; $("drecBadge").hidden = true; $("dRec").disabled = false;
     const type = (rec.mimeType || mime || "video/webm").split(";")[0];
     const ext = type.includes("mp4") ? "mp4" : "webm";
@@ -2593,7 +2842,7 @@ footer a { color: inherit; }
 
   function compileReal() {
     const [A, B] = D.f;
-    D.frames = [[], []]; D.events = []; D.projs = []; D.tracks = [[], []];
+    D.frames = [[], []]; D.events = []; D.projs = []; D.tracks = [[], []]; D.sfxEv = [];
     D.ko = -1; D.resultK = -1; D.resultText = ""; D.timeMap = null;
     if (!A || !B) return;
     const rng = mulberry32(D.seed * 7919 + 13);
@@ -2730,6 +2979,7 @@ footer a { color: inherit; }
           // 打斷：還沒放出去的攻擊（近戰還沒打到、投射物還沒射出）全部取消
           for (let n = hits.length - 1; n >= 0; n--) if (hits[n].i === i && hits[n].rel > k) hits.splice(n, 1);
           D.projs = D.projs.filter((p) => !(p.own === i && p.spawn > k));
+          D.sfxEv = D.sfxEv.filter((e) => !(e.side === i && e.kind !== "skill" && e.k > k));
           const kb = f.clips.knockback;
           if (kb) {
             const dur = startAnim(i, kb, k, false);
@@ -2784,6 +3034,11 @@ footer a { color: inherit; }
           }
         }
         hits.push({ k: Math.max(k + 1, hitAt), rel: Math.max(k + 1, rel), i, j: 1 - i, action, start: k, reps: me.reps || 1 });
+        if (action === "attack") D.sfxEv.push({ k: Math.max(k + 1, hitAt), side: i, kind: "attack" });
+        else {
+          D.sfxEv.push({ k, side: i, kind: "skill" });
+          if (!supportFor(i, action)) D.sfxEv.push({ k: Math.max(k + 1, hitAt), side: i, kind: "skillhit" }); // 輔助技能不打人，沒有命中聲
+        }
       }
       // 記錄這一幀兩人的姿勢與位置
       for (const i of [0, 1]) {
@@ -2953,7 +3208,28 @@ footer a { color: inherit; }
 
   /* ---------- 啟動 ---------- */
   (async () => {
-    setSize(store.get("size", "720x720"));
+    sfxControls($("sfxSingle"), () => SFX.cfg.single, "single", "");
+    sfxVolControl($("sfxSingle"));
+    sfxControls($("sfxDuel"), () => SFX.cfg.duel[0], "duel0", "左方");
+    sfxControls($("sfxDuel"), () => SFX.cfg.duel[1], "duel1", "右方");
+    sfxVolControl($("sfxDuel"));
+    for (const id of ["sfxSingle", "sfxDuel"]) {
+      const h = document.createElement("p"); h.className = "hint";
+      h.textContent = "普攻在命中時播放；技能在發動和命中時各播一次，可以分別設定。錄影時會一起錄進去。上傳的音效重新整理後要再選一次。";
+      $(id).appendChild(h);
+    }
+    // 太長的說明收起來，點「說明」才展開
+    document.querySelectorAll("p.hint:not(.warn)").forEach((p) => {
+      const txt = p.textContent.trim();
+      if (p.id !== "dModeHint" && txt.length <= 60) return;
+      const d = document.createElement("details"); d.className = "hint-fold";
+      const sm = document.createElement("summary");
+      const m = txt.match(/^([^：，。]{2,8})：/);
+      sm.textContent = "說明" + (m ? "・" + m[1] : "");
+      p.replaceWith(d); d.append(sm, p);
+    });
+    // 瀏覽器規定要先有點擊才能出聲：第一次點畫面時啟動音效
+    window.addEventListener("pointerdown", () => sfxCtx(), { once: true });
     S.projOn = store.get("singleProj", true); $("singleProj").checked = S.projOn;
     setBg(store.get("bg", "white"));
     await loadIndex();
