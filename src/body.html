@@ -1,0 +1,414 @@
+
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="logo">RANGER <b>惡搞工坊</b></div>
+      <div class="seg-mode app-mode" role="group" aria-label="模式">
+        <button id="appSingle" aria-pressed="true">單人</button>
+        <button id="appDuel" aria-pressed="false">雙人對打</button>
+      </div>
+    </div>
+    <span class="mode-note" id="modeNote">正在連線資料庫…</span>
+  </header>
+
+  <section class="search" data-app="single" aria-label="搜尋角色">
+    <div class="search-row">
+      <input id="q" type="search" placeholder="輸入角色名稱，例如：風之痕、熊大、兔兔" autocomplete="off">
+      <button class="btn primary" id="qBtn">搜尋</button>
+      <button class="btn" id="libBtn" aria-expanded="false">角色庫</button>
+      <button class="btn rand-btn" id="randBtn" type="button" title="隨機挑一隻角色">🎲 隨機</button>
+    </div>
+    <div class="results" id="results" role="list"></div>
+    <div class="lib" id="library" hidden>
+      <div class="lib-head">
+        <strong id="libTitle">角色庫</strong>
+        <span class="lib-count" id="libCount"></span>
+        <button class="btn small" id="libClose">收起</button>
+      </div>
+      <div class="lib-filters">
+        <label class="field">星數<select id="fStar"></select></label>
+        <label class="field">類型<select id="fType"></select></label>
+        <label class="field">排序<select id="fSort">
+          <option value="new">最新登場</option>
+          <option value="old">最早登場</option>
+          <option value="star">星數高→低</option>
+          <option value="name">名稱</option>
+        </select></label>
+      </div>
+      <div class="chips" id="fElem" role="group" aria-label="屬性"></div>
+      <label class="check"><input type="checkbox" id="fNamed" checked> 只顯示有中文名稱的角色（未命名的多半是敵人或測試資料）</label>
+      <div class="lib-grid" id="libGrid" role="list"></div>
+      <button class="btn" id="libMore" hidden>顯示更多</button>
+    </div>
+  </section>
+
+  <div class="main" data-app="single">
+    <div class="stage-col">
+      <div class="now">
+        <h1 id="unitName">—</h1>
+        <span class="tag" id="unitTag"></span>
+      </div>
+      <div class="stage">
+        <canvas id="cv" width="720" height="720" aria-label="動畫預覽"></canvas>
+        <div class="overlay" id="overlay"><div class="ld-box"><i class="ld-spin"></i></div><span class="ld-text">載入中…</span></div>
+        <button class="sfx-unlock" type="button" hidden>🔇 點一下開啟音效</button>
+        <div class="rec-badge" id="recBadge" hidden>● 錄製中</div>
+      </div>
+      <div class="transport">
+        <button class="btn icon" id="playBtn" aria-label="暫停">❚❚</button>
+        <span class="vol-wrap"><button class="btn icon vol-btn" type="button" aria-label="靜音與音量" aria-expanded="false"></button><span class="vol-pop" hidden></span></span>
+        <input type="range" id="scrub" min="0" max="0" value="0" aria-label="播放位置">
+        <span class="frame-no" id="frameNo">0 / 0</span>
+        <button class="btn icon import-btn" type="button" aria-label="開啟專案檔" title="開啟專案檔"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5M4 14v6h16v-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="btn icon share-btn" type="button" aria-label="分享這個畫面的連結" title="分享連結"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="18" cy="5.5" r="2.6" fill="currentColor"/><circle cx="6" cy="12" r="2.6" fill="currentColor"/><circle cx="18" cy="18.5" r="2.6" fill="currentColor"/><path d="M8.3 10.8 15.7 6.7M8.3 13.2l7.4 4.1" stroke="currentColor" stroke-width="2.2" fill="none"/></svg></button>
+      </div>
+      <div class="transport-row2">
+        <div class="seg-mode" role="group" aria-label="播放模式">
+          <button id="modeOrig" aria-pressed="true">原始</button>
+          <button id="modeRemix" aria-pressed="false">惡搞</button>
+        </div>
+        <span class="undo-wrap">
+          <button class="btn icon" id="undoBtn" type="button" aria-label="上一步" title="上一步（Ctrl+Z）" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 7 4.5 11.5 9 16M5 11.5h9.5a5 5 0 0 1 0 10H11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button class="btn icon" id="redoBtn" type="button" aria-label="下一步" title="下一步（Ctrl+Shift+Z）" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m15 7 4.5 4.5L15 16m4-4.5H9.5a5 5 0 0 0 0 10H13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </span>
+      </div>
+      <p class="hint">拖曳畫面可平移鏡頭，雙擊畫面重設。</p>
+      <div class="skills" id="skills" aria-label="技能"></div>
+    </div>
+
+    <div class="panel">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="act">動作</button>
+        <button role="tab" aria-selected="false" data-tab="comp">元件</button>
+        <button role="tab" aria-selected="false" data-tab="remix">惡搞剪輯</button>
+        <button role="tab" aria-selected="false" data-tab="out">輸出</button>
+      </div>
+
+      <div class="tab-body" data-panel="act">
+        <div class="group">
+          <span class="lbl">部件</span>
+          <div class="chips" id="parts"></div>
+        </div>
+        <div class="group">
+          <span class="lbl">動作</span>
+          <div class="chips" id="clips"></div>
+          <details class="more"><summary>其他原始動作片段</summary><div class="chips" id="rawClips" style="margin-top:8px"></div></details>
+        </div>
+        <div class="group">
+          <span class="lbl">播放</span>
+          <label class="slider">速度 <input type="range" id="speed" min="0.1" max="4" step="0.05" value="1"><output id="speedOut">1.00×</output></label>
+          <label class="slider">鏡頭縮放 <input type="range" id="camZoom" min="0.3" max="4" step="0.05" value="1"><output id="camZoomOut">1.00×</output></label>
+          <div class="row">
+            <label class="check"><input type="checkbox" id="follow"> 鏡頭跟隨角色</label>
+            <label class="check"><input type="checkbox" id="loop" checked> 循環播放</label>
+            <label class="check"><input type="checkbox" id="singleProj" checked> 投射物</label>
+          </div>
+        </div>
+        <div class="group">
+          <span class="lbl">背景</span>
+          <div class="chips" id="bgs">
+            <button class="chip" data-bg="white" aria-pressed="true">白</button>
+            <button class="chip" data-bg="black" aria-pressed="false">黑</button>
+            <button class="chip" data-bg="green" aria-pressed="false">綠幕</button>
+            <button class="chip" data-bg="transparent" aria-pressed="false">透明</button>
+          </div>
+          <p class="hint">綠幕方便你之後丟進剪輯 App 去背；透明只適用於存 PNG。</p>
+        </div>
+      </div>
+
+      <div class="tab-body" data-panel="comp" hidden>
+        <p class="hint">這裡列出目前動作用到的每個圖片零件。可以單獨隱藏、放大、讓它自己轉圈、變色或亂抖，原始與惡搞模式都會套用。</p>
+        <div class="row">
+          <button class="btn small" id="compReset">全部重設</button>
+          <button class="btn small hot" id="compChaos">隨機亂改</button>
+          <button class="btn small" id="compShowAll">全部顯示</button>
+        </div>
+        <div class="comps" id="comps"></div>
+      </div>
+
+      <div class="tab-body" data-panel="remix" hidden>
+        <div class="group">
+          <label class="lbl" for="remixAnim">要惡搞的動作</label>
+          <select id="remixAnim" class="big-select"></select>
+          <p class="hint">每個動作各自保存一套剪輯，切換時不會互相覆蓋。</p>
+        </div>
+        <div class="group">
+          <span class="lbl">快速套用</span>
+          <div class="chips">
+            <button class="chip" data-preset="plain">原速</button>
+            <button class="chip" data-preset="spam">連打</button>
+            <button class="chip" data-preset="demo1">惡搞示範 1</button>
+            <button class="chip" data-preset="demo2">惡搞示範 2</button>
+            <button class="chip" data-preset="random">隨機惡搞</button>
+          </div>
+          <p class="hint">片段會依序接起來播放。幀號以目前選的動作為準，可以先在「原始」模式拖進度條找想連打的那幾幀。</p>
+        </div>
+        <div class="row">
+          <button class="btn small primary" id="segAdd">＋ 新增片段</button>
+          <span class="total" id="segTotal"></span>
+        </div>
+        <div class="segs" id="segs"></div>
+      </div>
+
+      <div class="tab-body" data-panel="out" hidden>
+        <div class="group">
+          <span class="lbl">畫面比例</span>
+          <div class="chips" id="sizes">
+            <button class="chip" data-size="720x720" aria-pressed="true">1:1</button>
+            <button class="chip" data-size="720x1280" aria-pressed="false">9:16 直式</button>
+            <button class="chip" data-size="1280x720" aria-pressed="false">16:9 橫式</button>
+          </div>
+        </div>
+        <div class="group" id="sfxSingle">
+          <span class="lbl">音效</span>
+        </div>
+        <div class="group">
+          <span class="lbl">背景音樂（選用）</span>
+          <input type="file" id="audioFile" accept="audio/*">
+          <div class="saved-line" data-saved="bgm" hidden><span></span><button class="btn small" type="button">移除音樂</button></div>
+          <label class="slider">音樂起點 <input type="range" id="audioStart" min="0" max="60" step="0.1" value="0"><output id="audioStartOut">0.0s</output></label>
+          <p class="hint">錄製時會從指定秒數開始播放並一起錄進影片。請使用你有權使用的音樂。</p>
+        </div>
+        <div class="group">
+          <div class="saved-files" hidden>
+            <div class="row"><span class="saved-sum"></span><button class="btn small saved-clear" type="button">清除已存的檔案</button></div>
+            <p class="hint">自己上傳的音效、背景音樂和競技場背景會存在這台裝置的瀏覽器裡，重新整理後不用再上傳。換手機、換瀏覽器或清除瀏覽資料後就會不見；iPhone／iPad 超過約 7 天沒打開這個網站，也可能被系統自動清掉。</p>
+          </div>
+        </div>
+        <div class="group">
+          <span class="lbl">錄製</span>
+          <div class="row">
+            <button class="btn hot" id="recRemix">錄製惡搞版</button>
+            <button class="btn" id="recOrig">錄製原始動作</button>
+            <button class="btn" id="savePng">存目前畫面 PNG</button>
+          </div>
+          <label class="slider">原始重複 <input type="range" id="origLoops" min="1" max="10" step="1" value="1"><output id="origLoopsOut">1 次</output></label>
+          <div class="status" id="outStatus"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="reportModal" hidden role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+    <div class="modal-card">
+      <div class="modal-head"><strong id="reportTitle">回報資訊</strong><button class="btn icon modal-x" id="reportClose" type="button" aria-label="關閉">✕</button></div>
+      <p class="hint">遇到問題時，把下面這段文字和問題描述一起貼給開發者，就能知道你用的是哪一版、哪種瀏覽器，並用最後的連結重現當下的畫面。</p>
+      <textarea class="report-text" id="reportText" readonly aria-label="回報資訊"></textarea>
+      <div class="share-actions"><button class="btn primary" id="reportCopy" type="button" disabled>📋 複製</button></div>
+      <div class="status" id="reportStatus"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="shareModal" hidden role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+    <div class="modal-card">
+      <div class="modal-head"><strong id="shareTitle">分享</strong><button class="btn icon modal-x" id="shareClose" type="button" aria-label="關閉">✕</button></div>
+      <p class="share-what" id="shareWhat"></p>
+      <input class="share-link" id="shareLink" readonly aria-label="分享連結">
+      <p class="hint warn" id="shareWarn" hidden></p>
+      <div class="share-actions">
+        <button class="btn primary" id="shareCopy" type="button">🔗 複製連結</button>
+        <button class="btn" id="shareFile" type="button">⬇ 下載專案檔</button>
+      </div>
+      <p class="hint">連結會帶上角色、動作與對戰設定。專案檔是一個 .json 檔，連金手指和音效選擇都會記下來，對方按播放列分享鈕旁的「開啟專案檔」鈕（向上箭頭）就能還原。</p>
+      <div class="status" id="shareStatus"></div>
+    </div>
+  </div>
+  <div class="modal" id="importModal" hidden role="dialog" aria-modal="true" aria-labelledby="importTitle">
+    <div class="modal-card">
+      <div class="modal-head"><strong id="importTitle">開啟專案檔</strong><button class="btn icon modal-x" id="importClose" type="button" aria-label="關閉">✕</button></div>
+      <p class="hint">專案檔是在分享視窗按「下載專案檔」存下的 .json 檔，打開後會還原當時的角色、動作、惡搞片段或對戰設定（含金手指與音效選擇）。單人和雙人的專案檔都能在這裡開，會自動切到對應的模式。自己上傳的音效與背景不會存在專案檔裡。</p>
+      <label class="drop-zone" id="importDrop">
+        <input type="file" id="importFile" accept=".json,application/json">
+        <span class="dz-ico"><svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5M4 14v6h16v-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="dz-main">選擇專案檔</span>
+        <span class="dz-sub">或把 .json 檔拖到這裡</span>
+      </label>
+      <div class="status" id="importStatus"></div>
+    </div>
+  </div>
+
+  <section class="duel" data-app="duel" hidden aria-label="雙人對打">
+    <div class="fighters">
+      <div class="fighter is-a">
+        <div class="f-head">
+          <span class="side-tag">左方</span>
+          <div class="f-thumb" id="dthumb0"></div>
+          <strong class="f-name" id="dname0">未選擇</strong>
+        </div>
+        <div class="f-search">
+          <input id="dq0" type="search" placeholder="搜尋左方角色" autocomplete="off">
+          <button class="btn small" data-lib-side="0">角色庫</button>
+          <button class="btn small rand-btn" data-rand-side="0" type="button" title="隨機左方角色">🎲</button>
+        </div>
+        <div class="results" id="dr0" role="list"></div>
+      </div>
+      <div class="mid-tools">
+        <button class="btn small swap" id="dSwap" aria-label="左右交換">⇄</button>
+        <button class="btn small rand-btn" id="dRandAll" type="button" title="兩邊都隨機">🎲 全部隨機</button>
+      </div>
+      <div class="fighter is-b">
+        <div class="f-head">
+          <span class="side-tag">右方</span>
+          <div class="f-thumb" id="dthumb1"></div>
+          <strong class="f-name" id="dname1">未選擇</strong>
+        </div>
+        <div class="f-search">
+          <input id="dq1" type="search" placeholder="搜尋右方角色" autocomplete="off">
+          <button class="btn small" data-lib-side="1">角色庫</button>
+          <button class="btn small rand-btn" data-rand-side="1" type="button" title="隨機右方角色">🎲</button>
+        </div>
+        <div class="results" id="dr1" role="list"></div>
+      </div>
+    </div>
+
+    <div id="dLibHolder"></div>
+    <div class="main">
+      <div class="stage-col">
+        <div class="stage">
+          <canvas id="dcv" width="1280" height="720" aria-label="對打預覽"></canvas>
+          <div class="duel-start" id="dStart" hidden><button type="button" id="dStartBtn" aria-label="開始對戰" title="開始對戰"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5v17l14-8.5z" fill="currentColor"/></svg></button></div>
+          <div class="overlay" id="doverlay"><div class="ld-box"><i class="ld-spin"></i></div><span class="ld-text">載入中…</span></div>
+          <button class="sfx-unlock" type="button" hidden>🔇 點一下開啟音效</button>
+          <div class="rec-badge" id="drecBadge" hidden>● 錄製中</div>
+        </div>
+        <div class="transport duel-transport">
+          <button class="btn icon" id="dPlay" aria-label="暫停">❚❚</button>
+          <span class="vol-wrap"><button class="btn icon vol-btn" type="button" aria-label="靜音與音量" aria-expanded="false"></button><span class="vol-pop" hidden></span></span>
+          <input type="range" id="dscrub" min="0" max="0" value="0" aria-label="播放位置">
+          <span class="frame-no" id="dframeNo">0 / 0</span>
+          <button class="btn icon import-btn" type="button" aria-label="開啟專案檔" title="開啟專案檔"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5M4 14v6h16v-6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button class="btn icon share-btn" type="button" aria-label="分享這場對戰的連結" title="分享連結"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="18" cy="5.5" r="2.6" fill="currentColor"/><circle cx="6" cy="12" r="2.6" fill="currentColor"/><circle cx="18" cy="18.5" r="2.6" fill="currentColor"/><path d="M8.3 10.8 15.7 6.7M8.3 13.2l7.4 4.1" stroke="currentColor" stroke-width="2.2" fill="none"/></svg></button>
+          <button class="btn icon hot dl-btn" id="dRec" type="button" aria-label="錄製並下載對打影片" title="錄製並下載對打影片"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v11m0 0-4.5-4.5M12 14l4.5-4.5M4 17v3h16v-3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+        <div class="rec-ask" id="dRecAsk" hidden><span>錄影要包含開頭的 3、2、1 倒數嗎？</span><button class="btn small primary" type="button" id="dRecCd">包含倒數</button><button class="btn small" type="button" id="dRecNo">不包含</button><button class="btn small" type="button" id="dRecCancel">取消</button></div>
+      </div>
+
+      <div class="panel">
+        <div class="tab-body">
+          <div class="group">
+            <span class="lbl">對戰類型</span>
+            <div class="chips" id="dKinds">
+              <button class="chip" data-kind="classic" aria-pressed="true">經典對戰</button>
+              <button class="chip" data-kind="real" aria-pressed="false">真距離對戰</button>
+              <button class="chip" data-kind="raw" aria-pressed="false">原始數值對戰</button>
+            </div>
+            <div class="row"><button class="btn small primary" id="rRerun">重新對戰（重抽機率）</button><button class="btn small" id="rResetAll">↺ 全部恢復預設</button></div>
+            <p class="hint" id="rRerunHint"></p>
+            <p class="hint" id="classicHint">經典對戰：所有技能都當作攻擊，包含沒有傷害倍率的輔助技能（例如加攻、回血、無敵），出招就會打到對手。想看輔助技能改成強化下一擊或回血的效果，請用真距離對戰或原始數值對戰。</p>
+          </div>
+          <div class="group" id="realBox" hidden>
+            <span class="lbl" id="realLbl">真距離設定</span>
+            <p class="hint">雙方同時行動，對手在自己的攻擊距離內就出手，打不到會照自己的移動速度走過去（數字越大走越快，資料庫預設多在 50～150）。開場距離 = 較長的攻擊距離 + 100。平常被打中不會擊退、也不會中斷出招；體力跌破一半、以及倒下時，會立刻被擊退並打斷正在出的招（還沒放出去的攻擊取消，已射出的投射物照常命中）。</p>
+            <div class="real-grid">
+              <label class="field"><span id="rName0">左方</span>攻擊距離<input type="number" id="rRange0" min="0" step="5"></label>
+              <label class="field"><span id="rName1">右方</span>攻擊距離<input type="number" id="rRange1" min="0" step="5"></label>
+              <label class="field"><span id="rMvName0">左方</span>移動速度<input type="number" id="rMove0" min="1" step="5"></label>
+              <label class="field"><span id="rMvName1">右方</span>移動速度<input type="number" id="rMove1" min="1" step="5"></label>
+              <label class="field">時間上限（秒）<input type="number" id="rTime" min="5" max="600" step="5" value="60"></label>
+            </div>
+            <div class="row"><button class="btn small" id="rRangeReset">攻擊距離、移動速度恢復預設</button></div>
+            <p class="hint" id="rCompHint">距離補償：只加成攻擊距離較短的一方，傷害 ×（1 + 0.8 × 距離差 ÷ 較長的距離），最多 1.8 倍；長手不變。例如距離 200 對 400，短手傷害 ×1.4；50 對 550，短手 ×1.73。</p>
+            <p class="hint warn" id="rRawMissing" hidden>網站上還沒有原始數值資料（data/stats.json），所以原始數值對戰暫時不能用。請確認 GitHub 上的 sync.py 已換成新版，並等同步跑完再重新整理。</p>
+            <p class="hint warn" id="rZeroWarn" hidden></p>
+            <div id="rawBox" hidden class="group">
+              <div class="real-grid">
+                <label class="field">左方等級<span class="lv"><input type="number" id="rLv0" min="1" step="1"><span id="rLvMax0"></span></span></label>
+                <label class="field">右方等級<span class="lv"><input type="number" id="rLv1" min="1" step="1"><span id="rLvMax1"></span></span></label>
+              </div>
+              <p class="hint">普通攻擊傷害 = 攻擊 × 18000 ÷（18000 + 對方防禦），物理、魔法分開計算，最少 1 點；技能傷害 = 攻擊 × 倍率，不看防禦。照攻擊速度自動出招：先判定技能 1、再判定技能 2，都沒發動就普通攻擊。普通攻擊看「普攻閃避 − 普攻命中」，技能看「技能閃避 − 技能命中」；閃避、技能閃避最多算 95%（先套上限再扣命中）。技能抗性會讓受到的技能傷害（含持續傷害）減少同樣的 %，最多 95%，不影響普通攻擊。爆擊只算普通攻擊；持續傷害每秒結算，多次附加可以疊加。金手指裡也能改每個技能的發動率、冷卻與傷害倍率。不使用距離補償。<br>純輔助技能（沒有傷害倍率）發動時：50% 機率下一次攻擊 +50%，50% 機率回復 20% 體力。</p>
+              <div class="group hp-mul">
+                <span class="lbl">血量倍率</span>
+                <div class="chips" id="rHpMul">
+                  <button class="chip" data-hpmul="1">×1</button>
+                  <button class="chip" data-hpmul="5">×5</button>
+                  <button class="chip" data-hpmul="10">×10</button>
+                  <button class="chip" data-hpmul="20">×20</button>
+                  <input type="number" id="rHpMulIn" min="0.1" step="any" placeholder="自訂" aria-label="自訂血量倍率">
+                </div>
+                <p class="hint">雙方最大體力一起乘上倍率（金手指改過的體力也會再乘），戰鬥會拉長，普攻、防禦、爆擊、閃避更有影響。打到時間上限就比剩餘血量 %。</p>
+              </div>
+              <details class="more" id="cheatBox"><summary>金手指（直接改數值）</summary><div class="cheat-grid" id="cheatGrid"></div></details>
+            </div>
+          </div>
+          <div id="movesBox" class="group">
+          <div class="group">
+            <span class="lbl">招式編排</span>
+            <div class="chips" id="dModes">
+              <button class="chip" id="dPresetTrade" data-dmode="trade" aria-pressed="true">你來我往</button>
+              <button class="chip" id="dPresetRandom" data-dmode="random" aria-pressed="false">隨機對打</button>
+              <button class="chip" id="dPresetCustom" data-dmode="custom" aria-pressed="false">自定義</button>
+            </div>
+            <p class="hint" id="dModeHint"></p>
+            <span class="total" id="duelTotal" hidden></span>
+          </div>
+          <div class="moves" id="moves" hidden></div>
+          <div class="row" id="dAddRow" hidden>
+            <button class="btn small primary" id="dAddA">＋ 左方出招</button>
+            <button class="btn small primary" id="dAddB">＋ 右方出招</button>
+          </div>
+          </div>
+
+          <div class="group">
+            <span class="lbl">設定</span>
+            <label class="slider">雙方距離 <input type="range" id="dDist" min="120" max="700" step="10" value="320"><output id="dDistOut">320</output></label>
+            <label class="slider">整體速度 <input type="range" id="dSpeed" min="0.4" max="2.5" step="0.05" value="1"><output id="dSpeedOut">1.00×</output></label>
+            <div class="row">
+              <label class="check"><input type="checkbox" id="dShake" checked> 命中震動</label>
+              <label class="check"><input type="checkbox" id="dInvert"> 命中負片閃光</label>
+              <label class="check"><input type="checkbox" id="dNumbers" checked> 傷害數字</label>
+              <label class="check"><input type="checkbox" id="dBars" checked> 血條</label>
+              <label class="check"><input type="checkbox" id="dProj" checked> 投射物</label>
+              <label class="check"><input type="checkbox" id="dFinale" checked> K.O. 後慢動作重播最後一擊（黑白 REPLAY）</label>
+              <div class="sum-set">
+                <label class="field sum-cap">每方召喚物上限<input type="number" id="dSumCap" min="1" max="20" step="1" value="3"></label>
+                <label class="field sum-cap">召喚物攻擊比例 %<input type="number" id="dSumAtk" min="0" max="1000" step="5" placeholder="自動"></label>
+                <label class="field sum-cap">召喚物血量比例 %<input type="number" id="dSumHp" min="1" max="1000" step="5" placeholder="自動"></label>
+              </div>
+              <p class="hint">召喚物與複製體（含在上限內）只在真距離、原始數值對戰會被打。比例留空＝自動：真距離的攻擊是「召喚物攻擊 ÷ 召喚者攻擊」最多 50%、血量是召喚者的 30%；原始數值照召喚物自己的數值（100%）。填了數字，真距離就直接用這個比例，原始數值則再乘上這個比例。</p>
+            </div>
+            <div class="chips">
+              <button class="chip" data-bg="white" aria-pressed="true">白</button>
+              <button class="chip" data-bg="black" aria-pressed="false">黑</button>
+              <button class="chip" data-bg="green" aria-pressed="false">綠幕</button>
+            </div>
+            <div class="bg-upload">
+              <label class="field">自訂競技場背景<input type="file" id="dBgFile" accept="image/*"></label>
+              <button class="btn small" id="dBgClear" hidden>移除背景圖</button>
+            </div>
+            <label class="slider" id="dGroundRow" hidden>地面高度 <input type="range" id="dGround" min="0" max="45" step="1" value="8"><output id="dGroundOut">8%</output></label>
+            <p class="hint" id="dBgHint" hidden>拖動「地面高度」讓角色的腳踩在背景圖的地面上。背景圖只存在這台裝置的瀏覽器裡。</p>
+          </div>
+
+          <div class="group" id="sfxDuel">
+            <span class="lbl">音效</span>
+          </div>
+          <div class="group">
+            <span class="lbl">輸出</span>
+            <div class="chips" id="dsizes">
+              <button class="chip" data-size="1280x720" aria-pressed="true">16:9 橫式</button>
+              <button class="chip" data-size="720x720" aria-pressed="false">1:1</button>
+              <button class="chip" data-size="720x1280" aria-pressed="false">9:16 直式</button>
+            </div>
+            <label class="field">背景音樂（選用）<input type="file" id="dAudio" accept="audio/*"></label>
+            <div class="saved-line" data-saved="bgm" hidden><span></span><button class="btn small" type="button">移除音樂</button></div>
+            <div class="saved-files" hidden>
+            <div class="row"><span class="saved-sum"></span><button class="btn small saved-clear" type="button">清除已存的檔案</button></div>
+            <p class="hint">自己上傳的音效、背景音樂和競技場背景會存在這台裝置的瀏覽器裡，重新整理後不用再上傳。換手機、換瀏覽器或清除瀏覽資料後就會不見；iPhone／iPad 超過約 7 天沒打開這個網站，也可能被系統自動清掉。</p>
+          </div>
+            <p class="hint">要錄製影片，按播放列右邊的下載圖示。</p>
+            <div class="status" id="dStatus"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p><strong>非官方粉絲工具・完全免費・非營利。</strong>本站與 LINE、LY Corporation 及 LINE Rangers 官方沒有任何關係，也未獲得其授權或背書。</p>
+    <p>LINE Rangers 的角色名稱、圖片、動畫與音效等權利皆屬 LY Corporation 及其授權方所有。動畫資料每日同步自 <a href="https://rangerbook.warmycat.com/" target="_blank" rel="noopener">LINE Rangers 資料站</a>（蚯蚓貓）的公開素材庫；名稱前標有「【自製】」的角色是本站自己畫的測試角色，不含官方素材。</p>
+    <p>權利人如認為本站內容有不當之處，請到 <a href="https://github.com/XiaoZhouZhouFly/ranger-kichiku/issues" target="_blank" rel="noopener">GitHub Issues</a> 聯絡，我們會立即配合移除或下架。輸出的影片請勿用於商業用途。</p>
+    <p class="ver-line">版本 <strong id="appVer"></strong> ・ <button class="linklike" id="reportBtn" type="button">複製回報資訊</button>（遇到問題時，把這段資訊貼給開發者）</p>
+  </footer>
+</div>
+

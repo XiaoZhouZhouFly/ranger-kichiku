@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.13-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.13"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.14-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.14"></a>
 </p>
 
 <p align="center">
@@ -44,8 +44,9 @@
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v4.13）
+## 最近更新（v4.14）
 
+- 程式大整理（看起來沒變）：原始碼拆成好維護的小檔，分享連結補上整體速度、投射物、慢動作重播、經典對戰距離、時間上限，朋友打開的結果才會一模一樣。
 - 三種對戰都能「重新對戰（重抽機率）」與「全部恢復預設」，按鈕放在對戰類型正下方。
 - 雙人對戰改成按播放才開始：先 3、2、1 倒數（有音效），播完停在 K.O. 畫面；K.O. 也有音效。錄影時可選要不要包含倒數。
 - 召喚物平衡：召喚物會被打倒，可調攻擊、血量比例，每方上限預設改為 3；複製體只會複製對手本人。
@@ -81,7 +82,10 @@
 
 | 檔案 | 用途 |
 | --- | --- |
-| `index.html` | 網站本體 |
+| `index.html` | 網站本體（由 `src/` 組成，不要直接改） |
+| `src/` | 網站原始碼，說明見 `src/README.md` |
+| `build.py` | 把 `src/` 組成 `index.html`：`python build.py`；`--check` 只檢查 |
+| `sync_overrides.json` | 同步用的手動對應表（例如召喚物系列），改這個就好，不用改程式 |
 | `sync.py` | 同步程式：從上游抓新角色、精簡壓縮後存進 `data/` |
 | `.github/workflows/sync.yml` | 每天自動執行同步並發布網站 |
 | `.github/*.gif` | README 用的示範動圖 |
@@ -100,6 +104,7 @@
 - 上游連不上時會跳過，不會清空現有資料。
 - 想立刻更新：到 **Actions → 同步角色資料並發布網站 → Run workflow**。
 - 每次發布前會先跑**自動健檢**，全部通過才更新網站。結果在 Actions 該次執行的 **Summary** 頁面（表格列出每一項）；失敗時網站維持上一個正常版本，GitHub 會寄信通知，失敗截圖在同一頁下方的 `healthcheck-screenshots`。
+- 改網站程式：改 `src/` 裡的檔案，執行 `python build.py`，把 `src/` 和新的 `index.html` 一起上傳（只傳一個的話健檢會擋下來）。
 - 在自己電腦跑健檢：`cd tests && npm install playwright && npx playwright install chromium`，再回到上一層執行 `node tests/healthcheck.mjs .`。
 
 ### 注意

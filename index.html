@@ -753,13 +753,16 @@ footer a { color: inherit; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v4.13";
+  const APP_VERSION = "v4.14";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
   const baseOf = (id) => (customIds.has(id) ? CUSTOM : LOCAL);
+  // 預設角色（官方資料改名或移除時會依序退回下一個，全部找不到就任選）
   const DEFAULT_UNIT = "u362e-blast";
-  const FPS_OUT = 30;
+  const DEFAULT_LEFT = [DEFAULT_UNIT];
+  const DEFAULT_RIGHT = ["u010u-clara", "u1001u-brown"];
+  const FPS = 30; // 時間軸的影格率：單人惡搞剪輯與雙人對戰都用這個（錄影也是）
 
   const CLIPS = [
     { key: "idle", label: "待機", names: ["idle", "wait"] },
@@ -786,6 +789,8 @@ footer a { color: inherit; }
     bg: "white", panX: 0, panY: 0,
     pos: 0, lastTs: 0, timeline: [],
     recording: false, audioBuf: null, audioUrl: null,
+    clock: { abs: null, ref: null, st: null }, // 播放音效的時鐘（見 js-05）
+    urlSync: { on: false, timer: 0 }, // 網址列同步（見 js-16 syncUrl）
   };
 
   const store = {
@@ -794,18 +799,12 @@ footer a { color: inherit; }
   };
 
   /* ---------- 資料讀取 ---------- */
-  async function fetchFirst(urls, kind) {
-    let lastErr;
-    for (const u of urls) {
-      try {
-        const r = await fetch(u);
-        if (!r.ok) throw new Error(r.status + " " + u);
-        const out = kind === "json" ? await r.json() : await r.blob();
-        markDirty();
-        return out;
-      } catch (e) { lastErr = e; }
-    }
-    throw lastErr || new Error("無法讀取");
+  async function fetchData(url, kind) {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(r.status + " " + url);
+    const out = kind === "json" ? await r.json() : await r.blob();
+    markDirty();
+    return out;
   }
   async function blobToImage(blob) {
     if (window.createImageBitmap) { try { return await createImageBitmap(blob); } catch {} }
@@ -850,8 +849,8 @@ footer a { color: inherit; }
   async function loadIndex() {
     const note = $("modeNote");
     // 幾份索引同時下載；原始數值（stats.json）等第一次進雙人對戰才下載
-    const get = (name, fb) => fetchFirst([LOCAL + name], "json").catch(() => fb);
-    const getC = (name, fb) => fetchFirst([CUSTOM + name], "json").catch(() => fb);
+    const get = (name, fb) => fetchData(LOCAL + name, "json").catch(() => fb);
+    const getC = (name, fb) => fetchData(CUSTOM + name, "json").catch(() => fb);
     const [idx, skills, proj, st, cIdx, cSkills] = await Promise.all([get("units.json", []), get("skills.json", {}), get("projectiles.json", {}), get("sync_state.json", {}), getC("units.json", []), getC("skills.json", {})]);
     S.index = Array.isArray(idx) ? idx : []; S.skills = skills || {}; S.proj = proj || {};
     if (Array.isArray(cIdx)) for (const r of cIdx) if (r && r.id && !S.index.some((x) => x.id === r.id)) { customIds.add(r.id); S.index.push(r); }
@@ -865,13 +864,31 @@ footer a { color: inherit; }
   let statsPromise = null;
   function ensureStats() {
     if (!statsPromise) statsPromise = Promise.all([
-      fetchFirst([LOCAL + "stats.json"], "json").catch(() => ({})),
-      fetchFirst([CUSTOM + "stats.json"], "json").catch(() => ({})),
+      fetchData(LOCAL + "stats.json", "json").catch(() => ({})),
+      fetchData(CUSTOM + "stats.json", "json").catch(() => ({})),
     ]).then(([x, c]) => { S.stats = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); });
     return statsPromise;
   }
-  const available = () => true;
-
+  /* 角色的動畫資料（單人、雙人共用）：官方角色是壓縮檔 .json.gz（找不到才讀 .json），自製角色是 .json */
+  async function loadUnitMeta(id) {
+    const base = baseOf(id);
+    let meta;
+    if (customIds.has(id)) meta = await fetchData(`${base}units/${id}.json`, "json");
+    else {
+      try { meta = await fetchGzJson(`${base}units/${id}.json.gz`); }
+      catch { meta = await fetchData(`${base}units/${id}.json`, "json"); }
+    }
+    meta.base = base;
+    return meta;
+  }
+  // 本體以外的部件（投射物）圖片；讀不到的略過
+  async function loadBullets(meta) {
+    const bul = {};
+    await Promise.all(Object.keys(meta.parts).filter((k) => k !== "body").map(async (k) => {
+      try { bul[k] = { part: meta.parts[k], atlas: await blobToImage(await fetchData(meta.base + meta.parts[k].png, "blob")), sprites: new Map() }; } catch {}
+    }));
+    return bul;
+  }
   /* ---------- 搜尋 ---------- */
   function thumbUrls(id) {
     const b = baseOf(id);
@@ -993,18 +1010,8 @@ footer a { color: inherit; }
   async function selectUnit(r, opts = {}) {
     showOverlay(`載入 ${r.name} …`);
     try {
-      let meta;
-      const base = baseOf(r.id);
-      if (customIds.has(r.id)) meta = await fetchFirst([`${base}units/${r.id}.json`], "json");
-      else {
-        try { meta = await fetchGzJson(`${base}units/${r.id}.json.gz`); }
-        catch { meta = await fetchFirst([`${base}units/${r.id}.json`], "json"); }
-      }
-      meta.base = base;
-      const bul = {};
-      await Promise.all(Object.keys(meta.parts).filter((k) => k !== "body").map(async (k) => {
-        try { bul[k] = { part: meta.parts[k], atlas: await blobToImage(await fetchFirst([base + meta.parts[k].png], "blob")), sprites: new Map() }; } catch {}
-      }));
+      const meta = await loadUnitMeta(r.id);
+      const bul = await loadBullets(meta);
       const oldBul = S.bul;
       S.swapping = true; // 換角色途中先不畫，避免新舊資料混在一起
       S.unit = r; S.meta = meta; S.bul = bul;
@@ -1082,7 +1089,7 @@ footer a { color: inherit; }
   async function selectPart(key, clipKey) {
     const part = S.meta.parts[key];
     $("parts").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.part === key)));
-    const atlas = await blobToImage(await fetchFirst([(S.meta.base || LOCAL) + part.png], "blob"));
+    const atlas = await blobToImage(await fetchData((S.meta.base || LOCAL) + part.png, "blob"));
     const oldAtlas = S.atlas;
     S.partKey = key; S.part = part; S.atlas = atlas;
     freeCanvases(S.sprites); freeCanvases(S.hueCache);
@@ -1151,7 +1158,7 @@ footer a { color: inherit; }
     }
   }
   function selectAnim(name) {
-    S.animName = name; setTimeout(syncUrl, 0);
+    S.animName = name; syncUrl();
     document.querySelectorAll("#clips .chip, #rawClips .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.anim === name)));
     const sel = $("remixAnim");
     if ([...sel.options].some((o) => o.value === name)) sel.value = name;
@@ -1463,13 +1470,24 @@ footer a { color: inherit; }
   function rebuildTimeline() {
     const n = anim() ? clipN() : 1;
     S.timeline = expandSegs(S.segs, n);
-    $("segTotal").textContent = `共 ${S.timeline.length} 幀・約 ${(S.timeline.length / FPS_OUT).toFixed(1)} 秒`;
+    $("segTotal").textContent = `共 ${S.timeline.length} 幀・約 ${(S.timeline.length / FPS).toFixed(1)} 秒`;
   }
   function clampInt(v, lo, hi) { v = Math.round(+v); if (!isFinite(v)) v = lo; return Math.max(lo, Math.min(hi, v)); }
 
   /* ---------- 播放迴圈 ---------- */
+  /* 播放音效的時鐘（單人、雙人共用）：播放中依「不歸零的播放位置」提前預約音效；
+     畫面被拖動、跳轉或暫停時，取消已預約還沒響的聲音，下次從新位置重新計。 */
+  const newClock = () => ({ abs: null, ref: null, st: null });
+  function clockAdvance(c, pos, step) {
+    if (c.abs != null && c.ref !== pos) { c.abs = null; sfxStopPending(); } // 位置被跳轉過
+    if (c.abs == null) { c.abs = pos; c.st = {}; }
+    c.abs += step;
+    return pos + step;
+  }
+  function clockSchedule(c, pos, list, len, fps, play) { sfxRun(c.st, list, c.abs, fps, len, play); c.ref = pos; }
+  function clockStop(c, cancel = true) { if (c.abs != null) { c.abs = null; if (cancel) sfxStopPending(); } }
   function totalLen() { return S.mode === "remix" ? S.timeline.length : (anim() ? clipN() : 0); }
-  function rate() { return S.mode === "remix" ? FPS_OUT : (S.part?.anim_rate || 24) * S.speed; }
+  function rate() { return S.mode === "remix" ? FPS : (S.part?.anim_rate || 24) * S.speed; }
   function drawCurrent() {
     if (!S.part || !anim() || !S.atlas || S.swapping) return; // 切換角色載入中時先不畫
     const k = Math.floor(S.pos);
@@ -1506,17 +1524,13 @@ footer a { color: inherit; }
     if (!S.part || S.recording) return;
     if (S.playing) {
       const len = totalLen();
-      if (S.sfxAbs != null && S.sfxPosRef !== S.pos) { S.sfxAbs = null; sfxStopPending(); } // 位置被跳轉過
-      if (S.sfxAbs == null) { S.sfxAbs = S.pos; S.sfxSt = {}; }
-      S.pos += dt * rate();
-      S.sfxAbs += dt * rate();
+      S.pos = clockAdvance(S.clock, S.pos, dt * rate());
       if (S.pos >= len) {
         if (S.loop || S.mode === "remix") S.pos = S.pos % Math.max(1, len);
         else { S.pos = len - 1; setPlaying(false); }
       }
-      if (S.playing) { const sl = singleSfxList(); sfxRun(S.sfxSt, sl.list, S.sfxAbs, rate(), sl.len, singleSfxPlay); }
-      S.sfxPosRef = S.pos;
-    } else if (S.sfxAbs != null) { S.sfxAbs = null; sfxStopPending(); }
+      if (S.playing) { const sl = singleSfxList(); clockSchedule(S.clock, S.pos, sl.list, sl.len, rate(), singleSfxPlay); }
+    } else clockStop(S.clock);
     if (shouldDraw(S.playing)) drawCurrent();
   }
   function setPlaying(p) {
@@ -1525,7 +1539,7 @@ footer a { color: inherit; }
     $("playBtn").setAttribute("aria-label", p ? "暫停" : "播放");
   }
   function setMode(m) {
-    S.mode = m; S.pos = 0; S.sfxAbs = null; sfxStopPending(); setTimeout(syncUrl, 0);
+    S.mode = m; S.pos = 0; clockStop(S.clock); sfxStopPending(); syncUrl();
     $("modeOrig").setAttribute("aria-pressed", String(m === "orig"));
     $("modeRemix").setAttribute("aria-pressed", String(m === "remix"));
     updateScrub(); drawCurrent();
@@ -1633,7 +1647,7 @@ footer a { color: inherit; }
     return out;
   }
   function saveSegs() {
-    setTimeout(syncUrl, 0);
+    syncUrl();
     if (S.unit && S.animName) store.set("segs:" + S.unit.id + ":" + S.partKey + ":" + S.animName, S.segs);
   }
   /* ---------- 上一步／下一步（單人：惡搞片段與零件調整） ----------
@@ -2155,6 +2169,7 @@ footer a { color: inherit; }
   }
   function singleSfxPlay(e, when) { sfxPlay(SFX.cfg.single[e.which], "single-" + e.which, { rate: e.rate, choke: e.choke, when }); }
   // 雙人：模擬時記下的音效點（模擬幀）換算成輸出幀（含 K.O. 慢動作重播）
+  function sfxBufFor(id, key) { if (!id || id === "none") return null; return id === "custom" ? SFX.custom[key] : SFX.buffers[id]; }
   function duelSfxList() {
     if (D.sfxOutFor === D.sfxEv && D.sfxOutMap === D.timeMap && D.sfxOut) return D.sfxOut;
     const list = [], ev = D.sfxEv || [], map = D.timeMap && D.timeMap.length ? D.timeMap : null;
@@ -2750,7 +2765,67 @@ footer a { color: inherit; }
     return new Blob([file], { type: "video/mp4" });
   }
   // 音效時間表 → 離線用的事件
-  function sfxBufFor(id, key) { if (!id || id === "none") return null; return id === "custom" ? SFX.custom[key] : SFX.buffers[id]; }
+  function pickMime() {
+    if (!window.MediaRecorder) return null;
+    const list = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    return list.find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || "";
+  }
+  /* 共用錄影（單人、雙人都用）：先試離線逐格輸出（WebCodecs），不支援或失敗才改用即時錄影（MediaRecorder，錄完補上影片長度）。
+     o.canvas／o.len（格數）／o.fps／o.draw(k)：畫第 k 格
+     o.offEvents：逐格輸出用的音效 [{ t 秒, buf, rate, choke }]；o.live：即時錄影用的音效 { list, len, play }
+     o.status：顯示進度的元素；o.badge：「錄製中」徽章；o.buttons：錄影時停用的按鈕；o.busy(on)：設定「錄影中」狀態
+     o.onFrame(k)：顯示目前第幾格；o.fileBase：檔名（不含副檔名）；o.noSupport：瀏覽器不能錄影時的訊息 */
+  async function recordCanvas(o) {
+    const { canvas, len, fps, status, badge } = o;
+    const lock = (on) => { o.busy(on); badge.hidden = !on; if (!on) badge.textContent = "● 錄製中"; o.buttons.forEach((b) => (b.disabled = on)); };
+    const bgm = { bgmUrl: S.audioUrl, bgmStart: +$("audioStart").value || 0 };
+    lock(true);
+    let offBlob = null;
+    try {
+      status.textContent = "準備輸出…";
+      offBlob = await offlineExport({
+        canvas, len, fps, draw: o.draw, events: o.offEvents, ...bgm,
+        progress: (f, k) => { const pc = Math.round(f * 100); status.textContent = `輸出中 ${pc}%（逐格輸出，不用等即時播放）`; badge.textContent = `● 輸出中 ${pc}%`; o.onFrame(k); },
+      });
+    } catch { offBlob = null; }
+    lock(false);
+    if (offBlob) { await offerFile(offBlob, o.fileBase + ".mp4", status); return; }
+    // 即時錄影：照真實時間播放一次，邊播邊錄
+    const mime = pickMime();
+    if (mime === null || !canvas.captureStream) { status.textContent = o.noSupport; return; }
+    const stream = canvas.captureStream(fps);
+    const mix = await sfxBeginRecord(bgm.bgmUrl, bgm.bgmStart);
+    if (mix.track) stream.addTrack(mix.track);
+    let rec;
+    try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined); }
+    catch { sfxEndRecord(mix); status.textContent = "無法啟動錄影。"; return; }
+    const chunks = []; rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    const done = new Promise((r) => (rec.onstop = r));
+    lock(true);
+    status.textContent = `錄製中…約 ${(len / fps).toFixed(1)} 秒`;
+    o.draw(0); rec.start(250); const recT0 = performance.now();
+    if (mix.audioEl) { try { await mix.audioEl.play(); } catch {} }
+    const t0 = performance.now(), rst = {};
+    await new Promise((resolve) => {
+      const step = () => {
+        const kf = (performance.now() - t0) / 1000 * fps, k = Math.floor(kf);
+        if (k >= len) return resolve();
+        o.draw(k);
+        sfxRun(rst, o.live.list, kf, fps, o.live.len, o.live.play); o.onFrame(k);
+        requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    rec.stop(); await done; const recMs = performance.now() - recT0;
+    sfxEndRecord(mix);
+    lock(false);
+    const type = (rec.mimeType || mime || "video/webm").split(";")[0];
+    const ext = type.includes("mp4") ? "mp4" : "webm";
+    status.textContent = "整理影片中…";
+    await offerFile(await fixVideoDuration(new Blob(chunks, { type }), type, recMs), `${o.fileBase}.${ext}`, status);
+  }
+  /* ---------- 單人：錄影、截圖 ---------- */
   function singleOfflineEvents(len, fps) {
     const sl = singleSfxList(), out = [];
     if (!sl.len || !sl.list.length) return out;
@@ -2760,87 +2835,24 @@ footer a { color: inherit; }
     }
     return out.sort((a, b) => a.t - b.t);
   }
-  // shift = 影片開頭多出的倒數幀數（0 = 不含倒數）
-  function duelOfflineEvents(shift = 0) {
-    const fight = duelSfxList().map((e) => {
-      const buf = e.sys ? SFX.buffers[e.sys] : sfxBufFor((SFX.cfg.duel[e.side] || {})[e.which], `duel${e.side}-${e.which}`);
-      return { t: (e.k + shift) / DFPS, buf, rate: e.rate };
-    });
-    const cd = shift ? cdSfx(DFPS).map((e) => ({ t: e.k / DFPS, buf: SFX.buffers[e.sys], rate: 1 })) : [];
-    return cd.concat(fight);
-  }
-  function pickMime() {
-    if (!window.MediaRecorder) return null;
-    const list = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
-    return list.find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || "";
-  }
   async function record(kind) {
-    const status = $("outStatus");
     if (!S.part || S.recording) return;
     if (S.bg === "transparent") { setBg("white"); }
     setMode(kind);
     const loops = kind === "orig" ? +$("origLoops").value : 1;
     const len = kind === "remix" ? S.timeline.length : clipN() * loops;
-    const fps = kind === "remix" ? FPS_OUT : Math.round((S.part.anim_rate || 24) * S.speed) || 30;
+    const fps = kind === "remix" ? FPS : Math.round((S.part.anim_rate || 24) * S.speed) || 30;
     const clipKey = (CLIPS.find((c) => c.names.includes(S.animName)) || {}).key || S.animName;
-    const baseName = `${S.unit.id}_${clipKey}_${kind === "remix" ? "egao" : "orig"}`;
-    // 先試離線逐格輸出；不支援或失敗才用即時錄影
-    S.recording = true; $("recBadge").hidden = false;
-    document.querySelectorAll("#recRemix,#recOrig").forEach((b) => (b.disabled = true));
-    let offBlob = null;
-    try {
-      status.textContent = "準備輸出…";
-      offBlob = await offlineExport({
-        canvas: cv, len, fps, draw: (k) => render(...firstArgs(kind, k)),
-        events: singleOfflineEvents(len, fps), bgmUrl: S.audioUrl, bgmStart: +$("audioStart").value || 0,
-        progress: (f, k) => { const pc = Math.round(f * 100); status.textContent = `輸出中 ${pc}%（逐格輸出，不用等即時播放）`; $("recBadge").textContent = `● 輸出中 ${pc}%`; $("frameNo").textContent = `${k} / ${len - 1}`; },
-      });
-    } catch { offBlob = null; }
-    S.recording = false; $("recBadge").hidden = true; $("recBadge").textContent = "● 錄製中";
-    document.querySelectorAll("#recRemix,#recOrig").forEach((b) => (b.disabled = false));
-    if (offBlob) { await offerFile(offBlob, baseName + ".mp4"); S.pos = 0; markDirty(); return; }
-    const mime = pickMime();
-    if (mime === null || !cv.captureStream) { status.textContent = "這個瀏覽器不支援錄製影片。請改用電腦版 Chrome，或用 Python 腳本輸出。"; return; }
-    const stream = cv.captureStream(fps);
-    const mix = await sfxBeginRecord(S.audioUrl, +$("audioStart").value || 0);
-    if (mix.track) stream.addTrack(mix.track);
-    const audioEl = mix.audioEl;
-    let rec;
-    try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined); }
-    catch { status.textContent = "無法啟動錄影。"; return; }
-    const chunks = [];
-    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    const done = new Promise((r) => (rec.onstop = r));
-    S.recording = true; $("recBadge").hidden = false;
-    document.querySelectorAll("#recRemix,#recOrig").forEach((b) => (b.disabled = true));
-    status.textContent = `錄製中…約 ${(len / fps).toFixed(1)} 秒`;
-    render(...firstArgs(kind, 0));
-    rec.start(250); const recT0 = performance.now();
-    if (audioEl) { try { await audioEl.play(); } catch {} }
-    const t0 = performance.now();
-    const rst = {}, sl = singleSfxList();
-    await new Promise((resolve) => {
-      const step = () => {
-        const kf = (performance.now() - t0) / 1000 * fps, k = Math.floor(kf);
-        if (k >= len) return resolve();
-        render(...firstArgs(kind, k));
-        sfxRun(rst, sl.list, kf, fps, sl.len, singleSfxPlay);
-        $("frameNo").textContent = `${k} / ${len - 1}`;
-        requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
+    const sl = singleSfxList();
+    await recordCanvas({
+      canvas: cv, len, fps, draw: (k) => render(...firstArgs(kind, k)),
+      offEvents: singleOfflineEvents(len, fps), live: { list: sl.list, len: sl.len, play: singleSfxPlay },
+      status: $("outStatus"), badge: $("recBadge"), buttons: [...document.querySelectorAll("#recRemix,#recOrig")],
+      busy: (on) => { S.recording = on; }, onFrame: (k) => { $("frameNo").textContent = `${k} / ${len - 1}`; },
+      fileBase: `${S.unit.id}_${clipKey}_${kind === "remix" ? "egao" : "orig"}`,
+      noSupport: "這個瀏覽器不支援錄製影片。請改用電腦版 Chrome，或用 Python 腳本輸出。",
     });
-    await new Promise((r) => setTimeout(r, 150));
-    rec.stop(); await done; const recMs = performance.now() - recT0;
-    sfxEndRecord(mix);
-    S.recording = false; $("recBadge").hidden = true;
-    document.querySelectorAll("#recRemix,#recOrig").forEach((b) => (b.disabled = false));
-    const type = (rec.mimeType || mime || "video/webm").split(";")[0];
-    const ext = type.includes("mp4") ? "mp4" : "webm";
-    status.textContent = "整理影片中…";
-    const blob = await fixVideoDuration(new Blob(chunks, { type }), type, recMs);
-    await offerFile(blob, `${baseName}.${ext}`);
-    S.pos = 0;
+    S.pos = 0; markDirty();
   }
   function firstArgs(kind, k) {
     if (kind === "remix") { const st = remixState(k); return [st.idx, st.cam, st.fx, k]; }
@@ -2970,49 +2982,885 @@ footer a { color: inherit; }
   cv.addEventListener("pointercancel", () => (drag = null));
   cv.addEventListener("dblclick", () => { S.panX = 0; S.panY = 0; drawCurrent(); });
 
-  /* ---------- 雙人對打 ---------- */
+  /* ---------- 雙人對戰：狀態與設定表 ----------
+     D 是雙人對戰唯一的狀態物件，分成兩種欄位：
+       1. 設定（DUEL_SETTINGS 表裡的欄位）：使用者調的東西，會存進瀏覽器、專案檔，影響結果的會寫進分享連結。
+       2. 執行中的資料：角色（f）、招式（moves）、計算結果（見 js-11 的 TIMELINE 說明）、播放位置等。
+     新增一個設定只要在 DUEL_SETTINGS 加一筆，存檔、讀檔、分享連結、恢復預設、交換左右都會自動處理。 */
   const dcv = $("dcv");
   const dctx = dcv.getContext("2d");
-  const DFPS = 30;
   const DMG = { attack: 15, skill1: 30, skill2: 40 };
   const ACTION_LABEL = { move: "移動接近", attack: "一般攻擊", skill1: "技能1", skill2: "技能2" };
-  const D = {
-    f: [null, null], moves: [], dist: 320, speed: 1, shake: true, invert: false, numbers: true, bars: true, projOn: true, projs: [],
-    finale: true, finalKey: null, koInfo: null, finalStart: 0, finalTarget: 1, bgImg: null, ground: 8, mode: "trade",
-    kind: "classic", raw: false, timeLimit: 60, hpMul: 1, range: [null, null], mvs: [null, null], level: [null, null], cheat: [{}, {}], sumCap: 3, sumAtk: null, sumHp: null,
-    frames: [[], []], timeMap: null, maxHp: [100, 100], resultK: -1, resultText: "", winner: -1, simLen: 0,
-    tracks: [[], []], events: [], posKeys: [[], []], len: 1, cam: null,
-    pos: 0, playing: true, recording: false, seed: 1,
-  };
 
-  async function loadFighter(r) {
-    let meta;
-    const base = baseOf(r.id);
-    if (customIds.has(r.id)) meta = await fetchFirst([`${base}units/${r.id}.json`], "json");
-    else {
-      try { meta = await fetchGzJson(`${base}units/${r.id}.json.gz`); }
-      catch { meta = await fetchFirst([`${base}units/${r.id}.json`], "json"); }
+  /* 對戰類型：經典（照招式表演）、真距離（依距離模擬）、原始數值（依遊戲數值模擬） */
+  const KINDS = {
+    classic: { label: "經典對戰", sim: false, raw: false },
+    real: { label: "真距離對戰", sim: true, raw: false },
+    raw: { label: "原始數值對戰", sim: true, raw: true },
+  };
+  const isSim = () => KINDS[D.type].sim; // 真距離或原始數值（逐格模擬）
+  const isRaw = () => KINDS[D.type].raw;
+
+  /* 整理輸入值的小工具：空白或不是數字就回傳 undefined（由呼叫的地方改用預設值），超出範圍就夾到範圍內 */
+  const num = (lo, hi, round) => (v) => {
+    if (v === null || v === undefined || v === "" || typeof v === "boolean" || !isFinite(+v)) return undefined;
+    const n = round ? Math.round(+v) : +v;
+    return Math.max(lo, Math.min(hi, n));
+  };
+  const bool = (v) => (typeof v === "boolean" ? v : v === 0 || v === "0" ? false : v === 1 || v === "1" ? true : undefined);
+  const pair = (one) => (v) => (Array.isArray(v) && v.length === 2 ? v.map((x) => { const y = one(x); return y === undefined ? null : y; }) : undefined);
+  const optNum = (lo, hi) => (v) => (v === null || v === "" ? null : num(lo, hi)(v));
+  const oneOf = (...list) => (v) => (list.includes(v) ? v : undefined);
+  const objPair = (v) => (Array.isArray(v) && v.length === 2 ? v.map((x) => (x && typeof x === "object" && !Array.isArray(x) ? x : {})) : undefined);
+
+  /* 設定表
+     key：D 上的欄位名稱；def：預設值（陣列、物件用函式產生，避免共用同一份）
+     clean：把存檔、網址、專案檔讀到的值整理成合法值（不合法就用預設）
+     q／d：分享連結裡的位置——q＝一般網址參數名稱，d＝壓縮包 d 裡的代號；enc／dec 是網址格式和內部格式的轉換
+     share(D)：要不要寫進分享連結（省略＝跟預設不同才寫）；always＝一定寫
+     perSide：左右各一個值的陣列，交換左右時跟著交換
+     reset：「全部恢復預設」會還原的對戰類型；label：按鈕說明裡的名稱
+     ui：只影響畫面、不影響結果（不寫進分享連結） */
+  const DEF_SUMCAP = 3;
+  const DUEL_SETTINGS = [
+    { key: "type", def: "classic", clean: oneOf("classic", "real", "raw"), q: "type", always: true },
+    { key: "mode", def: "trade", clean: oneOf("trade", "random", "custom"), q: "m", always: true },
+    { key: "seed", def: 1, clean: num(1, 1e9, true), q: "s", always: true },
+    { key: "hpMul", label: "血量倍率", def: 1, clean: (v) => (+v > 0 ? Math.min(100000, +v) : undefined), q: "hp", share: (D) => isRaw() && D.hpMul !== 1, reset: ["raw"] },
+    { key: "level", label: "雙方等級", def: () => [null, null], clean: pair(num(1, 1e6, true)), q: "lv", perSide: true, reset: ["raw"],
+      share: (D) => isRaw() && !!(D.level[0] || D.level[1]), enc: (v) => v.map((x) => x || "").join(","), dec: (s) => String(s).split(",").slice(0, 2).concat([""]).slice(0, 2).map((x) => (+x > 0 ? +x : null)) },
+    { key: "cheat", label: "金手指", def: () => [{}, {}], clean: objPair, d: "ch", perSide: true, reset: ["raw"], share: (D) => isRaw() && hasCheat(D.cheat) },
+    { key: "range", label: "攻擊距離", def: () => [null, null], clean: pair(optNum(0, 1e6)), d: "rg", perSide: true, reset: ["real", "raw"] },
+    { key: "mvs", label: "移動速度", def: () => [null, null], clean: pair(optNum(1, 2000)), d: "ms", perSide: true, reset: ["real", "raw"], share: (D) => isSim() && (D.mvs[0] != null || D.mvs[1] != null) },
+    { key: "sumCap", def: DEF_SUMCAP, clean: num(1, 20, true), d: "sc" },
+    { key: "sumAtk", def: null, clean: optNum(0, 1000), d: "sa" },
+    { key: "sumHp", def: null, clean: optNum(1, 1000), d: "sh" },
+    // v4.14 起寫進分享連結（會影響結果，之前漏掉，朋友打開會跟分享的人不同）
+    { key: "dist", label: "雙方距離 320", def: 320, clean: num(120, 700), d: "di", share: (D) => !isSim() && D.dist !== 320, reset: ["classic"] },
+    { key: "speed", label: "整體速度 1×", def: 1, clean: num(0.4, 2.5), d: "sp", reset: ["classic", "real", "raw"] },
+    { key: "projOn", def: true, clean: bool, d: "pj", enc: (v) => (v ? 1 : 0) },
+    { key: "finale", def: true, clean: bool, d: "fn", enc: (v) => (v ? 1 : 0) },
+    { key: "timeLimit", label: "時間上限", def: 60, clean: num(5, 600), d: "tl", share: (D) => isSim() && D.timeLimit !== 60, reset: ["real", "raw"] },
+    // 只影響畫面
+    { key: "shake", def: true, clean: bool, ui: true },
+    { key: "invert", def: false, clean: bool, ui: true },
+    { key: "numbers", def: true, clean: bool, ui: true },
+    { key: "bars", def: true, clean: bool, ui: true },
+    { key: "ground", def: 8, clean: num(0, 45), ui: true },
+  ];
+  const SETTING = Object.fromEntries(DUEL_SETTINGS.map((s) => [s.key, s]));
+  const settingDef = (s) => (typeof s.def === "function" ? s.def() : s.def);
+  const sameVal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  const D = {
+    f: [null, null], moves: [], sumCapSet: false, bgImg: null,
+    pos: 0, playing: false, idle: true, cd: null, recording: false,
+    clock: { abs: null, ref: null, st: null }, // 播放音效的時鐘（見 js-05）
+  };
+  for (const s of DUEL_SETTINGS) D[s.key] = settingDef(s);
+
+  /* TIMELINE：對戰引擎（經典 compileOnce、真距離／原始數值 compileReal）的輸出。
+     畫面（renderDuel）、音效（duelSfxList）、錄影只讀這些欄位；引擎本身不碰網頁畫面。
+       len         總格數（含 K.O. 慢動作重播）      simLen   模擬了幾格（不含重播）
+       timeMap     輸出第 k 格 → 模擬第幾格（null＝一對一）；replayFrom：重播從輸出第幾格開始（-1＝沒有）
+       tracks[i]   第 i 方的動作片段 { anim, start, end, rate, loop }（經典）
+       posKeys[i]  第 i 方的位置關鍵格 { k, x }（經典）  frames[i]：第 i 方每一格的狀態 { x, anim, idx, ... }（真距離）
+       events      傷害數字、MISS、K.O. 等事件 { k, target, attacker, dmg, label, ko, ... }
+       projs       投射物；summons：召喚物與複製體 { side, k0, k1, ... }；sfxEv：音效點 { k（模擬格）, side, kind }
+       ko          K.O. 發生在模擬第幾格（-1＝沒有）；resultK／resultText／winner：結果
+       finalStart／finalTarget：最後一擊的起點與挨打的一方；maxHp：雙方最大體力；cam：鏡頭範圍 */
+  function resetTimeline() {
+    Object.assign(D, {
+      len: 1, simLen: 0, timeMap: null, replayFrom: -1, tracks: [[], []], posKeys: [[], []], frames: [[], []],
+      events: [], projs: [], summons: [], sfxEv: [], ko: -1, resultK: -1, resultText: "", winner: -1,
+      finalStart: 0, finalTarget: 1, maxHp: [100, 100], cam: null,
+    });
+  }
+  resetTimeline();
+
+  /* 讀入一包設定（來源：瀏覽器存檔、專案檔、分享連結解出來的物件）。
+     沒有的欄位、不合法的值一律用預設值——同一個連結在任何人的瀏覽器都會得到同樣結果。 */
+  function applyDuelSettings(obj) {
+    obj = obj || {};
+    for (const s of DUEL_SETTINGS) {
+      const v = obj[s.key] === undefined ? undefined : s.clean(obj[s.key]);
+      D[s.key] = v === undefined ? settingDef(s) : v;
     }
+    D.sumCapSet = !!obj.sumCapSet;
+  }
+  /* 瀏覽器存檔／專案檔 → 設定物件（處理舊格式） */
+  function settingsFromSaved(saved) {
+    const o = Object.assign({}, saved || {});
+    // v4.13 以前：對戰類型存成 kind（classic/real）＋ raw
+    if (o.type === undefined && o.kind !== undefined) o.type = o.kind === "real" ? (o.raw ? "raw" : "real") : "classic";
+    // v4.12：召喚上限預設 5→3；沒自己改過、還存著 5 的改成 3
+    if (o.sumCap === 5 && !o.sumCapSet) delete o.sumCap;
+    return o;
+  }
+  /* 分享連結 → 設定物件 */
+  function settingsFromUrl(params, packed) {
+    const o = {};
+    for (const s of DUEL_SETTINGS) {
+      let raw;
+      if (s.q && params.get(s.q) != null && params.get(s.q) !== "") raw = params.get(s.q);
+      else if (s.d && packed[s.d] !== undefined) raw = packed[s.d];
+      if (raw === undefined) continue;
+      o[s.key] = s.dec ? s.dec(raw) : raw;
+    }
+    if (o.sumCap !== undefined) o.sumCapSet = true;
+    return o;
+  }
+  /* 目前設定 → 瀏覽器存檔／專案檔（欄位名稱沿用舊版，舊版網頁也讀得懂） */
+  function settingsToSaved() {
+    const o = {};
+    for (const s of DUEL_SETTINGS) o[s.key] = D[s.key];
+    o.kind = isSim() ? "real" : "classic"; o.raw = isRaw();
+    o.sumCapSet = D.sumCapSet;
+    return o;
+  }
+  /* 目前設定 → 分享連結：q 欄位寫進 params，d 欄位寫進壓縮包 */
+  function settingsToUrl(params, packed) {
+    for (const s of DUEL_SETTINGS) {
+      if (s.ui) continue;
+      const on = s.always || (s.share ? s.share(D) : !sameVal(D[s.key], settingDef(s)));
+      if (!on) continue;
+      const v = s.enc ? s.enc(D[s.key]) : D[s.key];
+      if (s.q) params.set(s.q, String(v)); else packed[s.d] = v;
+    }
+  }
+  /* 全部恢復預設：只還原目前對戰類型用得到的設定 */
+  function resetDuelSettings(type) {
+    const done = [];
+    for (const s of DUEL_SETTINGS) if (s.reset && s.reset.includes(type)) { D[s.key] = settingDef(s); done.push(s.key); }
+    return done;
+  }
+  // 隨機種子（1～n-1，不會是 0）
+  const newSeed = (n) => Math.floor(Math.random() * n) || 1;
+  /* 畫面上的設定欄位 ← D（讀檔、恢復預設之後呼叫）。真距離／原始數值面板由 renderRealPanel 處理。 */
+  function syncDuelInputs() {
+    $("dDist").value = D.dist; $("dDistOut").textContent = D.dist;
+    $("dSpeed").value = D.speed; $("dSpeedOut").textContent = D.speed.toFixed(2) + "×";
+    $("dProj").checked = D.projOn; $("dFinale").checked = D.finale;
+    $("dShake").checked = D.shake; $("dInvert").checked = D.invert; $("dNumbers").checked = D.numbers; $("dBars").checked = D.bars;
+    $("dGround").value = D.ground; $("dGroundOut").textContent = D.ground + "%";
+    $("dSumCap").value = D.sumCap; $("dSumAtk").value = D.sumAtk ?? ""; $("dSumHp").value = D.sumHp ?? "";
+  }
+  /* 從輸入框改一個設定（side：左右各一個值的設定要改哪一邊）。值一樣用設定表整理。 */
+  function setDuelSetting(key, v, side) {
+    const s = SETTING[key];
+    if (side == null) { const c = s.clean(v); D[key] = c === undefined ? settingDef(s) : c; }
+    else { const c = s.clean(D[key].map((x, j) => (j === side ? v : x))); if (c) D[key] = c; }
+    if (key === "sumCap") D.sumCapSet = true;
+  }
+  const resetLabels = (type) => DUEL_SETTINGS.filter((s) => s.reset && s.reset.includes(type)).map((s) => s.label).join("、");
+  /* 交換左右 */
+  function swapDuelSides() { for (const s of DUEL_SETTINGS) if (s.perSide) D[s.key] = D[s.key].slice().reverse(); }
+  /* ---------- 雙人對打：角色、召喚物、經典對戰引擎 ---------- */
+  // 待機姿勢：沒有待機動畫的角色用普攻動畫代替
+  const idleClip = (f) => f.clips.idle || f.clips.attack;
+  async function loadFighter(r) {
+    const meta = await loadUnitMeta(r.id);
     const part = meta.parts.body || meta.parts[Object.keys(meta.parts)[0]];
-    const atlas = await blobToImage(await fetchFirst([base + part.png], "blob"));
+    const atlas = await blobToImage(await fetchData(meta.base + part.png, "blob"));
     const f = { r, part, atlas, sprites: new Map() };
     const clip = (key) => { const c = CLIPS.find((x) => x.key === key); return c ? c.names.find((n) => part.animations[n]?.frames?.length) || null : null; };
     f.clips = { idle: clip("idle"), move: clip("move"), attack: clip("attack"), skill1: clip("skill1"), skill2: clip("skill2"), knockback: clip("knockback") };
     f.skills = S.skills[r.id] || [];
     f.proj = S.proj[r.id] || {};
-    f.bul = {};
-    await Promise.all(Object.keys(meta.parts).filter((k) => k !== "body").map(async (k) => {
-      try {
-        const bp = meta.parts[k];
-        f.bul[k] = { part: bp, atlas: await blobToImage(await fetchFirst([base + bp.png], "blob")), sprites: new Map() };
-      } catch {}
-    }));
-    f.lb = fBounds(f, f.clips.idle || f.clips.attack);
+    f.bul = await loadBullets(meta);
+    f.lb = fBounds(f, idleClip(f));
     // 讓角色以身體中心站位、腳踩在地面上（原始素材的原點不在腳底中央）
     f.ox = -(f.lb.x0 + f.lb.x1) / 2; f.oy = -f.lb.y1;
     f.w = f.lb.x1 - f.lb.x0; f.h = f.lb.y1 - f.lb.y0;
     return f;
   }
+  function pickAnim(part, names) { return names.find((n) => part.animations[n]?.frames?.length) || null; }
+  function animIdx(dr, anim, ageFrames, loop) {
+    const n = dr.part.animations[anim].frame_count;
+    const i = Math.floor(ageFrames / FPS * (dr.part.anim_rate || 24) * D.speed);
+    return loop ? i % n : Math.min(n - 1, i);
+  }
+  function animOutFrames(dr, anim) {
+    return Math.max(1, Math.round(dr.part.animations[anim].frame_count / ((dr.part.anim_rate || 24) * D.speed) * FPS));
+  }
+
+  /* 招式編排 → 逐幀時間軸 */
+  function rnd(n) { return hash(n * 7.13 + D.seed * 3.7); }
+  function hitFrac(f, anim) {
+    const a = f.part.animations[anim];
+    if (!a) return 0.5;
+    if (anim.endsWith("_all")) {
+      const ready = f.part.animations[anim.replace(/_all$/, "_ready")] || f.part.animations[anim.replace(/attack_all$/, "attack_ready")];
+      if (ready) return Math.max(0.2, Math.min(0.9, (ready.frame_count + (a.frame_count - ready.frame_count) * 0.3) / a.frame_count));
+    }
+    return 0.5;
+  }
+  function framesFor(f, anim, slow) {
+    const a = f.part.animations[anim];
+    const sf = typeof slow === "number" ? slow : (slow ? 0.5 : 1);
+    const rate = (f.part.anim_rate || 24) * D.speed * sf;
+    return { rate, dur: Math.max(1, Math.round(a.frame_count / rate * FPS)) };
+  }
+  /* 重新計算整場對戰（任何設定、角色、招式改變後呼叫）：
+     引擎只產生 TIMELINE（見 js-10），算完更新進度條與結果文字，並回到「還沒開始」（停在第一格、蓋黑幕等按播放） */
+  function compileDuel() { compileDuelCore(); showTimelineInfo(); duelIdle(); }
+  function compileDuelCore() {
+    resetTimeline();
+    if (isSim()) { compileReal(); return; }
+    compileOnce();
+    D.resultK = D.ko; D.resultText = D.ko >= 0 ? "K.O." : "";
+    const koEv = D.events.find((e) => e.ko);
+    D.finalStart = koEv && koEv.start != null ? koEv.start : D.ko - 20;
+    D.simLen = D.len;
+    buildReplay();
+  }
+  /* 召喚：一個技能可以召喚好幾隻（sums），或在我方出現對手的複製體（cpy，「將敵人召喚為我方夥伴」）。
+     每一方場上的召喚物＋複製體最多 D.sumCap 隻，滿了就不再出現。 */
+  const skSums = (sk) => (sk ? sk.sums || (sk.sum ? [sk.sum] : []) : []);
+  function skillSpawn(fid, action) {
+    if (action !== "skill1" && action !== "skill2") return null;
+    const st = S.stats[fid], sk = st && st.sk && st.sk[action === "skill1" ? 0 : 1];
+    if (!sk) return null;
+    const sums = skSums(sk).filter((sm) => D.sumF && D.sumF[sm.id]);
+    const cpy = sk.cpy && +sk.cpy.lv > 0 ? sk.cpy : null;
+    return sums.length || cpy ? { sums, cpy } : null;
+  }
+  function summonInfo(i, action) { const f = D.f[i]; return f ? skillSpawn(f.r.id, action) : null; }
+  const sumCap = () => Math.max(1, Math.min(20, Math.round(D.sumCap || 3)));
+  async function loadSummons(i) {
+    const f = D.f[i], st = f && S.stats[f.r.id];
+    if (!st || !st.sk) return;
+    D.sumF = D.sumF || {};
+    for (const sk of st.sk) for (const sm of skSums(sk)) {
+      if (!sm || !sm.id || D.sumF[sm.id]) continue;
+      const r = S.index.find((x) => x.id === sm.id) || { id: sm.id, name: sm.id };
+      try { D.sumF[sm.id] = await loadFighter(r); } catch {}
+    }
+  }
+  // 已經沒有角色會用到的召喚物，圖片釋放掉
+  function pruneSummons() {
+    if (!D.sumF) return;
+    const keep = new Set();
+    for (const f of D.f) { const st = f && S.stats[f.r.id]; for (const sk of (st && st.sk) || []) for (const sm of skSums(sk)) keep.add(sm.id); }
+    for (const id of Object.keys(D.sumF)) if (!keep.has(id)) { freeFighter(D.sumF[id]); delete D.sumF[id]; }
+  }
+  function summonLevel(sm, L) {
+    const v = sm.lv ? +sm.lv[1] || 0 : 0;
+    if (!sm.lv) return L;
+    return Math.max(1, Math.round(sm.lv[0] === "fix" ? v : sm.lv[0] === "mul" ? L * v : L + v));
+  }
+  // 複製體：對手的資料庫數值，等級固定（不套金手指）
+  function copyStats(fid, lv) {
+    const st = S.stats[fid] || {}, lim = levelLimits(st.s || "1星");
+    const L = Math.max(1, Math.min(lim.max, Math.round(lv)));
+    const o = { level: L };
+    for (const k of STAT5) o[k] = Math.round(statAt(st[k], L, lim.cap));
+    Object.assign(o, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, dg: st.dg || 0, hit: st.hit || 0, sh: st.sh || 0, sdg: st.sdg || 0, sr: st.sr || 0, rg: st.rg || 100, mv: st.mv || 100, sk: st.sk || [] });
+    return o;
+  }
+  function summonStats(id, lv) {
+    const st = S.stats[id] || {}, lim = levelLimits(st.s || "1星");
+    const L = Math.max(1, Math.min(lim.max, Math.round(lv)));
+    const o = { level: L };
+    for (const k of STAT5) o[k] = Math.round(statAt(st[k], L, lim.cap));
+    Object.assign(o, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, hit: st.hit || 0, sh: st.sh || 0, dg: st.dg || 0, sdg: st.sdg || 0, sr: st.sr || 0, rg: st.rg || 100, mv: st.mv || 100 });
+    return o;
+  }
+  // 單位（本人或召喚物，需有 f＝角色）開始一個動作，回傳動作長度（格）
+  function unitAnim(s, anim, k, loop) {
+    const rate = (s.f.part.anim_rate || 24) * D.speed;
+    const dur = Math.max(1, Math.round(s.f.part.animations[anim].frame_count / rate * FPS));
+    s.cur = { anim, start: k, rate, loop, dur };
+    return dur;
+  }
+  // 召喚物的動作：回傳這一幀要畫的動畫與幀號
+  function sumFrame(s, k) {
+    const idle = idleClip(s.f);
+    if (!s.cur || (!s.cur.loop && k >= s.cur.start + s.cur.dur)) unitAnim(s, idle, k, true);
+    const n = s.f.part.animations[s.cur.anim].frame_count;
+    let idx = Math.floor((k - s.cur.start) / FPS * s.cur.rate);
+    idx = s.cur.loop ? idx % n : Math.min(n - 1, idx);
+    return { anim: s.cur.anim, idx, x: s.x };
+  }
+  // 真距離／原始數值對戰用。純輔助技能：資料庫裡這招沒有任何傷害倍率（例如只有攻擊力提升、無敵、回血）。
+  // 沒有數值資料時無法判斷，當作攻擊技能。
+  function isSupport(i, action) {
+    if (action !== "skill1" && action !== "skill2") return false;
+    const f = D.f[i], st = f && S.stats && S.stats[f.r.id];
+    if (!st || !Array.isArray(st.sk)) return false;
+    const sk = st.sk[action === "skill1" ? 0 : 1];
+    return !!sk && !(sk.e && sk.e.length);
+  }
+  function compileOnce() {
+    const [A, B] = D.f;
+    D.len = 30;
+    if (!A || !B) return;
+    const pos = [-D.dist / 2, D.dist / 2];
+    D.posKeys = [[{ k: 0, x: pos[0] }], [{ k: 0, x: pos[1] }]];
+    const hp = [100, 100];
+    let k = 12, ko = -1;
+    // 兩人「正面」之間至少留一點空隙，不會疊在一起
+    const minGap = Math.max(80, A.w / 2 + B.w / 2 + 70);
+    D.moves.forEach((m, mi) => {
+      if (ko >= 0) return;
+      const i = m.who === "B" ? 1 : 0, j = 1 - i, f = D.f[i], g = D.f[j];
+      const anim = f.clips[m.action];
+      if (!anim) return;
+      const dir = i === 0 ? 1 : -1;
+      if (m.action === "move") {
+        const { rate, dur } = framesFor(f, anim, m.slow);
+        const total = Math.max(dur * 2, 24);
+        const gap = Math.abs(pos[1] - pos[0]);
+        const step = Math.max(0, Math.min(110, gap - minGap));
+        D.tracks[i].push({ anim, start: k, end: k + total, rate, loop: true });
+        D.posKeys[i].push({ k, x: pos[i] });
+        pos[i] += dir * step;
+        D.posKeys[i].push({ k: k + total, x: pos[i] });
+        k += total + 4;
+        return;
+      }
+      const reps = Math.max(1, Math.min(8, Math.round(m.repeat || 1)));
+      for (let r = 0; r < reps && ko < 0; r++) {
+        const sf = m.slow ? 0.5 : 1;
+        const { rate, dur } = framesFor(f, anim, sf);
+        D.tracks[i].push({ anim, start: k, end: k + dur, rate });
+        let hitAt = k + Math.round(dur * hitFrac(f, anim));
+        // 投射物：從角色手上射出，飛到對手身上才算命中
+        const cfg = D.projOn ? f.proj[{ attack: "n", skill1: "s1", skill2: "s2" }[m.action]] : null;
+        const dr = cfg && f.bul[cfg.p];
+        const flight = dr && pickAnim(dr.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
+        if (dr && flight) {
+          const finish = pickAnim(dr.part, ["finish", "hit", "end"]);
+          const face = i === 0 ? 1 : -1;
+          const ready = f.part.animations[anim.replace(/_all$/, "_ready")];
+          const total = f.part.animations[anim].frame_count;
+          const spawn = k + Math.round(dur * (ready && anim.endsWith("_all") ? ready.frame_count / total : 0.3));
+          if ((cfg.m === "LINEAR" || cfg.m === "CURVE") && cfg.v > 0 && cfg.e) {
+            const st = { x: pos[i] + face * (f.ox + cfg.x * 0.5), y: f.oy - cfg.y * 0.5 };
+            const en = { x: pos[j], y: -g.h * (cfg.m === "CURVE" ? 0.05 : 0.3) };
+            const dist = Math.hypot(en.x - st.x, en.y - st.y);
+            const fl = Math.max(2, Math.round(dist / (cfg.v * 60) * FPS / D.speed / sf));
+            hitAt = spawn + fl;
+            D.projs.push({ spawn, fl, st, en, curve: cfg.m === "CURVE", face, dr, flight, finish, a0: cfg.a0, a1: cfg.a1, rot: !!cfg.r, loop: !!cfg.l, dist });
+          } else {
+            // 近戰或沒有飛行資料：在對手身上播放命中特效
+            D.projs.push({ direct: true, spawn: hitAt, en: { x: pos[j], y: -g.h * 0.45 }, face, dr, flight, finish });
+          }
+        }
+        // 召喚技能：召喚物（或對手的複製體）在技能命中時出現在身旁，做一次動作（經典對戰只做畫面）
+        const smc = summonInfo(i, m.action);
+        if (smc) {
+          const list = smc.sums.map((sm) => ({ sf: D.sumF[sm.id], act: "attack" }));
+          if (smc.cpy) list.push({ sf: D.f[j], act: D.f[j].clips.skill1 ? "skill1" : D.f[j].clips.skill2 ? "skill2" : "attack", copy: true });
+          list.forEach(({ sf, act, copy }, n) => {
+            if (!sf) return;
+            const alive = D.summons.filter((x) => x.side === i && x.k0 <= hitAt && x.k1 > hitAt).length;
+            if (alive >= sumCap()) return; // 場上已滿
+            const so = { side: i, f: sf, copy: !!copy, x: pos[i] + dir * (f.w * 0.5 + sf.w * 0.3 + n * 26), k0: hitAt, k1: 0, fr: [] };
+            const atkA = sf.clips[act] || sf.clips.attack || sf.clips.idle, idleA = sf.clips.idle || atkA;
+            if (!atkA) return;
+            const fa = framesFor(sf, atkA, 1);
+            for (let t = 0; t < fa.dur; t++) so.fr.push({ anim: atkA, idx: Math.min(sf.part.animations[atkA].frame_count - 1, Math.floor(t / FPS * fa.rate)), x: so.x });
+            const fi = framesFor(sf, idleA, 1);
+            for (let t = 0; t < 24; t++) so.fr.push({ anim: idleA, idx: Math.floor(t / FPS * fi.rate) % sf.part.animations[idleA].frame_count, x: so.x });
+            so.k1 = hitAt + so.fr.length;
+            D.summons.push(so);
+            if (copy) D.sfxEv.push({ k: hitAt, side: i, kind: "skill" });
+            D.sfxEv.push({ k: hitAt + Math.round(fa.dur * hitFrac(sf, atkA)), side: i, kind: copy ? "skillhit" : "attack" });
+          });
+        }
+        if (m.action === "attack") D.sfxEv.push({ k: hitAt, side: i, kind: "attack" });
+        else D.sfxEv.push({ k, side: i, kind: "skill" }, { k: hitAt, side: i, kind: "skillhit" });
+        const dmg = Math.max(1, Math.round((DMG[m.action] || 8) * (0.75 + rnd(mi * 10 + r) * 0.5) / (reps > 1 ? 1.6 : 1)));
+        hp[j] = Math.max(0, hp[j] - dmg);
+        D.events.push({ k: hitAt, target: j, attacker: i, dmg, hp: hp.slice(), ko: hp[j] <= 0, start: k });
+        let kbEnd = hitAt;
+        const kb = g.clips.knockback;
+        if (kb) {
+          const t = framesFor(g, kb, sf);
+          D.tracks[j].push({ anim: kb, start: hitAt, end: hitAt + t.dur, rate: t.rate });
+          kbEnd = hitAt + t.dur;
+          D.posKeys[j].push({ k: hitAt, x: pos[j] });
+          pos[j] += dir * (hp[j] <= 0 ? 90 : 30); // 被打的一方往後退（遠離攻擊者）
+          D.posKeys[j].push({ k: hitAt + Math.round(t.dur * 0.6), x: pos[j] });
+        }
+        if (hp[j] <= 0) ko = hitAt;
+        k = r < reps - 1 ? k + Math.round(dur * (reps > 1 ? 0.8 : 1)) : Math.max(k + dur, kbEnd) + 8;
+      }
+    });
+    D.len = k + (ko >= 0 ? 50 : 24);
+    D.ko = ko;
+    // 鏡頭：涵蓋兩人所有走到的位置
+    let X0 = Infinity, X1 = -Infinity;
+    D.posKeys.forEach((keys, i) => {
+      const hw = D.f[i].w / 2;
+      for (const p of keys) { X0 = Math.min(X0, p.x - hw); X1 = Math.max(X1, p.x + hw); }
+    });
+    for (const so of D.summons) { X0 = Math.min(X0, so.x - so.f.w / 2); X1 = Math.max(X1, so.x + so.f.w / 2); }
+    const bodyH = Math.max(A.h, B.h, 60);
+    D.cam = { cx: (X0 + X1) / 2, w: (X1 - X0) * 1.15 + 40, h: bodyH * 2.0, bodyH };
+  }
+  // K.O. 特效：先正常速度打完並顯示 K.O.，接著慢動作重播最後一擊（timeMap 把輸出格對到模擬格）
+  function buildReplay() {
+    const n = Math.max(1, D.simLen || D.len);
+    const map = [];
+    for (let t = 0; t < n; t++) map.push(t);
+    D.replayFrom = -1;
+    if (D.finale && D.ko >= 0) {
+      D.replayFrom = map.length;
+      const rs = Math.max(0, D.finalStart - 8), re = Math.min(n - 1, D.ko + 30);
+      for (let t = rs; t <= re; t += 0.4) map.push(Math.floor(t));
+      for (let h = 0; h < 24; h++) map.push(re);
+    }
+    D.timeMap = map;
+    D.len = map.length;
+  }
+  /* ---------- 真距離／原始數值對戰（D.type = "real" 或 "raw"） ---------- */
+  const STAT5 = ["hp", "pa", "ma", "pd", "md"];
+  const CHEAT_FIELDS = [
+    ["hp", "體力"], ["pa", "物攻"], ["ma", "魔攻"], ["pd", "物防"], ["md", "魔防"],
+    ["ai", "攻擊間隔（秒）"], ["cr", "爆擊率 %"], ["cd", "爆擊傷害 %"], ["dg", "普攻閃避 %"], ["hit", "普攻命中 %"],
+    ["sdg", "技能閃避 %"], ["sh", "技能命中 %"], ["sr", "技能抗性 %"],
+    ["rg", "攻擊距離"], ["mv", "移動速度"],
+  ];
+  const DEF_K = 18000;
+  const cap95 = (v) => Math.min(95, Math.max(0, +v || 0));
+  // 普通攻擊：物理、魔法各自依對方防禦打折
+  const atkDmg = (a, t) => a.pa * DEF_K / (DEF_K + Math.max(0, t.pd || 0)) + a.ma * DEF_K / (DEF_K + Math.max(0, t.md || 0));
+  function mulberry32(a) {
+    return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  function levelLimits(label) {
+    const m = /(\d+)/.exec(label || ""); const star = m ? +m[1] : 0;
+    const evolved = /超進化|終極進化|究極進化/.test(label || "");
+    let cap = star >= 1 && star <= 5 ? star * 10 + 10 : star >= 6 && star <= 8 ? 60 + (star - 5) * 20 : star === 9 ? 160 : 100;
+    if (evolved) cap += 20;
+    return { cap, max: cap + (evolved ? 100 : 20) };
+  }
+  function statAt(arr, level, cap) {
+    const [b, g, gm] = arr || [0, 0, 0];
+    return b + (Math.min(level, cap) - 1) * g + Math.max(0, level - cap) * gm;
+  }
+  function defaultRange(i) {
+    const f = D.f[i]; if (!f) return 100;
+    const st = S.stats[f.r.id];
+    return Math.round(st?.rg || f.proj.range || 100);
+  }
+  function rangeOf(i) { return D.range[i] != null ? D.range[i] : defaultRange(i); }
+  function defaultMove(i) {
+    const f = D.f[i]; if (!f) return 100;
+    const st = S.stats[f.r.id];
+    return Math.round(st?.mv || f.proj.speed || 100);
+  }
+  function moveOf(i) { return D.mvs && D.mvs[i] != null ? D.mvs[i] : defaultMove(i); }
+  // 原始數值：等級換算 → 金手指覆蓋
+  function rawStats(i) {
+    const f = D.f[i], st = S.stats[f.r.id] || {};
+    const lim = levelLimits(st.s || f.r.star);
+    const lv = Math.max(1, Math.min(lim.max, D.level[i] || lim.max));
+    const out = { level: lv, maxLevel: lim.max };
+    for (const k of STAT5) out[k] = Math.round(statAt(st[k], lv, lim.cap));
+    Object.assign(out, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, dg: st.dg || 0, hit: st.hit || 0, sh: st.sh || 0, sdg: st.sdg || 0, sr: st.sr || 0, rg: rangeOf(i), mv: moveOf(i) });
+    const ov = D.cheat[i] || {};
+    for (const [k] of CHEAT_FIELDS) if (ov[k] !== undefined && ov[k] !== "" && isFinite(+ov[k])) out[k] = +ov[k];
+    // 技能：發動率、冷卻、各傷害效果的倍率都可以用金手指覆蓋
+    const osk = ov.sk || [];
+    out.sk = [0, 1].map((s) => {
+      const base = (st.sk || [])[s], o = osk[s] || {};
+      if (!base) return null;
+      const e = base.e.map((x, n) => (o.c && o.c[n] !== undefined && o.c[n] !== "" && isFinite(+o.c[n]) ? { ...x, c: +o.c[n] / 100 } : { ...x }));
+      // 輔助技能填了倍率，就當作有單次傷害
+      if (!base.e.length && o.c && +o.c[0] > 0) e.push({ t: "hit", c: +o.c[0] / 100, b: "atk", d: 0 });
+      return {
+        sum: base.sum, sums: base.sums, cpy: base.cpy, ar: base.ar,
+        r: o.r !== undefined && o.r !== "" && isFinite(+o.r) ? +o.r : base.r,
+        cd: o.cd !== undefined && o.cd !== "" && isFinite(+o.cd) ? +o.cd : base.cd,
+        e,
+      };
+    });
+    return out;
+  }
+  function basicStats(i) {
+    const f = D.f[i], st = S.stats[f.r.id] || {};
+    return { rg: rangeOf(i), mv: moveOf(i) };
+  }
+  function realQueues() {
+    // 真距離：左右各自的招式清單，「移動接近」改由自動走位取代
+    const q = [[], []];
+    for (const m of D.moves) if (m.action !== "move") q[m.who === "B" ? 1 : 0].push(m);
+    for (const i of [0, 1]) if (!q[i].length) q[i].push({ who: i ? "B" : "A", action: "attack" });
+    return q;
+  }
+
+  function compileReal() {
+    const [A, B] = D.f;
+    if (!A || !B) return;
+    const rng = mulberry32(D.seed * 7919 + 13);
+    const raw = isRaw() && !!(S.stats && Object.keys(S.stats).length);
+    const st = [0, 1].map((i) => (raw ? rawStats(i) : basicStats(i)));
+    const hpMul = raw ? Math.max(0.01, D.hpMul || 1) : 1;
+    const maxHp = raw ? [Math.max(1, st[0].hp * hpMul), Math.max(1, st[1].hp * hpMul)] : [100, 100];
+    D.maxHp = maxHp;
+    const r0 = st[0].rg, r1 = st[1].rg;
+    // 距離補償：只加成短手，短手傷害 ×（1 + k × 距離差 ÷ 長手距離），k = 0.8，最多 1.8 倍
+    const COMP_K = 0.8;
+    const RL = Math.max(r0, r1), RS = Math.min(r0, r1), bonus = RL > 0 ? 1 + COMP_K * (RL - RS) / RL : 1;
+    const comp = r0 === r1 ? [1, 1] : r0 < r1 ? [bonus, 1] : [1, bonus];
+    const gap0 = Math.max(r0, r1) + 100;
+    const cd0 = gap0 + (A.w + B.w) / 2;
+    /* 單位（多打多預備）：本人、召喚物、複製體都是單位，各有陣營、位置、寬度、血量、數值。
+       - 每個單位只看離自己最近的敵方單位：進到自己的射程就出手，否則往它走。
+       - 普攻打最近（最前面）的那一個；技能以觸發的那一個為中心，左右各一個技能範圍內的敵方單位都會被打到。
+       - 只有本人倒下才算 K.O.；召喚物、複製體血扣完就提早消失。擊退只發生在本人身上。 */
+    const F = [0, 1].map((i) => ({
+      side: i, isMain: true, f: D.f[i], w: D.f[i].w, st: st[i], maxHp: maxHp[i],
+      x: i ? cd0 / 2 : -cd0 / 2, hp: maxHp[i], busy: 0, pendingKb: false, kbKo: false, qi: 0, nextAtk: 0,
+      skillCd: [0, 0], buff: false, dots: [], cur: null, dead: false,
+    }));
+    const alive = (u, k) => (u.isMain ? !u.dead : k >= u.k0 && k < u.k1 && u.hp > 0);
+    const foes = (side, k) => {
+      const out = [], m = F[1 - side];
+      if (alive(m, k)) out.push(m);
+      for (const x of D.summons) if (x.side !== side && alive(x, k)) out.push(x);
+      return out;
+    };
+    const gapTo = (a, b) => Math.abs(b.x - a.x) - (a.w + b.w) / 2;
+    const nearestFoe = (u, k) => { let best = null, bg = Infinity; for (const t of foes(u.side, k)) { const g = gapTo(u, t); if (g < bg) { bg = g; best = t; } } return best; };
+    // 技能範圍：以中心目標為準，左右各 ar
+    const victimsOf = (side, center, ar, k) => (ar > 0 ? foes(side, k).filter((u) => u === center || Math.abs(u.x - center.x) <= ar) : [center]);
+    // 資料庫的技能範圍；沒有範圍資料（舊資料、自製角色）時用出手者的攻擊距離，至少 AR_DEF（資料庫技能範圍的中位數），
+    // 避免技能只打到擋在前面的召喚物
+    const AR_DEF = 300;
+    const skillAr = (fid, sts, action, rg) => {
+      const n = action === "skill1" ? 0 : 1;
+      const sk = (sts && sts.sk && sts.sk[n]) || (((S.stats[fid] || {}).sk || [])[n]);
+      return sk && +sk.ar > 0 ? +sk.ar : Math.max(AR_DEF, +rg || 0);
+    };
+    // 召喚物的攻擊、血量比例：空白＝自動
+    const atkPct = D.sumAtk != null && D.sumAtk !== "" && isFinite(+D.sumAtk) ? Math.max(0, +D.sumAtk) / 100 : null;
+    const hpPct = D.sumHp != null && D.sumHp !== "" && isFinite(+D.sumHp) ? Math.max(0, +D.sumHp) / 100 : null;
+    const atkOf = (x) => (x.pa || 0) + (x.ma || 0);
+    const fullAtk = (fid) => { const fs = S.stats[fid]; return fs ? atkOf(copyStats(fid, levelLimits(fs.s || "").max)) : 0; };
+    // 自動：真距離＝召喚物攻擊 ÷ 召喚者（複製體則是對手本人）攻擊，最多 50%；原始數值＝100%（照召喚物自己的數值）
+    const autoAtkR = (ss, refAtk) => (raw ? 1 : refAtk > 0 ? Math.min(0.5, atkOf(ss) / refAtk) : 0.5);
+    const sumAtkR = (ss, refAtk) => (atkPct != null ? atkPct : autoAtkR(ss, refAtk));
+    // 自動：真距離＝召喚者血量的 30%；原始數值＝召喚物自己資料的體力（沒有資料時用召喚者的 30%），並乘上血量倍率
+    const sumMaxHp = (ss, i) => {
+      if (!raw) return Math.max(1, maxHp[i] * (hpPct != null ? hpPct : 0.3));
+      const base = ss.hp > 0 ? ss.hp * hpMul : maxHp[i] * 0.3;
+      return Math.max(1, base * (hpPct != null ? hpPct : 1));
+    };
+    const queues = realQueues();
+    const limitK = Math.max(5, D.timeLimit || 60) * FPS;
+    const hits = [];
+    let endK = -1, timeUp = false;
+    // v4.10：普攻用防禦公式（攻擊 × K ÷ (K + 防禦)），技能不看防禦；閃避、技能閃避、技能抗性最多 95%
+    const dmgCalc = (a, t, coef, base) => (base === "hp" ? a.hp : a.pa + a.ma) * coef;
+    /* 單位共用的動作（本人、召喚物、複製體）
+       faceTo：朝目標的方向（+1 往右、-1 往左）；目標在背後時會轉身，不會越走越遠
+       walkToward：目標不在射程內就往它走一步，回傳 true＝這一格在走路
+       rollSkill：依發動率與冷卻決定要不要放技能（needClip＝沒有技能動畫就不放，複製體用）
+       goIdle：切回待機動作 */
+    const faceTo = (u, tgt) => (tgt.x > u.x ? 1 : tgt.x < u.x ? -1 : u.side === 0 ? 1 : -1);
+    const walkToward = (u, tgt, k) => {
+      const gap = gapTo(u, tgt), range = u.st.rg;
+      if (gap <= range + 0.5) return false;
+      u.x += faceTo(u, tgt) * Math.min(u.st.mv / FPS * D.speed, gap - range);
+      const mv = u.f.clips.move;
+      if (mv && (!u.cur || u.cur.anim !== mv)) unitAnim(u, mv, k, true);
+      return true;
+    };
+    const rollSkill = (u, k, needClip) => {
+      for (const s of [0, 1]) {
+        const sk = u.st.sk[s];
+        if (sk && (!needClip || u.f.clips[s ? "skill2" : "skill1"]) && k >= u.skillCd[s] && rng() < (sk.r || 0) / 100) { u.skillCd[s] = k + (sk.cd || 0) * FPS; return s ? "skill2" : "skill1"; }
+      }
+      return "attack";
+    };
+    const goIdle = (u, k) => { const idle = idleClip(u.f); if (!u.cur || u.cur.anim !== idle) unitAnim(u, idle, k, true); };
+    // 擊退只在「體力跌破一半」與「倒下」時發生，會立刻打斷正在出的招
+    const checkKb = (j, before) => {
+      const t = F[j], half = maxHp[j] / 2;
+      if (t.hp <= 0) { t.pendingKb = true; t.kbKo = true; }
+      else if (before >= half && t.hp < half) t.pendingKb = true;
+    };
+    // 原始數值看金手指覆蓋後的技能；真距離看資料庫
+    const supportFor = (i, action) => {
+      if (action !== "skill1" && action !== "skill2") return false;
+      if (!raw) return isSupport(i, action);
+      const sk = st[i].sk[action === "skill1" ? 0 : 1];
+      return !sk || !sk.e.length;
+    };
+    const sumHits = [];
+    const sideFull = (i, k) => D.summons.filter((x) => x.side === i && x.k0 <= k && x.k1 > k).length >= sumCap();
+    // 召喚：L＝召喚者的等級；x0＝召喚者的位置（本人或複製體）
+    const spawnSummon = (i, sm, k, L, x0, n = 0) => {
+      const sf = D.sumF[sm.id]; if (!sf) return;
+      if (sideFull(i, k)) { pushEvent({ k, target: i, attacker: i, dmg: 0, label: "召喚物已滿", fx: "buff", noFx: true }); return; }
+      const dir = i === 0 ? 1 : -1;
+      const lv = summonLevel(sm, L);
+      const sec = sm.dur ? (sm.dur[0] === "mul" ? L * (+sm.dur[1] || 0) : +sm.dur[1] || 10) : 10;
+      const ss = summonStats(sm.id, lv);
+      const hp0 = sumMaxHp(ss, i);
+      D.summons.push({ side: i, isMain: false, f: sf, w: sf.w, x: x0 + dir * (D.f[i].w * 0.5 + sf.w * 0.3 + n * 26), k0: k, k1: k + Math.max(1, Math.round(Math.max(1, sec) * FPS)), st: ss, hp: hp0, maxHp: hp0, dots: [], atkR: sumAtkR(ss, raw ? atkOf(st[i]) : fullAtk(D.f[i].r.id)), nextAtk: k + 8, busy: 0, cur: null, fr: [] });
+      pushEvent({ k, target: i, attacker: i, dmg: 0, label: raw ? `召喚！Lv${ss.level}` : "召喚！", fx: "buff", noFx: true });
+    };
+    // 將敵人召喚為我方夥伴：在我方出現對手的複製體（固定等級、會放技能）
+    const spawnCopy = (i, cpy, k, x0) => {
+      const src = D.f[1 - i]; if (!src) return;
+      if (sideFull(i, k)) { pushEvent({ k, target: i, attacker: i, dmg: 0, label: "召喚物已滿", fx: "buff", noFx: true }); return; }
+      const dir = i === 0 ? 1 : -1;
+      const ss = copyStats(src.r.id, +cpy.lv || 60);
+      const sec = cpy.dur ? +cpy.dur[1] || 10 : 10;
+      const hp0 = sumMaxHp(ss, i);
+      D.summons.push({ side: i, isMain: false, f: src, w: src.w, copy: true, src: src.r.id, x: x0 + dir * (D.f[i].w * 0.5 + src.w * 0.4), k0: k, k1: k + Math.max(1, Math.round(sec * FPS)), st: ss, hp: hp0, maxHp: hp0, dots: [], atkR: sumAtkR(ss, fullAtk(src.r.id)), skillCd: [0, 0], nextAtk: k + 8, busy: 0, cur: null, fr: [] });
+      pushEvent({ k, target: i, attacker: i, dmg: 0, label: raw ? `複製對手！Lv${ss.level}` : "複製對手！", fx: "buff", noFx: true });
+    };
+    const doSpawns = (i, info, k, L, x0) => {
+      if (!info) return;
+      info.sums.forEach((sm, n) => spawnSummon(i, sm, k, L, x0, n));
+      if (info.cpy) spawnCopy(i, info.cpy, k, x0);
+    };
+    const pushEvent = (e) => { e.hp = [F[0].hp, F[1].hp]; D.events.push(e); };
+    // 扣血：本人會觸發擊退與 K.O.；召喚物血扣完就提早離場
+    const hurt = (t, dmg, k, from, label, crit, start, extra) => {
+      const before = t.hp;
+      t.hp = Math.max(0, t.hp - dmg);
+      if (t.isMain) {
+        checkKb(t.side, before);
+        pushEvent(Object.assign({ k, target: t.side, attacker: from, dmg, label, crit, ko: t.hp <= 0, start }, extra));
+      } else {
+        pushEvent(Object.assign({ k, target: t.side, attacker: from, dmg, label, crit, sumTarget: true, tx: t.x, noFx: true, start }, extra));
+        if (t.hp <= 0) { t.k1 = Math.min(t.k1, k + 1); pushEvent({ k, target: t.side, attacker: from, dmg: 0, label: "擊倒召喚物", fx: "buff", sumTarget: true, tx: t.x, noFx: true }); }
+      }
+    };
+    const missEv = (t, k, from) => pushEvent(t.isMain ? { k, target: t.side, attacker: from, dmg: 0, label: "MISS", miss: true, noFx: true } : { k, target: t.side, attacker: from, dmg: 0, label: "MISS", miss: true, noFx: true, sumTarget: true, tx: t.x });
+    // 持續傷害：每秒結算一次（本人、召喚物共用；召喚物這一格被打倒後就不再扣）
+    const tickDots = (u, k) => {
+      if (!u.dots.length || D.ko >= 0 || !alive(u, k)) return;
+      for (const d of u.dots) {
+        if (k < d.next || k >= d.until || (!u.isMain && u.hp <= 0)) continue;
+        d.next += FPS;
+        const v = Math.max(1, d.per);
+        hurt(u, v, k, d.from, "-" + Math.round(v).toLocaleString(), u.isMain ? undefined : false, undefined, u.isMain ? { dotTick: true, noFx: true } : { dotTick: true });
+      }
+    };
+    // 對一個目標結算一次攻擊。a＝攻擊方單位；o.base＝真距離的基礎傷害；o.mul＝其他倍率；o.sk＝原始數值的技能資料
+    const strike = (a, t, action, k, start, o) => {
+      const tst = t.st;
+      let dmg = 0, label = "", crit = false;
+      if (!raw) {
+        dmg = o.base * (0.75 + rng() * 0.5) * o.mul;
+        label = `-${Math.round(dmg * 123)}`;
+      } else if (action === "attack") {
+        if (rng() < Math.max(0, cap95(tst.dg) - a.st.hit) / 100) { missEv(t, k, a.side); return false; }
+        crit = rng() < a.st.cr / 100;
+        dmg = Math.max(1, atkDmg(a.st, tst) * (crit ? a.st.cd / 100 : 1) * o.mul);
+        label = (crit ? "爆擊 " : "") + "-" + Math.round(dmg).toLocaleString();
+      } else {
+        const sk = o.sk || { e: [] };
+        if (rng() < Math.max(0, cap95(tst.sdg) - a.st.sh) / 100) { missEv(t, k, a.side); return false; }
+        // 技能抗性：技能傷害（單次與持續）照比例減少
+        const mult = o.mul * (1 - cap95(tst.sr) / 100);
+        for (const e of sk.e) {
+          const v = dmgCalc(a.st, tst, e.c, e.b) * mult;
+          if (e.t === "dot") t.dots.push({ per: Math.max(1, v), next: k + FPS, until: k + Math.max(1, e.d) * FPS + 1, from: a.side });
+          else dmg += v;
+        }
+        if (!sk.e.some((e) => e.t !== "dot")) { pushEvent(t.isMain ? { k, target: t.side, attacker: a.side, dmg: 0, label: "持續傷害", fx: "dot", noFx: true } : { k, target: t.side, attacker: a.side, dmg: 0, label: "持續傷害", fx: "dot", noFx: true, sumTarget: true, tx: t.x }); return true; }
+        dmg = Math.max(1, dmg);
+        label = "-" + Math.round(dmg).toLocaleString();
+      }
+      hurt(t, dmg, k, a.side, label, crit, start);
+      return true; // 沒被閃避（「下一擊 +50%」只在打中時用掉）
+    };
+    // 一次出手命中時：先召喚／複製，再依普攻（單一目標）或技能（範圍）結算
+    const resolve = (a, h, k) => {
+      const i = a.side, action = h.action, isSkill = action !== "attack";
+      let tgt = h.tgt && alive(h.tgt, k) ? h.tgt : nearestFoe(a, k);
+      if (!tgt) return;
+      if (a.isMain) {
+        const smr = isSkill ? summonInfo(i, action) : null;
+        if (smr) doSpawns(i, smr, k, raw ? st[i].level : levelLimits((S.stats[D.f[i].r.id] || {}).s || D.f[i].r.star).max, a.x);
+        if (smr && supportFor(i, action)) return; // 純召喚技能：只召喚，不另外強化或回血
+        if (isSkill && supportFor(i, action)) {
+          // 純輔助技能：不打對手、不會被閃避。一半機率下一擊 +50%，一半機率回復 20% 體力
+          if (rng() < 0.5) { a.buff = true; pushEvent({ k, target: i, attacker: i, dmg: 0, label: "下一擊 +50%", fx: "buff", noFx: true }); }
+          else { a.hp = Math.min(maxHp[i], a.hp + maxHp[i] * 0.2); pushEvent({ k, target: i, attacker: i, dmg: 0, label: "回復 20%", fx: "heal", noFx: true }); }
+          return;
+        }
+        const buffM = a.buff ? 1.5 : 1;
+        const o = raw ? { mul: buffM, sk: isSkill ? st[i].sk[action === "skill1" ? 0 : 1] : null } : { base: DMG[action] || 8, mul: comp[i] / (h.reps > 1 ? 1.6 : 1) * buffM };
+        const list = isSkill ? victimsOf(i, tgt, h.ar || 0, k) : [tgt];
+        let landed = false;
+        for (const t of list) if (strike(a, t, action, k, h.start, o)) landed = true;
+        if (landed || !raw) a.buff = false;
+        return;
+      }
+      // 召喚物／複製體
+      if (isSkill) {
+        doSpawns(i, skillSpawn(a.src, action), k, a.st.level, a.x); // 複製體放技能：用對手的技能資料（召喚、複製、傷害）
+        const sk = a.st.sk[action === "skill1" ? 0 : 1];
+        if (!sk || !sk.e || !sk.e.length) return; // 沒有傷害的技能
+        const o = raw ? { mul: a.atkR, sk } : { base: DMG[action] || 8, mul: a.atkR };
+        for (const t of victimsOf(i, tgt, h.ar || 0, k)) strike(a, t, action, k, h.start, o);
+        return;
+      }
+      strike(a, tgt, "attack", k, h.start, raw ? { mul: a.atkR } : { base: DMG.attack || 15, mul: a.atkR });
+    };
+
+    /* 本人這一格要做什麼（召喚物見 actSummon；共用的走路、放技能判斷見上面的單位共用動作）
+       本人才有的：被擊退會打斷出招、真距離照招式表出招、投射物、攻擊後的硬直 */
+    const actMain = (me, k, over) => {
+      const i = me.side, f = me.f;
+      if (me.pendingKb) {
+        me.pendingKb = false;
+        // 打斷：還沒放出去的攻擊（近戰還沒打到、投射物還沒射出）全部取消
+        for (let n = hits.length - 1; n >= 0; n--) if (hits[n].i === i && hits[n].rel > k) hits.splice(n, 1);
+        D.projs = D.projs.filter((p) => !(p.own === i && p.spawn > k));
+        D.sfxEv = D.sfxEv.filter((e) => !(e.side === i && e.kind !== "skill" && e.k > k));
+        const kb = f.clips.knockback;
+        if (kb) {
+          const dur = unitAnim(me, kb, k, false), back = i === 0 ? -1 : 1; // 往自己陣營那邊退
+          me.busy = k + dur;
+          me.slide = { from: me.x, to: me.x + back * (me.kbKo ? 90 : 30), k0: k, k1: k + Math.round(dur * 0.6) };
+        }
+        return;
+      }
+      if (k < me.busy) return;
+      if (me.dead) return;
+      const tgt = over ? null : nearestFoe(me, k);
+      if (!tgt) { goIdle(me, k); return; }
+      if (walkToward(me, tgt, k)) return;
+      const dir = faceTo(me, tgt);
+      let action = "attack";
+      if (raw) {
+        if (k < me.nextAtk) { goIdle(me, k); return; }
+        action = rollSkill(me, k, false);
+        me.nextAtk = k + Math.max(0.2, me.st.ai) * FPS / D.speed;
+      } else {
+        const m = queues[i][me.qi % queues[i].length]; me.qi++;
+        action = m.action; me.reps = m.repeat || 1;
+      }
+      const anim = f.clips[action] || f.clips.attack;
+      const dur = unitAnim(me, anim, k, false);
+      me.busy = k + dur + (raw ? 0 : 4);
+      let hitAt = k + Math.round(dur * hitFrac(f, anim)), rel = hitAt;
+      const cfg = D.projOn && !supportFor(i, action) ? f.proj[{ attack: "n", skill1: "s1", skill2: "s2" }[action]] : null;
+      const drp = cfg && f.bul[cfg.p];
+      const flight = drp && pickAnim(drp.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
+      if (drp && flight) {
+        const finish = pickAnim(drp.part, ["finish", "hit", "end"]);
+        const ready = f.part.animations[anim.replace(/_all$/, "_ready")];
+        const spawn = k + Math.round(dur * (ready && anim.endsWith("_all") ? ready.frame_count / f.part.animations[anim].frame_count : 0.3));
+        const g = tgt.f;
+        if ((cfg.m === "LINEAR" || cfg.m === "CURVE") && cfg.v > 0 && cfg.e) {
+          const stp = { x: me.x + dir * (f.ox + cfg.x * 0.5), y: f.oy - cfg.y * 0.5 };
+          const en = { x: tgt.x, y: -g.h * (cfg.m === "CURVE" ? 0.05 : 0.3) };
+          const dist = Math.hypot(en.x - stp.x, en.y - stp.y);
+          const fl = Math.max(2, Math.round(dist / (cfg.v * 60) * FPS / D.speed));
+          hitAt = spawn + fl; rel = spawn;
+          D.projs.push({ own: i, spawn, fl, st: stp, en, curve: cfg.m === "CURVE", face: dir, dr: drp, flight, finish, a0: cfg.a0, a1: cfg.a1, rot: !!cfg.r, loop: !!cfg.l, dist });
+        } else {
+          D.projs.push({ own: i, direct: true, spawn: hitAt, en: { x: tgt.x, y: -g.h * 0.45 }, face: dir, dr: drp, flight, finish });
+        }
+      }
+      hits.push({ k: Math.max(k + 1, hitAt), rel: Math.max(k + 1, rel), i, action, start: k, reps: me.reps || 1, tgt, ar: action === "attack" ? 0 : skillAr(f.r.id, raw ? me.st : null, action, me.st.rg) });
+      if (action === "attack") D.sfxEv.push({ k: Math.max(k + 1, hitAt), side: i, kind: "attack" });
+      else {
+        D.sfxEv.push({ k, side: i, kind: "skill" });
+        if (!supportFor(i, action)) D.sfxEv.push({ k: Math.max(k + 1, hitAt), side: i, kind: "skillhit" }); // 輔助技能不打人，沒有命中聲
+      }
+    };
+    /* 召喚物、複製體這一格要做什麼：跟本人同樣看最近的敵方單位。
+       一般召喚物只會普攻；複製體照對手的發動率與冷卻放技能。沒有擊退、投射物與招式表，時間到或血扣完就離場。 */
+    const actSummon = (so, k, over) => {
+      if (k < so.k0 || k >= so.k1) return;
+      const i = so.side, sf = so.f;
+      const tgt = !over && k >= so.busy ? nearestFoe(so, k) : null;
+      if (tgt && !walkToward(so, tgt, k)) {
+        if (k >= so.nextAtk && sf.clips.attack) {
+          const action = so.copy ? rollSkill(so, k, true) : "attack";
+          const clip = sf.clips[action] || sf.clips.attack;
+          const dur = unitAnim(so, clip, k, false);
+          so.busy = k + dur;
+          const hk = k + Math.max(1, Math.round(dur * hitFrac(sf, clip)));
+          if (hk < so.k1) {
+            sumHits.push({ k: hk, s: so, start: k, action, tgt, ar: action === "attack" ? 0 : skillAr(so.src, so.st, action, so.st && so.st.rg) });
+            if (action === "attack") D.sfxEv.push({ k: hk, side: i, kind: "attack" });
+            else D.sfxEv.push({ k, side: i, kind: "skill" }, { k: hk, side: i, kind: "skillhit" });
+          }
+          so.nextAtk = k + Math.max(0.3, so.st.ai) * FPS / D.speed;
+        } else if (so.cur && so.cur.anim === sf.clips.move) so.cur = null;
+      }
+      so.fr.push(sumFrame(so, k));
+    };
+    const maxK = limitK + 400;
+    for (let k = 0; k < maxK; k++) {
+      // 命中與持續傷害
+      for (let n = hits.length - 1; n >= 0; n--) if (hits[n].k === k) { const h = hits.splice(n, 1)[0]; if ((D.ko < 0 || h.k === D.ko) && !F[h.i].dead) resolve(F[h.i], h, k); }
+      for (let n = sumHits.length - 1; n >= 0; n--) if (sumHits[n].k === k) { const h = sumHits.splice(n, 1)[0]; if (D.ko < 0 && alive(h.s, k)) resolve(h.s, h, k); }
+      for (const u of [F[0], F[1], ...D.summons]) tickDots(u, k);
+      // 勝負判定
+      if (D.ko < 0 && endK < 0) {
+        const dead = [F[0].hp <= 0, F[1].hp <= 0];
+        if (dead[0] || dead[1]) {
+          D.ko = k; D.resultK = k;
+          D.resultText = dead[0] && dead[1] ? "DRAW" : "K.O.";
+          D.winner = dead[0] && dead[1] ? -1 : dead[0] ? 1 : 0;
+          dead.forEach((x, i) => { if (x) { F[i].dead = true; F[i].pendingKb = true; F[i].kbKo = true; } });
+          endK = k + 60;
+          const last = [...D.events].reverse().find((e) => e.ko);
+          D.finalStart = last && last.start != null ? last.start : k - 20; D.finalTarget = D.winner === 0 ? 1 : 0;
+        } else if (k >= limitK) {
+          timeUp = true; D.resultK = k; D.resultText = "TIME UP";
+          const p0 = F[0].hp / maxHp[0], p1 = F[1].hp / maxHp[1];
+          D.winner = Math.abs(p0 - p1) < 1e-9 ? -1 : p0 > p1 ? 0 : 1;
+          endK = k + 50;
+        }
+      }
+      if (endK >= 0 && k >= endK) { D.simLen = k; break; }
+      const over = D.ko >= 0 || timeUp;
+      // 各單位行動：本人先（左、右），再來是召喚物與複製體（順序固定，亂數結果才會一樣）
+      for (const i of [0, 1]) actMain(F[i], k, over);
+      for (const so of D.summons) actSummon(so, k, over);
+      // 記錄這一幀兩人的姿勢與位置
+      for (const i of [0, 1]) {
+        const me = F[i], f = D.f[i];
+        if (me.slide) {
+          const s2 = me.slide;
+          me.x = k >= s2.k1 ? s2.to : s2.from + (s2.to - s2.from) * ((k - s2.k0) / Math.max(1, s2.k1 - s2.k0));
+          if (k >= s2.k1) me.slide = null;
+        }
+        let anim, idx, start = -1;
+        if (me.cur && (me.cur.loop || k < me.cur.start + me.cur.dur)) {
+          const n = f.part.animations[me.cur.anim].frame_count;
+          idx = Math.floor((k - me.cur.start) / FPS * me.cur.rate);
+          idx = me.cur.loop ? idx % n : Math.min(n - 1, idx);
+          anim = me.cur.anim; start = me.cur.loop ? -1 : me.cur.start;
+        } else if (me.dead && f.clips.knockback) {
+          anim = f.clips.knockback; idx = f.part.animations[anim].frame_count - 1;
+        } else {
+          anim = idleClip(f);
+          idx = Math.floor(k / FPS * (f.part.anim_rate || 24)) % f.part.animations[anim].frame_count;
+        }
+        D.frames[i].push({ anim, idx, x: me.x, start });
+      }
+      D.simLen = k + 1;
+    }
+    buildReplay();
+    let X0 = Infinity, X1 = -Infinity;
+    D.frames.forEach((fr, i) => { const hw = D.f[i].w / 2; for (const s of fr) { X0 = Math.min(X0, s.x - hw); X1 = Math.max(X1, s.x + hw); } });
+    for (const so of D.summons) for (const s of so.fr) { X0 = Math.min(X0, s.x - so.f.w / 2); X1 = Math.max(X1, s.x + so.f.w / 2); }
+    const bodyH = Math.max(A.h, B.h, 60);
+    D.cam = { cx: (X0 + X1) / 2, w: (X1 - X0) * 1.1 + 40, h: bodyH * 2.0, bodyH };
+  }
+
+  /* ---------- 雙人對打：畫面（只讀 TIMELINE，畫出第 k 格） ---------- */
+  // 畫布文字的字型：網頁本身的字型（第一次用到時讀一次）；display＝標題用的 Bungee
+  let bodyFontCache = "";
+  const bodyFont = () => bodyFontCache || (bodyFontCache = getComputedStyle(document.body).fontFamily);
+  const canvasFont = (weight, px, display) => `${weight} ${px}px ${display ? '"Bungee", ' : ""}${bodyFont()}`;
   function fSprite(f, name) {
     if (f.sprites.has(name)) return f.sprites.get(name);
     const sp = f.part.sprites[name];
@@ -3074,7 +3922,6 @@ footer a { color: inherit; }
     dctx.restore();
   }
 
-  function pickAnim(part, names) { return names.find((n) => part.animations[n]?.frames?.length) || null; }
   function drawPartAt(dr, anim, idx, x, y, faceLeft, rotDeg) { drawPartCtx(dctx, dr, anim, idx, x, y, faceLeft, rotDeg); }
   function drawPartCtx(c, dr, anim, idx, x, y, faceLeft, rotDeg) {
     const a = dr.part.animations[anim];
@@ -3095,237 +3942,8 @@ footer a { color: inherit; }
     }
     c.restore();
   }
-  function animIdx(dr, anim, ageFrames, loop) {
-    const n = dr.part.animations[anim].frame_count;
-    const i = Math.floor(ageFrames / DFPS * (dr.part.anim_rate || 24) * D.speed);
-    return loop ? i % n : Math.min(n - 1, i);
-  }
-  function animOutFrames(dr, anim) {
-    return Math.max(1, Math.round(dr.part.animations[anim].frame_count / ((dr.part.anim_rate || 24) * D.speed) * DFPS));
-  }
-
-  /* 招式編排 → 逐幀時間軸 */
-  function rnd(n) { return hash(n * 7.13 + D.seed * 3.7); }
-  function hitFrac(f, anim) {
-    const a = f.part.animations[anim];
-    if (!a) return 0.5;
-    if (anim.endsWith("_all")) {
-      const ready = f.part.animations[anim.replace(/_all$/, "_ready")] || f.part.animations[anim.replace(/attack_all$/, "attack_ready")];
-      if (ready) return Math.max(0.2, Math.min(0.9, (ready.frame_count + (a.frame_count - ready.frame_count) * 0.3) / a.frame_count));
-    }
-    return 0.5;
-  }
-  function framesFor(f, anim, slow) {
-    const a = f.part.animations[anim];
-    const sf = typeof slow === "number" ? slow : (slow ? 0.5 : 1);
-    const rate = (f.part.anim_rate || 24) * D.speed * sf;
-    return { rate, dur: Math.max(1, Math.round(a.frame_count / rate * DFPS)) };
-  }
-  // 你來我往／隨機：先排一次找出致命一擊，再把那一擊改成慢動作重新排
-  // 任何設定改變重新計算後，都回到「還沒開始」：停在第一格、蓋黑幕等按播放
-  function compileDuel() { compileDuelCore(); duelIdle(); }
-  function compileDuelCore() {
-    D.finalKey = null; D.koInfo = null;
-    if (D.kind === "real") { compileReal(); return; }
-    D.timeMap = null; D.maxHp = [100, 100];
-    compileOnce();
-    D.resultK = D.ko; D.resultText = D.ko >= 0 ? "K.O." : "";
-    const koEv = D.events.find((e) => e.ko);
-    D.finalStart = koEv && koEv.start != null ? koEv.start : D.ko - 20;
-    D.simLen = D.len;
-    buildReplay();
-  }
-  /* 召喚：一個技能可以召喚好幾隻（sums），或在我方出現對手的複製體（cpy，「將敵人召喚為我方夥伴」）。
-     每一方場上的召喚物＋複製體最多 D.sumCap 隻，滿了就不再出現。 */
-  const skSums = (sk) => (sk ? sk.sums || (sk.sum ? [sk.sum] : []) : []);
-  function skillSpawn(fid, action) {
-    if (action !== "skill1" && action !== "skill2") return null;
-    const st = S.stats[fid], sk = st && st.sk && st.sk[action === "skill1" ? 0 : 1];
-    if (!sk) return null;
-    const sums = skSums(sk).filter((sm) => D.sumF && D.sumF[sm.id]);
-    const cpy = sk.cpy && +sk.cpy.lv > 0 ? sk.cpy : null;
-    return sums.length || cpy ? { sums, cpy } : null;
-  }
-  function summonInfo(i, action) { const f = D.f[i]; return f ? skillSpawn(f.r.id, action) : null; }
-  const sumCap = () => Math.max(1, Math.min(20, Math.round(D.sumCap || 3)));
-  async function loadSummons(i) {
-    const f = D.f[i], st = f && S.stats[f.r.id];
-    if (!st || !st.sk) return;
-    D.sumF = D.sumF || {};
-    for (const sk of st.sk) for (const sm of skSums(sk)) {
-      if (!sm || !sm.id || D.sumF[sm.id]) continue;
-      const r = S.index.find((x) => x.id === sm.id) || { id: sm.id, name: sm.id };
-      try { D.sumF[sm.id] = await loadFighter(r); } catch {}
-    }
-  }
-  // 已經沒有角色會用到的召喚物，圖片釋放掉
-  function pruneSummons() {
-    if (!D.sumF) return;
-    const keep = new Set();
-    for (const f of D.f) { const st = f && S.stats[f.r.id]; for (const sk of (st && st.sk) || []) for (const sm of skSums(sk)) keep.add(sm.id); }
-    for (const id of Object.keys(D.sumF)) if (!keep.has(id)) { freeFighter(D.sumF[id]); delete D.sumF[id]; }
-  }
-  function summonLevel(sm, L) {
-    const v = sm.lv ? +sm.lv[1] || 0 : 0;
-    if (!sm.lv) return L;
-    return Math.max(1, Math.round(sm.lv[0] === "fix" ? v : sm.lv[0] === "mul" ? L * v : L + v));
-  }
-  // 複製體：對手的資料庫數值，等級固定（不套金手指）
-  function copyStats(fid, lv) {
-    const st = S.stats[fid] || {}, lim = levelLimits(st.s || "1星");
-    const L = Math.max(1, Math.min(lim.max, Math.round(lv)));
-    const o = { level: L };
-    for (const k of STAT5) o[k] = Math.round(statAt(st[k], L, lim.cap));
-    Object.assign(o, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, dg: st.dg || 0, hit: st.hit || 0, sh: st.sh || 0, sdg: st.sdg || 0, sr: st.sr || 0, rg: st.rg || 100, mv: st.mv || 100, sk: st.sk || [] });
-    return o;
-  }
-  function summonStats(id, lv) {
-    const st = S.stats[id] || {}, lim = levelLimits(st.s || "1星");
-    const L = Math.max(1, Math.min(lim.max, Math.round(lv)));
-    const o = { level: L };
-    for (const k of STAT5) o[k] = Math.round(statAt(st[k], L, lim.cap));
-    Object.assign(o, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, hit: st.hit || 0, sh: st.sh || 0, dg: st.dg || 0, sdg: st.sdg || 0, sr: st.sr || 0, rg: st.rg || 100, mv: st.mv || 100 });
-    return o;
-  }
-  // 召喚物的動作：回傳這一幀要畫的動畫與幀號
-  function sumAnim(s, anim, k, loop) {
-    const rate = (s.f.part.anim_rate || 24) * D.speed;
-    const dur = Math.max(1, Math.round(s.f.part.animations[anim].frame_count / rate * DFPS));
-    s.cur = { anim, start: k, rate, loop, dur };
-    return dur;
-  }
-  function sumFrame(s, k) {
-    const idle = s.f.clips.idle || s.f.clips.attack;
-    if (!s.cur || (!s.cur.loop && k >= s.cur.start + s.cur.dur)) sumAnim(s, idle, k, true);
-    const n = s.f.part.animations[s.cur.anim].frame_count;
-    let idx = Math.floor((k - s.cur.start) / DFPS * s.cur.rate);
-    idx = s.cur.loop ? idx % n : Math.min(n - 1, idx);
-    return { anim: s.cur.anim, idx, x: s.x };
-  }
-  // 真距離／原始數值對戰用。純輔助技能：資料庫裡這招沒有任何傷害倍率（例如只有攻擊力提升、無敵、回血）。
-  // 沒有數值資料時無法判斷，當作攻擊技能。
-  function isSupport(i, action) {
-    if (action !== "skill1" && action !== "skill2") return false;
-    const f = D.f[i], st = f && S.stats && S.stats[f.r.id];
-    if (!st || !Array.isArray(st.sk)) return false;
-    const sk = st.sk[action === "skill1" ? 0 : 1];
-    return !!sk && !(sk.e && sk.e.length);
-  }
-  function compileOnce() {
-    const [A, B] = D.f;
-    D.tracks = [[], []]; D.events = []; D.projs = []; D.len = 30; D.sfxEv = []; D.summons = [];
-    if (!A || !B) return;
-    const pos = [-D.dist / 2, D.dist / 2];
-    D.posKeys = [[{ k: 0, x: pos[0] }], [{ k: 0, x: pos[1] }]];
-    const hp = [100, 100];
-    let k = 12, ko = -1;
-    // 兩人「正面」之間至少留一點空隙，不會疊在一起
-    const minGap = Math.max(80, A.w / 2 + B.w / 2 + 70);
-    D.moves.forEach((m, mi) => {
-      if (ko >= 0) return;
-      const i = m.who === "B" ? 1 : 0, j = 1 - i, f = D.f[i], g = D.f[j];
-      const anim = f.clips[m.action];
-      if (!anim) return;
-      const dir = i === 0 ? 1 : -1;
-      if (m.action === "move") {
-        const { rate, dur } = framesFor(f, anim, m.slow);
-        const total = Math.max(dur * 2, 24);
-        const gap = Math.abs(pos[1] - pos[0]);
-        const step = Math.max(0, Math.min(110, gap - minGap));
-        D.tracks[i].push({ anim, start: k, end: k + total, rate, loop: true });
-        D.posKeys[i].push({ k, x: pos[i] });
-        pos[i] += dir * step;
-        D.posKeys[i].push({ k: k + total, x: pos[i] });
-        k += total + 4;
-        return;
-      }
-      const reps = Math.max(1, Math.min(8, Math.round(m.repeat || 1)));
-      for (let r = 0; r < reps && ko < 0; r++) {
-        const isFinal = !!(D.finalKey && D.finalKey.mi === mi && D.finalKey.r === r);
-        const sf = isFinal ? 0.35 : (m.slow ? 0.5 : 1);
-        if (isFinal) { D.finalStart = k; D.finalTarget = j; }
-        const { rate, dur } = framesFor(f, anim, sf);
-        D.tracks[i].push({ anim, start: k, end: k + dur, rate });
-        let hitAt = k + Math.round(dur * hitFrac(f, anim));
-        // 投射物：從角色手上射出，飛到對手身上才算命中
-        const cfg = D.projOn ? f.proj[{ attack: "n", skill1: "s1", skill2: "s2" }[m.action]] : null;
-        const dr = cfg && f.bul[cfg.p];
-        const flight = dr && pickAnim(dr.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
-        if (dr && flight) {
-          const finish = pickAnim(dr.part, ["finish", "hit", "end"]);
-          const face = i === 0 ? 1 : -1;
-          const ready = f.part.animations[anim.replace(/_all$/, "_ready")];
-          const total = f.part.animations[anim].frame_count;
-          const spawn = k + Math.round(dur * (ready && anim.endsWith("_all") ? ready.frame_count / total : 0.3));
-          if ((cfg.m === "LINEAR" || cfg.m === "CURVE") && cfg.v > 0 && cfg.e) {
-            const st = { x: pos[i] + face * (f.ox + cfg.x * 0.5), y: f.oy - cfg.y * 0.5 };
-            const en = { x: pos[j], y: -g.h * (cfg.m === "CURVE" ? 0.05 : 0.3) };
-            const dist = Math.hypot(en.x - st.x, en.y - st.y);
-            const fl = Math.max(2, Math.round(dist / (cfg.v * 60) * DFPS / D.speed / sf));
-            hitAt = spawn + fl;
-            D.projs.push({ spawn, fl, st, en, curve: cfg.m === "CURVE", face, dr, flight, finish, a0: cfg.a0, a1: cfg.a1, rot: !!cfg.r, loop: !!cfg.l, dist });
-          } else {
-            // 近戰或沒有飛行資料：在對手身上播放命中特效
-            D.projs.push({ direct: true, spawn: hitAt, en: { x: pos[j], y: -g.h * 0.45 }, face, dr, flight, finish });
-          }
-        }
-        // 召喚技能：召喚物（或對手的複製體）在技能命中時出現在身旁，做一次動作（經典對戰只做畫面）
-        const smc = summonInfo(i, m.action);
-        if (smc) {
-          const list = smc.sums.map((sm) => ({ sf: D.sumF[sm.id], act: "attack" }));
-          if (smc.cpy) list.push({ sf: D.f[j], act: D.f[j].clips.skill1 ? "skill1" : D.f[j].clips.skill2 ? "skill2" : "attack", copy: true });
-          list.forEach(({ sf, act, copy }, n) => {
-            if (!sf) return;
-            const alive = D.summons.filter((x) => x.side === i && x.k0 <= hitAt && x.k1 > hitAt).length;
-            if (alive >= sumCap()) return; // 場上已滿
-            const so = { side: i, f: sf, copy: !!copy, x: pos[i] + dir * (f.w * 0.5 + sf.w * 0.3 + n * 26), k0: hitAt, k1: 0, fr: [] };
-            const atkA = sf.clips[act] || sf.clips.attack || sf.clips.idle, idleA = sf.clips.idle || atkA;
-            if (!atkA) return;
-            const fa = framesFor(sf, atkA, 1);
-            for (let t = 0; t < fa.dur; t++) so.fr.push({ anim: atkA, idx: Math.min(sf.part.animations[atkA].frame_count - 1, Math.floor(t / DFPS * fa.rate)), x: so.x });
-            const fi = framesFor(sf, idleA, 1);
-            for (let t = 0; t < 24; t++) so.fr.push({ anim: idleA, idx: Math.floor(t / DFPS * fi.rate) % sf.part.animations[idleA].frame_count, x: so.x });
-            so.k1 = hitAt + so.fr.length;
-            D.summons.push(so);
-            if (copy) D.sfxEv.push({ k: hitAt, side: i, kind: "skill" });
-            D.sfxEv.push({ k: hitAt + Math.round(fa.dur * hitFrac(sf, atkA)), side: i, kind: copy ? "skillhit" : "attack" });
-          });
-        }
-        if (m.action === "attack") D.sfxEv.push({ k: hitAt, side: i, kind: "attack" });
-        else D.sfxEv.push({ k, side: i, kind: "skill" }, { k: hitAt, side: i, kind: "skillhit" });
-        const dmg = Math.max(1, Math.round((DMG[m.action] || 8) * (0.75 + rnd(mi * 10 + r) * 0.5) / (reps > 1 ? 1.6 : 1)));
-        hp[j] = Math.max(0, hp[j] - dmg);
-        D.events.push({ k: hitAt, target: j, attacker: i, dmg, hp: hp.slice(), ko: hp[j] <= 0, start: k });
-        let kbEnd = hitAt;
-        const kb = g.clips.knockback;
-        if (kb) {
-          const t = framesFor(g, kb, sf);
-          D.tracks[j].push({ anim: kb, start: hitAt, end: hitAt + t.dur, rate: t.rate });
-          kbEnd = hitAt + t.dur;
-          D.posKeys[j].push({ k: hitAt, x: pos[j] });
-          pos[j] += dir * (hp[j] <= 0 ? 90 : 30); // 被打的一方往後退（遠離攻擊者）
-          D.posKeys[j].push({ k: hitAt + Math.round(t.dur * 0.6), x: pos[j] });
-        }
-        if (hp[j] <= 0) { ko = hitAt; if (!D.finalKey) D.koInfo = { mi, r }; }
-        k = r < reps - 1 ? k + Math.round(dur * (reps > 1 ? 0.8 : 1)) : Math.max(k + dur, kbEnd) + 8;
-      }
-    });
-    D.len = k + (ko >= 0 ? (D.finalKey ? 66 : 50) : 24);
-    D.ko = ko;
-    // 鏡頭：涵蓋兩人所有走到的位置
-    let X0 = Infinity, X1 = -Infinity;
-    D.posKeys.forEach((keys, i) => {
-      const hw = D.f[i].w / 2;
-      for (const p of keys) { X0 = Math.min(X0, p.x - hw); X1 = Math.max(X1, p.x + hw); }
-    });
-    for (const so of D.summons) { X0 = Math.min(X0, so.x - so.f.w / 2); X1 = Math.max(X1, so.x + so.f.w / 2); }
-    const bodyH = Math.max(A.h, B.h, 60);
-    D.cam = { cx: (X0 + X1) / 2, w: (X1 - X0) * 1.15 + 40, h: bodyH * 2.0, bodyH };
-    $("duelTotal").textContent = `共 ${D.len} 幀・約 ${(D.len / DFPS).toFixed(1)} 秒${ko >= 0 ? "・" + (D.events.find((e) => e.ko).target === 0 ? "右方" : "左方") + "獲勝" : ""}`;
-    $("dscrub").max = String(D.len - 1);
-  }
   function posAt(i, k) {
-    if (D.kind === "real") { const fr = D.frames[i]; return fr.length ? fr[Math.max(0, Math.min(fr.length - 1, k))].x : 0; }
+    if (isSim()) { const fr = D.frames[i]; return fr.length ? fr[Math.max(0, Math.min(fr.length - 1, k))].x : 0; }
     const keys = D.posKeys[i];
     let x = keys[0].x;
     for (let n = 1; n < keys.length; n++) {
@@ -3337,13 +3955,13 @@ footer a { color: inherit; }
     return x;
   }
   function stateAt(i, k) {
-    if (D.kind === "real") { const fr = D.frames[i]; const s2 = fr[Math.max(0, Math.min(fr.length - 1, k))]; if (s2) return { anim: s2.anim, idx: s2.idx, active: s2.start >= 0, start: s2.start }; }
+    if (isSim()) { const fr = D.frames[i]; const s2 = fr[Math.max(0, Math.min(fr.length - 1, k))]; if (s2) return { anim: s2.anim, idx: s2.idx, active: s2.start >= 0, start: s2.start }; }
     const f = D.f[i];
     let tr = null;
     for (const t of D.tracks[i]) if (k >= t.start && k < t.end && (!tr || t.start >= tr.start)) tr = t;
     if (tr) {
       const n = f.part.animations[tr.anim].frame_count;
-      let idx = Math.floor((k - tr.start) / DFPS * tr.rate);
+      let idx = Math.floor((k - tr.start) / FPS * tr.rate);
       idx = tr.loop ? idx % n : Math.min(n - 1, idx);
       return { anim: tr.anim, idx, active: true, start: tr.start };
     }
@@ -3352,9 +3970,9 @@ footer a { color: inherit; }
       const n = f.part.animations[f.clips.knockback].frame_count;
       return { anim: f.clips.knockback, idx: n - 1, active: false, start: 0 };
     }
-    const idle = f.clips.idle || f.clips.attack;
+    const idle = idleClip(f);
     const n = f.part.animations[idle].frame_count;
-    return { anim: idle, idx: Math.floor(k / DFPS * (f.part.anim_rate || 24)) % n, active: false, start: -1 };
+    return { anim: idle, idx: Math.floor(k / FPS * (f.part.anim_rate || 24)) % n, active: false, start: -1 };
   }
   function renderDuel(k) {
     const kOut = k;
@@ -3441,7 +4059,7 @@ footer a { color: inherit; }
         c.save(); c.translate(x, y); c.scale(1 / sc, 1 / sc);
         c.globalAlpha = d < 18 ? 1 : 1 - (d - 18) / 8;
         const big = e.ko || e.crit;
-        c.font = `900 ${big ? 40 : e.dotTick ? 22 : 30}px ${getComputedStyle(document.body).fontFamily}`;
+        c.font = canvasFont(900, big ? 40 : e.dotTick ? 22 : 30);
         c.textAlign = "center"; c.lineWidth = 6; c.strokeStyle = "#1b2038";
         c.fillStyle = e.fx === "heal" ? "#3cd070" : e.fx === "buff" ? "#ffc814" : e.miss ? "#c9cede" : e.dotTick || e.fx === "dot" ? "#c79bff" : big ? "#ffc814" : "#ffffff";
         const txt = e.label || `-${Math.round(e.dmg * 123)}`;
@@ -3463,29 +4081,29 @@ footer a { color: inherit; }
         const w = bw * ratio;
         c.fillStyle = ratio > 0.3 ? (i === 0 ? "#ff3d7f" : "#2f7cff") : "#ffc814";
         if (i === 0) c.fillRect(x, 30, w, bh); else c.fillRect(x + bw - w, 30, w, bh);
-        c.font = `700 15px ${getComputedStyle(document.body).fontFamily}`;
+        c.font = canvasFont(700, 15);
         c.textAlign = i === 0 ? "left" : "right";
         if (D.bgImg || BG[S.bg] === "#000000") { c.lineWidth = 4; c.strokeStyle = "#1b2038"; c.strokeText(D.f[i].r.name, i === 0 ? x : x + bw, 22); c.fillStyle = "#ffffff"; }
         else c.fillStyle = "#1b2038";
         c.fillText(D.f[i].r.name, i === 0 ? x : x + bw, 22);
-        if (D.kind === "real" && D.raw) {
-          c.font = `700 12px ${getComputedStyle(document.body).fontFamily}`;
+        if (isRaw()) {
+          c.font = canvasFont(700, 12);
           const t2 = `${Math.round(hp[i]).toLocaleString()} / ${Math.round(D.maxHp[i]).toLocaleString()}`;
           c.lineWidth = 3; c.strokeStyle = "#1b2038"; c.strokeText(t2, i === 0 ? x : x + bw, 60); c.fillStyle = "#ffffff"; c.fillText(t2, i === 0 ? x : x + bw, 60);
         }
       });
-      c.font = `900 22px ${getComputedStyle(document.body).fontFamily}`;
+      c.font = canvasFont(900, 22);
       c.textAlign = "center"; c.fillStyle = "#ffc814"; c.strokeStyle = "#1b2038"; c.lineWidth = 4;
       c.strokeText("VS", W / 2, 46); c.fillText("VS", W / 2, 46);
     }
     if (D.resultK >= 0 && k >= D.resultK + 6) {
       const d = k - D.resultK - 6, s = Math.min(1, d / 8);
       c.save(); c.translate(W / 2, H * 0.42); c.scale(0.6 + s * 0.4, 0.6 + s * 0.4);
-      c.font = `900 ${Math.round(H * 0.16)}px "Bungee", ${getComputedStyle(document.body).fontFamily}`;
+      c.font = canvasFont(900, Math.round(H * 0.16), true);
       c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 10; c.strokeStyle = "#1b2038"; c.fillStyle = "#ffc814";
       c.strokeText(D.resultText, 0, 0); c.fillText(D.resultText, 0, 0);
       if (D.resultText === "TIME UP") {
-        c.font = `900 ${Math.round(H * 0.06)}px ${getComputedStyle(document.body).fontFamily}`; c.lineWidth = 6;
+        c.font = canvasFont(900, Math.round(H * 0.06)); c.lineWidth = 6;
         const wt = D.winner === -1 ? "平手" : `${D.f[D.winner].r.name} 獲勝`;
         c.strokeText(wt, 0, H * 0.12); c.fillStyle = "#ffffff"; c.fillText(wt, 0, H * 0.12);
       }
@@ -3494,24 +4112,14 @@ footer a { color: inherit; }
     if (fin) drawReplayLabel(c, W, H, kOut, fin);
     if (inv && BG[S.bg]) { c.globalCompositeOperation = "difference"; c.fillStyle = "#ffffff"; c.fillRect(0, 0, W, H); c.globalCompositeOperation = "source-over"; }
   }
-  // 最後一擊：K.O. 之後畫面慢慢轉成些微黑白
-  // K.O. 特效：先正常速度打完並顯示 K.O.，接著慢動作重播最後一擊、畫面淡灰
-  function buildReplay() {
-    const n = Math.max(1, D.simLen || D.len);
-    const map = [];
-    for (let t = 0; t < n; t++) map.push(t);
-    D.replayFrom = -1;
-    if (D.finale && D.ko >= 0) {
-      D.replayFrom = map.length;
-      const rs = Math.max(0, D.finalStart - 8), re = Math.min(n - 1, D.ko + 30);
-      for (let t = rs; t <= re; t += 0.4) map.push(Math.floor(t));
-      for (let h = 0; h < 24; h++) map.push(re);
-    }
-    D.timeMap = map;
-    D.len = map.length;
-    $("dscrub").max = String(D.len - 1);
-    if (D.kind !== "real") $("duelTotal").textContent = `共 ${D.len} 幀・約 ${(D.len / DFPS).toFixed(1)} 秒${D.ko >= 0 ? "・" + (D.events.find((e) => e.ko).target === 0 ? "右方" : "左方") + "獲勝" : ""}`;
+  // 進度條長度與結果文字（引擎算完後由 compileDuel 呼叫）
+  function timelineSummary() {
+    const head = `共 ${D.len} 幀・約 ${(D.len / FPS).toFixed(1)} 秒`;
+    if (!isSim()) return head + (D.ko >= 0 ? "・" + (D.events.find((e) => e.ko).target === 0 ? "右方" : "左方") + "獲勝" : "");
+    const who = D.winner === 0 ? "左方" : D.winner === 1 ? "右方" : "";
+    return head + "・" + (D.resultText === "TIME UP" ? `時間到，${who ? who + "獲勝" : "平手"}` : D.winner === -1 ? "平手" : who + "獲勝");
   }
+  function showTimelineInfo() { $("dscrub").max = String(Math.max(0, D.len - 1)); $("duelTotal").textContent = timelineSummary(); }
   function finaleState(kOut) {
     if (!(D.replayFrom >= 0) || kOut < D.replayFrom) return null;
     const t = Math.min(1, (kOut - D.replayFrom) / 10);
@@ -3538,10 +4146,24 @@ footer a { color: inherit; }
     const sz = Math.round(Math.min(W, H) * 0.075), x = 24, y = 30 + 16 + 22 + sz * 0.6;
     c.save(); c.globalAlpha = a;
     if (Math.floor(kOut / 15) % 2 === 0) { c.fillStyle = "#ff3040"; c.beginPath(); c.arc(x + sz * 0.3, y, sz * 0.26, 0, Math.PI * 2); c.fill(); }
-    c.font = `900 ${sz}px "Bungee", ${getComputedStyle(document.body).fontFamily}`;
+    c.font = canvasFont(900, sz, true);
     c.textAlign = "left"; c.textBaseline = "middle";
     c.lineWidth = Math.max(4, sz * 0.14); c.strokeStyle = "#1b2038"; c.fillStyle = "#ffffff";
     c.strokeText("REPLAY", x + sz * 0.75, y); c.fillText("REPLAY", x + sz * 0.75, y);
+    c.restore();
+  }
+  // 倒數畫面：黑幕從 50% 慢慢變透明，中間大大的 3、2、1（錄影含倒數時也用這個）
+  function drawCountdown(c, W, H, f) {
+    const t = Math.max(0, f) / FPS; if (t >= 3) return;
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = "source-over";
+    c.globalAlpha = 1; c.fillStyle = `rgba(0,0,0,${(0.5 * (1 - t / 3)).toFixed(3)})`; c.fillRect(0, 0, W, H);
+    const n = 3 - Math.floor(t), ph = t % 1, pop = 1 - Math.pow(1 - Math.min(1, ph * 4), 3);
+    const sz = Math.round(Math.min(W, H) * 0.34 * (1.35 - 0.35 * pop));
+    c.globalAlpha = ph < 0.8 ? 1 : Math.max(0, (1 - ph) / 0.2);
+    c.font = canvasFont(900, sz, true);
+    c.textAlign = "center"; c.textBaseline = "middle";
+    c.lineWidth = Math.max(6, sz * 0.09); c.lineJoin = "round"; c.strokeStyle = "#1b2038"; c.fillStyle = "#ffffff";
+    c.strokeText(String(n), W / 2, H / 2); c.fillText(String(n), W / 2, H / 2);
     c.restore();
   }
   /* 播放狀態：
@@ -3562,34 +4184,18 @@ footer a { color: inherit; }
     $("dStart").hidden = true; duelPlayBtn(true); markDirty();
   }
   function duelPause() { D.playing = false; D.cd = null; D.idle = false; $("dStart").hidden = true; duelPlayBtn(false); }
-  // 倒數畫面：黑幕從 50% 慢慢變透明，中間大大的 3、2、1（錄影含倒數時也用這個）
-  function drawCountdown(c, W, H, f) {
-    const t = Math.max(0, f) / DFPS; if (t >= 3) return;
-    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = "source-over";
-    c.globalAlpha = 1; c.fillStyle = `rgba(0,0,0,${(0.5 * (1 - t / 3)).toFixed(3)})`; c.fillRect(0, 0, W, H);
-    const n = 3 - Math.floor(t), ph = t % 1, pop = 1 - Math.pow(1 - Math.min(1, ph * 4), 3);
-    const sz = Math.round(Math.min(W, H) * 0.34 * (1.35 - 0.35 * pop));
-    c.globalAlpha = ph < 0.8 ? 1 : Math.max(0, (1 - ph) / 0.2);
-    c.font = `900 ${sz}px "Bungee", ${getComputedStyle(document.body).fontFamily}`;
-    c.textAlign = "center"; c.textBaseline = "middle";
-    c.lineWidth = Math.max(6, sz * 0.09); c.lineJoin = "round"; c.strokeStyle = "#1b2038"; c.fillStyle = "#ffffff";
-    c.strokeText(String(n), W / 2, H / 2); c.fillText(String(n), W / 2, H / 2);
-    c.restore();
-  }
   function duelTick(dt) {
     if (D.recording) return;
     if (D.cd != null && D.f[0] && D.f[1]) {
-      D.cd += dt * DFPS;
-      sfxRun(D.cdSt, cdSfx(DFPS), D.cd, DFPS, 1e9, duelSfxPlay);
-      if (D.cd >= CD_SEC * DFPS) { D.cd = null; D.pos = 0; D.playing = true; D.sfxAbs = null; }
+      D.cd += dt * FPS;
+      sfxRun(D.cdSt, cdSfx(FPS), D.cd, FPS, 1e9, duelSfxPlay);
+      if (D.cd >= CD_SEC * FPS) { D.cd = null; D.pos = 0; D.playing = true; clockStop(D.clock, false); } // 開打的嗶聲已預約，不取消
     }
     if (D.playing && D.f[0] && D.f[1]) {
-      if (D.sfxAbs != null && D.sfxPosRef !== D.pos) { D.sfxAbs = null; sfxStopPending(); } // 位置被跳轉過
-      if (D.sfxAbs == null) { D.sfxAbs = D.pos; D.sfxSt = {}; }
-      D.pos += dt * DFPS; D.sfxAbs += dt * DFPS;
+      D.pos = clockAdvance(D.clock, D.pos, dt * FPS);
       if (D.pos >= D.len) duelIdle(true); // 播完停在最後一格，不重複
-      else { sfxRun(D.sfxSt, duelSfxList(), D.sfxAbs, DFPS, 1e9, duelSfxPlay); D.sfxPosRef = D.pos; }
-    } else if (D.sfxAbs != null) { D.sfxAbs = null; if (D.cd == null) sfxStopPending(); }
+      else clockSchedule(D.clock, D.pos, duelSfxList(), 1e9, FPS, duelSfxPlay);
+    } else clockStop(D.clock, D.cd == null); // 倒數中不取消（倒數的嗶聲已預約）
     const active = (D.playing || D.cd != null) && D.f[0] && D.f[1];
     if (!shouldDraw(active)) return;
     renderDuel(Math.floor(D.pos));
@@ -3600,7 +4206,7 @@ footer a { color: inherit; }
   let dscrubbing = false;
 
   /* 招式預設 */
-  function availActions(i) { const f = D.f[i]; return f ? ["move", "attack", "skill1", "skill2"].filter((a) => f.clips[a] && !(a === "move" && D.kind === "real")) : []; }
+  function availActions(i) { const f = D.f[i]; return f ? ["move", "attack", "skill1", "skill2"].filter((a) => f.clips[a] && !(a === "move" && isSim())) : []; }
   function presetTrade() {
     const out = [{ who: "A", action: "move" }, { who: "B", action: "move" }];
     const pick = (i, list) => list.find((a) => availActions(i).includes(a));
@@ -3609,7 +4215,7 @@ footer a { color: inherit; }
     return out;
   }
   function presetRandomDuel() {
-    D.seed = Math.floor(Math.random() * 1000);
+    D.seed = newSeed(1000);
     const out = [{ who: "A", action: "move" }];
     for (let n = 0; n < 12; n++) {
       const who = Math.random() < 0.5 ? "A" : "B";
@@ -3624,11 +4230,11 @@ footer a { color: inherit; }
   function actionLabel(i, a) {
     const f = D.f[i]; if (!f) return ACTION_LABEL[a];
     const sk = a === "skill1" ? f.skills[0] : a === "skill2" ? f.skills[1] : null;
-    return ACTION_LABEL[a] + (sk ? "・" + sk.name : "") + (summonInfo(i, a) ? (summonInfo(i, a).cpy ? "（複製對手）" : "（召喚）") : D.kind === "real" && isSupport(i, a) ? "（輔助）" : "");
+    return ACTION_LABEL[a] + (sk ? "・" + sk.name : "") + (summonInfo(i, a) ? (summonInfo(i, a).cpy ? "（複製對手）" : "（召喚）") : isSim() && isSupport(i, a) ? "（輔助）" : "");
   }
   function renderMoves() {
     const box = $("moves"); box.textContent = "";
-    const real = D.kind === "real";
+    const real = isSim();
     const order = real ? [...D.moves.keys()].filter((n) => D.moves[n].who !== "B" && D.moves[n].action !== "move").concat([...D.moves.keys()].filter((n) => D.moves[n].who === "B" && D.moves[n].action !== "move")) : [...D.moves.keys()];
     let lastSide = null;
     order.forEach((n) => {
@@ -3675,7 +4281,7 @@ footer a { color: inherit; }
     if (rerender) renderMoves();
   }
   function saveDuel() {
-    setTimeout(syncUrl, 0);
+    syncUrl();
     store.set("duel", duelState());
   }
   function fighterPanel(i) {
@@ -3716,63 +4322,31 @@ footer a { color: inherit; }
     if (D.recording || !D.f[0] || !D.f[1]) return;
     $("dRecAsk").hidden = !$("dRecAsk").hidden;
   }
+  // shift = 影片開頭多出的倒數幀數（0 = 不含倒數）
+  function duelOfflineEvents(shift = 0) {
+    const fight = duelSfxList().map((e) => {
+      const buf = e.sys ? SFX.buffers[e.sys] : sfxBufFor((SFX.cfg.duel[e.side] || {})[e.which], `duel${e.side}-${e.which}`);
+      return { t: (e.k + shift) / FPS, buf, rate: e.rate };
+    });
+    const cd = shift ? cdSfx(FPS).map((e) => ({ t: e.k / FPS, buf: SFX.buffers[e.sys], rate: 1 })) : [];
+    return cd.concat(fight);
+  }
   async function recordDuel(withCd) {
-    const status = $("dStatus");
     $("dRecAsk").hidden = true;
     if (D.recording || !D.f[0] || !D.f[1]) return;
     duelPause();
-    const CD = withCd ? CD_SEC * DFPS : 0, total = D.len + CD;
-    const drawAt = (k) => { if (k < CD) { renderDuel(0); drawCountdown(dctx, dcv.width, dcv.height, k); } else renderDuel(k - CD); };
     if (S.bg === "transparent") setBg("white");
-    const fileBase = `duel_${D.f[0].r.id}_vs_${D.f[1].r.id}`;
-    // 先試離線逐格輸出；不支援或失敗才用即時錄影
-    D.recording = true; $("drecBadge").hidden = false; $("dRec").disabled = true;
-    let offBlob = null;
-    try {
-      status.textContent = "準備輸出…";
-      offBlob = await offlineExport({
-        canvas: dcv, len: total, fps: DFPS, draw: drawAt,
-        events: duelOfflineEvents(CD), bgmUrl: S.audioUrl, bgmStart: +$("audioStart").value || 0,
-        progress: (f, k) => { const pc = Math.round(f * 100); status.textContent = `輸出中 ${pc}%（逐格輸出，不用等即時播放）`; $("drecBadge").textContent = `● 輸出中 ${pc}%`; $("dframeNo").textContent = `${Math.max(0, k - CD)} / ${D.len - 1}`; },
-      });
-    } catch { offBlob = null; }
-    D.recording = false; $("drecBadge").hidden = true; $("drecBadge").textContent = "● 錄製中"; $("dRec").disabled = false;
-    if (offBlob) { await offerFile(offBlob, fileBase + ".mp4", status); duelIdle(); return; }
-    const mime = pickMime();
-    if (mime === null || !dcv.captureStream) { status.textContent = "這個瀏覽器不支援錄製影片。請改用電腦版 Chrome。"; return; }
-    const stream = dcv.captureStream(DFPS);
-    const mix = await sfxBeginRecord(S.audioUrl, +$("audioStart").value || 0);
-    if (mix.track) stream.addTrack(mix.track);
-    const audioEl = mix.audioEl;
-    let rec;
-    try { rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined); }
-    catch { status.textContent = "無法啟動錄影。"; return; }
-    const chunks = []; rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-    const done = new Promise((r) => (rec.onstop = r));
-    D.recording = true; $("drecBadge").hidden = false; $("dRec").disabled = true;
-    status.textContent = `錄製中…約 ${(total / DFPS).toFixed(1)} 秒`;
-    drawAt(0); rec.start(250); const recT0 = performance.now();
-    if (audioEl) { try { await audioEl.play(); } catch {} }
-    const t0 = performance.now();
-    const rst = {}, dl = (CD ? cdSfx(DFPS) : []).concat(duelSfxList().map((e) => Object.assign({}, e, { k: e.k + CD })));
-    await new Promise((resolve) => {
-      const step = () => {
-        const kf = (performance.now() - t0) / 1000 * DFPS, k = Math.floor(kf);
-        if (k >= total) return resolve();
-        drawAt(k);
-        sfxRun(rst, dl, kf, DFPS, 1e9, duelSfxPlay); $("dframeNo").textContent = `${Math.max(0, k - CD)} / ${D.len - 1}`;
-        requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
+    const CD = withCd ? CD_SEC * FPS : 0, total = D.len + CD; // 含倒數：影片開頭多 3 秒
+    const live = (CD ? cdSfx(FPS) : []).concat(duelSfxList().map((e) => Object.assign({}, e, { k: e.k + CD })));
+    await recordCanvas({
+      canvas: dcv, len: total, fps: FPS,
+      draw: (k) => { if (k < CD) { renderDuel(0); drawCountdown(dctx, dcv.width, dcv.height, k); } else renderDuel(k - CD); },
+      offEvents: duelOfflineEvents(CD), live: { list: live, len: 1e9, play: duelSfxPlay },
+      status: $("dStatus"), badge: $("drecBadge"), buttons: [$("dRec")],
+      busy: (on) => { D.recording = on; }, onFrame: (k) => { $("dframeNo").textContent = `${Math.max(0, k - CD)} / ${D.len - 1}`; },
+      fileBase: `duel_${D.f[0].r.id}_vs_${D.f[1].r.id}`,
+      noSupport: "這個瀏覽器不支援錄製影片。請改用電腦版 Chrome。",
     });
-    await new Promise((r) => setTimeout(r, 150));
-    rec.stop(); await done; const recMs = performance.now() - recT0;
-    sfxEndRecord(mix);
-    D.recording = false; $("drecBadge").hidden = true; $("dRec").disabled = false;
-    const type = (rec.mimeType || mime || "video/webm").split(";")[0];
-    const ext = type.includes("mp4") ? "mp4" : "webm";
-    status.textContent = "整理影片中…";
-    await offerFile(await fixVideoDuration(new Blob(chunks, { type }), type, recMs), `${fileBase}.${ext}`, status);
     duelIdle();
   }
   function setDuelSize(sz) {
@@ -3785,50 +4359,33 @@ footer a { color: inherit; }
   async function initDuel() {
     if (D.inited) return; D.inited = true;
     const saved = store.get("duel", {});
-    Object.assign(D, { dist: saved.dist || 320, speed: saved.speed || 1, shake: saved.shake !== false, invert: !!saved.invert, numbers: saved.numbers !== false, bars: saved.bars !== false, seed: saved.seed || 1, projOn: saved.projOn !== false });
-    $("dProj").checked = D.projOn;
-    D.finale = saved.finale !== false; $("dFinale").checked = D.finale;
-    D.kind = saved.kind || "classic"; D.raw = !!saved.raw; D.timeLimit = saved.timeLimit || 60; D.hpMul = saved.hpMul > 0 ? saved.hpMul : 1;
-    D.sumCap = saved.sumCap > 0 && (saved.sumCapSet || saved.sumCap !== 5) ? saved.sumCap : 3; D.sumCapSet = !!saved.sumCapSet;
-    D.sumAtk = saved.sumAtk != null && isFinite(+saved.sumAtk) ? +saved.sumAtk : null; D.sumHp = saved.sumHp != null && isFinite(+saved.sumHp) ? +saved.sumHp : null;
-    $("dSumCap").value = D.sumCap; $("dSumAtk").value = D.sumAtk ?? ""; $("dSumHp").value = D.sumHp ?? "";
-    D.range = saved.range || [null, null]; D.mvs = Array.isArray(saved.mvs) && saved.mvs.length === 2 ? saved.mvs : [null, null]; D.level = saved.level || [null, null]; D.cheat = saved.cheat || [{}, {}];
-    D.ground = saved.ground ?? 8; $("dGround").value = D.ground; $("dGroundOut").textContent = D.ground + "%";
-    await restoreDuelBg();
-    $("dDist").value = D.dist; $("dDistOut").textContent = D.dist;
-    $("dSpeed").value = D.speed; $("dSpeedOut").textContent = D.speed.toFixed(2) + "×";
-    $("dShake").checked = D.shake; $("dInvert").checked = D.invert; $("dNumbers").checked = D.numbers; $("dBars").checked = D.bars;
-    setDuelSize(store.get("dsize", "1280x720"));
-    const find = (id) => id && S.index.find((r) => r.id === id);
-    // 從分享連結開啟：網址參數優先，找不到的角色就忽略
+    /* 設定的來源：
+       - 分享連結（網址有 s＝種子，分享按鈕產生的連結一定有）：會影響結果的設定完全照連結，連結沒寫的用預設值，
+         所以同一個連結在任何人的瀏覽器都得到同樣結果；只影響畫面的設定（震動、血條等）保留自己的習慣。
+       - 其他網址（例如手打的 ?app=duel&type=raw）：照瀏覽器存檔，網址有寫的再蓋過去。 */
+    applyDuelSettings(settingsFromSaved(saved));
     const fromUrl = URLP.get("app") === "duel";
     if (fromUrl) {
-      const ty = URLP.get("type");
-      if (ty === "classic" || ty === "real" || ty === "raw") { D.kind = ty === "classic" ? "classic" : "real"; D.raw = ty === "raw"; }
-      if (/^\d+$/.test(URLP.get("s") || "")) D.seed = +URLP.get("s");
-      if (+URLP.get("hp") > 0) D.hpMul = Math.min(100000, +URLP.get("hp"));
-      if (URLP.get("lv")) D.level = URLP.get("lv").split(",").slice(0, 2).map((x) => (+x > 0 ? Math.round(+x) : null));
-      D.cheat = Array.isArray(URLD.ch) && URLD.ch.length === 2 ? URLD.ch.map((x) => (x && typeof x === "object" ? x : {})) : [{}, {}];
-      D.range = Array.isArray(URLD.rg) && URLD.rg.length === 2 ? URLD.rg.map((x) => (x == null || !(+x >= 0) ? null : +x)) : [null, null];
-      D.mvs = Array.isArray(URLD.ms) && URLD.ms.length === 2 ? URLD.ms.map((x) => (x == null || !(+x > 0) ? null : +x)) : [null, null];
-      D.sumCap = +URLD.sc > 0 ? Math.min(20, Math.round(+URLD.sc)) : 3; D.sumCapSet = +URLD.sc > 0;
-      D.sumAtk = URLD.sa != null && isFinite(+URLD.sa) ? +URLD.sa : null; D.sumHp = URLD.sh != null && isFinite(+URLD.sh) ? +URLD.sh : null;
-      $("dSumCap").value = D.sumCap; $("dSumAtk").value = D.sumAtk ?? ""; $("dSumHp").value = D.sumHp ?? "";
+      const fromLink = settingsFromUrl(URLP, URLD);
+      if (URLP.has("s")) {
+        const mine = Object.fromEntries(DUEL_SETTINGS.filter((s) => s.ui).map((s) => [s.key, D[s.key]]));
+        applyDuelSettings(Object.assign(fromLink, mine));
+      } else applyDuelSettings(Object.assign(settingsToSaved(), fromLink));
     }
-    const a = (fromUrl && find(URLP.get("l"))) || find(saved.a) || S.unit || find(DEFAULT_UNIT) || S.index[0];
-    const b = (fromUrl && find(URLP.get("r"))) || find(saved.b) || find("u010u-clara") || find("u1001u-brown") || S.index.find((r) => r.id !== a.id);
+    syncDuelInputs();
+    await restoreDuelBg();
+    setDuelSize(store.get("dsize", "1280x720"));
+    const find = (id) => id && S.index.find((r) => r.id === id);
+    // 角色：連結 → 存檔 → 單人正在看的角色 → 預設角色（找不到就依序退回，最後任選一隻）
+    const a = (fromUrl && find(URLP.get("l"))) || find(saved.a) || S.unit || DEFAULT_LEFT.map(find).find(Boolean) || S.index[0];
+    const b = (fromUrl && find(URLP.get("r"))) || find(saved.b) || DEFAULT_RIGHT.map(find).find(Boolean) || S.index.find((r) => r.id !== a.id);
     setLoad($("doverlay"), "載入角色中…");
     const [fa, fb] = await Promise.all([loadFighter(a), loadFighter(b), ensureStats()]);
     D.f = [fa, fb]; fighterPanel(0); fighterPanel(1);
     await loadSummons(0); await loadSummons(1);
-    D.mode = saved.mode || "trade";
-    D.moves = saved.moves && saved.moves.length ? saved.moves : presetTrade();
-    if (fromUrl) {
-      const mm = URLP.get("m");
-      D.mode = mm === "random" || mm === "custom" ? mm : "trade";
-      const mv = decMoves(URLD.mv || URLP.get("mv")).filter((m) => availActions(m.who === "B" ? 1 : 0).includes(m.action) || m.action === "move");
-      D.moves = D.mode !== "trade" && mv.length ? mv : presetTrade();
-    }
+    // 招式：從連結開啟時，你來我往用預設招式、隨機與自定義照連結；不是從連結開啟就照存檔
+    const mv = fromUrl ? decMoves(URLD.mv || URLP.get("mv")).filter((m) => availActions(m.who === "B" ? 1 : 0).includes(m.action) || m.action === "move") : saved.moves;
+    D.moves = (fromUrl ? D.mode !== "trade" : true) && Array.isArray(mv) && mv.length ? mv : presetTrade();
     $("doverlay").hidden = true;
     setDuelMode(D.mode, false);
     renderRealPanel();
@@ -3840,7 +4397,7 @@ footer a { color: inherit; }
     $("appDuel").setAttribute("aria-pressed", String(mode === "duel"));
     document.querySelectorAll("[data-app]").forEach((el) => (el.hidden = el.dataset.app !== mode));
     store.set("app", mode);
-    setTimeout(syncUrl, 0);
+    syncUrl();
     if (mode === "duel") initDuel();
   }
 
@@ -3850,7 +4407,7 @@ footer a { color: inherit; }
     let t; $(`dq${i}`).addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => renderDuelResults(i), 250); });
     $(`dq${i}`).addEventListener("keydown", (e) => { if (e.key === "Enter") renderDuelResults(i); });
   });
-  $("dSwap").onclick = () => { D.f.reverse(); D.range.reverse(); D.mvs.reverse(); D.level.reverse(); D.cheat.reverse(); renderRealPanel(); fighterPanel(0); fighterPanel(1); D.moves.forEach((m) => (m.who = m.who === "A" ? "B" : "A")); movesChanged(true); };
+  $("dSwap").onclick = () => { D.f.reverse(); swapDuelSides(); renderRealPanel(); fighterPanel(0); fighterPanel(1); D.moves.forEach((m) => (m.who = m.who === "A" ? "B" : "A")); movesChanged(true); };
   $("dPlay").onclick = () => {
     if (D.cd != null) duelIdle(); // 倒數中按暫停：回到還沒開始
     else if (D.playing) duelPause();
@@ -3872,7 +4429,7 @@ footer a { color: inherit; }
     document.querySelectorAll("#dModes .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.dmode === mode)));
     const custom = mode === "custom";
     $("moves").hidden = !custom; $("dAddRow").hidden = !custom; $("duelTotal").hidden = !custom;
-    $("dModeHint").textContent = MODE_HINT[mode] + (D.kind === "real" ? " 真距離：雙方同時行動，打不到會自動走過去，「移動接近」不再需要；只有體力跌破一半與倒下時才會被擊退。" : "");
+    $("dModeHint").textContent = MODE_HINT[mode] + (isSim() ? " 真距離：雙方同時行動，打不到會自動走過去，「移動接近」不再需要；只有體力跌破一半與倒下時才會被擊退。" : "");
     if (regenerate && mode === "trade") D.moves = presetTrade();
     if (regenerate && mode === "random") D.moves = presetRandomDuel();
     movesChanged(true);
@@ -3931,474 +4488,23 @@ footer a { color: inherit; }
     await filePut("bgm", f, f.name);
   };
 
-  /* ---------- 真距離／原始數值對戰（內部 kind = "real"，原始數值為 D.raw） ---------- */
-  const STAT5 = ["hp", "pa", "ma", "pd", "md"];
-  const CHEAT_FIELDS = [
-    ["hp", "體力"], ["pa", "物攻"], ["ma", "魔攻"], ["pd", "物防"], ["md", "魔防"],
-    ["ai", "攻擊間隔（秒）"], ["cr", "爆擊率 %"], ["cd", "爆擊傷害 %"], ["dg", "普攻閃避 %"], ["hit", "普攻命中 %"],
-    ["sdg", "技能閃避 %"], ["sh", "技能命中 %"], ["sr", "技能抗性 %"],
-    ["rg", "攻擊距離"], ["mv", "移動速度"],
-  ];
-  const DEF_K = 18000;
-  const cap95 = (v) => Math.min(95, Math.max(0, +v || 0));
-  // 普通攻擊：物理、魔法各自依對方防禦打折
-  const atkDmg = (a, t) => a.pa * DEF_K / (DEF_K + Math.max(0, t.pd || 0)) + a.ma * DEF_K / (DEF_K + Math.max(0, t.md || 0));
-  function mulberry32(a) {
-    return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  }
-  function levelLimits(label) {
-    const m = /(\d+)/.exec(label || ""); const star = m ? +m[1] : 0;
-    const evolved = /超進化|終極進化|究極進化/.test(label || "");
-    let cap = star >= 1 && star <= 5 ? star * 10 + 10 : star >= 6 && star <= 8 ? 60 + (star - 5) * 20 : star === 9 ? 160 : 100;
-    if (evolved) cap += 20;
-    return { cap, max: cap + (evolved ? 100 : 20) };
-  }
-  function statAt(arr, level, cap) {
-    const [b, g, gm] = arr || [0, 0, 0];
-    return b + (Math.min(level, cap) - 1) * g + Math.max(0, level - cap) * gm;
-  }
-  function defaultRange(i) {
-    const f = D.f[i]; if (!f) return 100;
-    const st = S.stats[f.r.id];
-    return Math.round(st?.rg || f.proj.range || 100);
-  }
-  function rangeOf(i) { return D.range[i] != null ? D.range[i] : defaultRange(i); }
-  function defaultMove(i) {
-    const f = D.f[i]; if (!f) return 100;
-    const st = S.stats[f.r.id];
-    return Math.round(st?.mv || f.proj.speed || 100);
-  }
-  function moveOf(i) { return D.mvs && D.mvs[i] != null ? D.mvs[i] : defaultMove(i); }
-  // 原始數值：等級換算 → 金手指覆蓋
-  function rawStats(i) {
-    const f = D.f[i], st = S.stats[f.r.id] || {};
-    const lim = levelLimits(st.s || f.r.star);
-    const lv = Math.max(1, Math.min(lim.max, D.level[i] || lim.max));
-    const out = { level: lv, maxLevel: lim.max };
-    for (const k of STAT5) out[k] = Math.round(statAt(st[k], lv, lim.cap));
-    Object.assign(out, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, dg: st.dg || 0, hit: st.hit || 0, sh: st.sh || 0, sdg: st.sdg || 0, sr: st.sr || 0, rg: rangeOf(i), mv: moveOf(i) });
-    const ov = D.cheat[i] || {};
-    for (const [k] of CHEAT_FIELDS) if (ov[k] !== undefined && ov[k] !== "" && isFinite(+ov[k])) out[k] = +ov[k];
-    // 技能：發動率、冷卻、各傷害效果的倍率都可以用金手指覆蓋
-    const osk = ov.sk || [];
-    out.sk = [0, 1].map((s) => {
-      const base = (st.sk || [])[s], o = osk[s] || {};
-      if (!base) return null;
-      const e = base.e.map((x, n) => (o.c && o.c[n] !== undefined && o.c[n] !== "" && isFinite(+o.c[n]) ? { ...x, c: +o.c[n] / 100 } : { ...x }));
-      // 輔助技能填了倍率，就當作有單次傷害
-      if (!base.e.length && o.c && +o.c[0] > 0) e.push({ t: "hit", c: +o.c[0] / 100, b: "atk", d: 0 });
-      return {
-        sum: base.sum, sums: base.sums, cpy: base.cpy, ar: base.ar,
-        r: o.r !== undefined && o.r !== "" && isFinite(+o.r) ? +o.r : base.r,
-        cd: o.cd !== undefined && o.cd !== "" && isFinite(+o.cd) ? +o.cd : base.cd,
-        e,
-      };
-    });
-    return out;
-  }
-  function basicStats(i) {
-    const f = D.f[i], st = S.stats[f.r.id] || {};
-    return { rg: rangeOf(i), mv: moveOf(i) };
-  }
-  function realQueues() {
-    // 真距離：左右各自的招式清單，「移動接近」改由自動走位取代
-    const q = [[], []];
-    for (const m of D.moves) if (m.action !== "move") q[m.who === "B" ? 1 : 0].push(m);
-    for (const i of [0, 1]) if (!q[i].length) q[i].push({ who: i ? "B" : "A", action: "attack" });
-    return q;
-  }
-
-  function compileReal() {
-    const [A, B] = D.f;
-    D.frames = [[], []]; D.events = []; D.projs = []; D.tracks = [[], []]; D.sfxEv = []; D.summons = [];
-    D.ko = -1; D.resultK = -1; D.resultText = ""; D.timeMap = null;
-    if (!A || !B) return;
-    const rng = mulberry32(D.seed * 7919 + 13);
-    const raw = D.raw && !!(S.stats && Object.keys(S.stats).length);
-    const st = [0, 1].map((i) => (raw ? rawStats(i) : basicStats(i)));
-    const hpMul = raw ? Math.max(0.01, D.hpMul || 1) : 1;
-    const maxHp = raw ? [Math.max(1, st[0].hp * hpMul), Math.max(1, st[1].hp * hpMul)] : [100, 100];
-    D.maxHp = maxHp;
-    const r0 = st[0].rg, r1 = st[1].rg;
-    // 距離補償：只加成短手，短手傷害 ×（1 + k × 距離差 ÷ 長手距離），k = 0.8，最多 1.8 倍
-    const COMP_K = 0.8;
-    const RL = Math.max(r0, r1), RS = Math.min(r0, r1), bonus = RL > 0 ? 1 + COMP_K * (RL - RS) / RL : 1;
-    const comp = r0 === r1 ? [1, 1] : r0 < r1 ? [bonus, 1] : [1, bonus];
-    const gap0 = Math.max(r0, r1) + 100;
-    const cd0 = gap0 + (A.w + B.w) / 2;
-    /* 單位（多打多預備）：本人、召喚物、複製體都是單位，各有陣營、位置、寬度、血量、數值。
-       - 每個單位只看離自己最近的敵方單位：進到自己的射程就出手，否則往它走。
-       - 普攻打最近（最前面）的那一個；技能以觸發的那一個為中心，左右各一個技能範圍內的敵方單位都會被打到。
-       - 只有本人倒下才算 K.O.；召喚物、複製體血扣完就提早消失。擊退只發生在本人身上。 */
-    const F = [0, 1].map((i) => ({
-      side: i, isMain: true, w: D.f[i].w, st: st[i], maxHp: maxHp[i],
-      x: i ? cd0 / 2 : -cd0 / 2, hp: maxHp[i], busy: 0, pendingKb: false, kbKo: false, qi: 0, nextAtk: 0,
-      skillCd: [0, 0], buff: false, dots: [], cur: null, dead: false,
-    }));
-    const alive = (u, k) => (u.isMain ? !u.dead : k >= u.k0 && k < u.k1 && u.hp > 0);
-    const foes = (side, k) => {
-      const out = [], m = F[1 - side];
-      if (alive(m, k)) out.push(m);
-      for (const x of D.summons) if (x.side !== side && alive(x, k)) out.push(x);
-      return out;
-    };
-    const gapTo = (a, b) => Math.abs(b.x - a.x) - (a.w + b.w) / 2;
-    const nearestFoe = (u, k) => { let best = null, bg = Infinity; for (const t of foes(u.side, k)) { const g = gapTo(u, t); if (g < bg) { bg = g; best = t; } } return best; };
-    // 技能範圍：以中心目標為準，左右各 ar
-    const victimsOf = (side, center, ar, k) => (ar > 0 ? foes(side, k).filter((u) => u === center || Math.abs(u.x - center.x) <= ar) : [center]);
-    // 資料庫的技能範圍；沒有範圍資料（舊資料、自製角色）時用出手者的攻擊距離，至少 AR_DEF（資料庫技能範圍的中位數），
-    // 避免技能只打到擋在前面的召喚物
-    const AR_DEF = 300;
-    const skillAr = (fid, sts, action, rg) => {
-      const n = action === "skill1" ? 0 : 1;
-      const sk = (sts && sts.sk && sts.sk[n]) || (((S.stats[fid] || {}).sk || [])[n]);
-      return sk && +sk.ar > 0 ? +sk.ar : Math.max(AR_DEF, +rg || 0);
-    };
-    // 召喚物的攻擊、血量比例：空白＝自動
-    const atkPct = D.sumAtk != null && D.sumAtk !== "" && isFinite(+D.sumAtk) ? Math.max(0, +D.sumAtk) / 100 : null;
-    const hpPct = D.sumHp != null && D.sumHp !== "" && isFinite(+D.sumHp) ? Math.max(0, +D.sumHp) / 100 : null;
-    const atkOf = (x) => (x.pa || 0) + (x.ma || 0);
-    const fullAtk = (fid) => { const fs = S.stats[fid]; return fs ? atkOf(copyStats(fid, levelLimits(fs.s || "").max)) : 0; };
-    // 自動：真距離＝召喚物攻擊 ÷ 召喚者（複製體則是對手本人）攻擊，最多 50%；原始數值＝100%（照召喚物自己的數值）
-    const autoAtkR = (ss, refAtk) => (raw ? 1 : refAtk > 0 ? Math.min(0.5, atkOf(ss) / refAtk) : 0.5);
-    const sumAtkR = (ss, refAtk) => (atkPct != null ? atkPct : autoAtkR(ss, refAtk));
-    // 自動：真距離＝召喚者血量的 30%；原始數值＝召喚物自己資料的體力（沒有資料時用召喚者的 30%），並乘上血量倍率
-    const sumMaxHp = (ss, i) => {
-      if (!raw) return Math.max(1, maxHp[i] * (hpPct != null ? hpPct : 0.3));
-      const base = ss.hp > 0 ? ss.hp * hpMul : maxHp[i] * 0.3;
-      return Math.max(1, base * (hpPct != null ? hpPct : 1));
-    };
-    const queues = realQueues();
-    const limitK = Math.max(5, D.timeLimit || 60) * DFPS;
-    const hits = [];
-    let endK = -1, timeUp = false;
-    // v4.10：普攻用防禦公式（攻擊 × K ÷ (K + 防禦)），技能不看防禦；閃避、技能閃避、技能抗性最多 95%
-    const dmgCalc = (a, t, coef, base) => (base === "hp" ? a.hp : a.pa + a.ma) * coef;
-    const startAnim = (i, anim, k, loop) => {
-      const f = D.f[i];
-      const rate = (f.part.anim_rate || 24) * D.speed;
-      const dur = Math.max(1, Math.round(f.part.animations[anim].frame_count / rate * DFPS));
-      F[i].cur = { anim, start: k, rate, loop, dur };
-      return dur;
-    };
-    // 擊退只在「體力跌破一半」與「倒下」時發生，會立刻打斷正在出的招
-    const checkKb = (j, before) => {
-      const t = F[j], half = maxHp[j] / 2;
-      if (t.hp <= 0) { t.pendingKb = true; t.kbKo = true; }
-      else if (before >= half && t.hp < half) t.pendingKb = true;
-    };
-    // 原始數值看金手指覆蓋後的技能；真距離看資料庫
-    const supportFor = (i, action) => {
-      if (action !== "skill1" && action !== "skill2") return false;
-      if (!raw) return isSupport(i, action);
-      const sk = st[i].sk[action === "skill1" ? 0 : 1];
-      return !sk || !sk.e.length;
-    };
-    const sumHits = [];
-    const sideFull = (i, k) => D.summons.filter((x) => x.side === i && x.k0 <= k && x.k1 > k).length >= sumCap();
-    // 召喚：L＝召喚者的等級；x0＝召喚者的位置（本人或複製體）
-    const spawnSummon = (i, sm, k, L, x0, n = 0) => {
-      const sf = D.sumF[sm.id]; if (!sf) return;
-      if (sideFull(i, k)) { pushEvent({ k, target: i, attacker: i, dmg: 0, label: "召喚物已滿", fx: "buff", noFx: true }); return; }
-      const dir = i === 0 ? 1 : -1;
-      const lv = summonLevel(sm, L);
-      const sec = sm.dur ? (sm.dur[0] === "mul" ? L * (+sm.dur[1] || 0) : +sm.dur[1] || 10) : 10;
-      const ss = summonStats(sm.id, lv);
-      const hp0 = sumMaxHp(ss, i);
-      D.summons.push({ side: i, isMain: false, f: sf, w: sf.w, x: x0 + dir * (D.f[i].w * 0.5 + sf.w * 0.3 + n * 26), k0: k, k1: k + Math.max(1, Math.round(Math.max(1, sec) * DFPS)), st: ss, hp: hp0, maxHp: hp0, dots: [], atkR: sumAtkR(ss, raw ? atkOf(st[i]) : fullAtk(D.f[i].r.id)), nextAtk: k + 8, busy: 0, cur: null, fr: [] });
-      pushEvent({ k, target: i, attacker: i, dmg: 0, label: raw ? `召喚！Lv${ss.level}` : "召喚！", fx: "buff", noFx: true });
-    };
-    // 將敵人召喚為我方夥伴：在我方出現對手的複製體（固定等級、會放技能）
-    const spawnCopy = (i, cpy, k, x0) => {
-      const src = D.f[1 - i]; if (!src) return;
-      if (sideFull(i, k)) { pushEvent({ k, target: i, attacker: i, dmg: 0, label: "召喚物已滿", fx: "buff", noFx: true }); return; }
-      const dir = i === 0 ? 1 : -1;
-      const ss = copyStats(src.r.id, +cpy.lv || 60);
-      const sec = cpy.dur ? +cpy.dur[1] || 10 : 10;
-      const hp0 = sumMaxHp(ss, i);
-      D.summons.push({ side: i, isMain: false, f: src, w: src.w, copy: true, src: src.r.id, x: x0 + dir * (D.f[i].w * 0.5 + src.w * 0.4), k0: k, k1: k + Math.max(1, Math.round(sec * DFPS)), st: ss, hp: hp0, maxHp: hp0, dots: [], atkR: sumAtkR(ss, fullAtk(src.r.id)), skillCd: [0, 0], nextAtk: k + 8, busy: 0, cur: null, fr: [] });
-      pushEvent({ k, target: i, attacker: i, dmg: 0, label: raw ? `複製對手！Lv${ss.level}` : "複製對手！", fx: "buff", noFx: true });
-    };
-    const doSpawns = (i, info, k, L, x0) => {
-      if (!info) return;
-      info.sums.forEach((sm, n) => spawnSummon(i, sm, k, L, x0, n));
-      if (info.cpy) spawnCopy(i, info.cpy, k, x0);
-    };
-    const pushEvent = (e) => { e.hp = [F[0].hp, F[1].hp]; D.events.push(e); };
-    // 扣血：本人會觸發擊退與 K.O.；召喚物血扣完就提早離場
-    const hurt = (t, dmg, k, from, label, crit, start, extra) => {
-      const before = t.hp;
-      t.hp = Math.max(0, t.hp - dmg);
-      if (t.isMain) {
-        checkKb(t.side, before);
-        pushEvent(Object.assign({ k, target: t.side, attacker: from, dmg, label, crit, ko: t.hp <= 0, start }, extra));
-      } else {
-        pushEvent(Object.assign({ k, target: t.side, attacker: from, dmg, label, crit, sumTarget: true, tx: t.x, noFx: true, start }, extra));
-        if (t.hp <= 0) { t.k1 = Math.min(t.k1, k + 1); pushEvent({ k, target: t.side, attacker: from, dmg: 0, label: "擊倒召喚物", fx: "buff", sumTarget: true, tx: t.x, noFx: true }); }
-      }
-    };
-    const missEv = (t, k, from) => pushEvent(t.isMain ? { k, target: t.side, attacker: from, dmg: 0, label: "MISS", miss: true, noFx: true } : { k, target: t.side, attacker: from, dmg: 0, label: "MISS", miss: true, noFx: true, sumTarget: true, tx: t.x });
-    // 對一個目標結算一次攻擊。a＝攻擊方單位；o.base＝真距離的基礎傷害；o.mul＝其他倍率；o.sk＝原始數值的技能資料
-    const strike = (a, t, action, k, start, o) => {
-      const tst = t.st;
-      let dmg = 0, label = "", crit = false;
-      if (!raw) {
-        dmg = o.base * (0.75 + rng() * 0.5) * o.mul;
-        label = `-${Math.round(dmg * 123)}`;
-      } else if (action === "attack") {
-        if (rng() < Math.max(0, cap95(tst.dg) - a.st.hit) / 100) { missEv(t, k, a.side); return false; }
-        crit = rng() < a.st.cr / 100;
-        dmg = Math.max(1, atkDmg(a.st, tst) * (crit ? a.st.cd / 100 : 1) * o.mul);
-        label = (crit ? "爆擊 " : "") + "-" + Math.round(dmg).toLocaleString();
-      } else {
-        const sk = o.sk || { e: [] };
-        if (rng() < Math.max(0, cap95(tst.sdg) - a.st.sh) / 100) { missEv(t, k, a.side); return false; }
-        // 技能抗性：技能傷害（單次與持續）照比例減少
-        const mult = o.mul * (1 - cap95(tst.sr) / 100);
-        for (const e of sk.e) {
-          const v = dmgCalc(a.st, tst, e.c, e.b) * mult;
-          if (e.t === "dot") t.dots.push({ per: Math.max(1, v), next: k + DFPS, until: k + Math.max(1, e.d) * DFPS + 1, from: a.side });
-          else dmg += v;
-        }
-        if (!sk.e.some((e) => e.t !== "dot")) { pushEvent(t.isMain ? { k, target: t.side, attacker: a.side, dmg: 0, label: "持續傷害", fx: "dot", noFx: true } : { k, target: t.side, attacker: a.side, dmg: 0, label: "持續傷害", fx: "dot", noFx: true, sumTarget: true, tx: t.x }); return true; }
-        dmg = Math.max(1, dmg);
-        label = "-" + Math.round(dmg).toLocaleString();
-      }
-      hurt(t, dmg, k, a.side, label, crit, start);
-      return true; // 沒被閃避（「下一擊 +50%」只在打中時用掉）
-    };
-    // 一次出手命中時：先召喚／複製，再依普攻（單一目標）或技能（範圍）結算
-    const resolve = (a, h, k) => {
-      const i = a.side, action = h.action, isSkill = action !== "attack";
-      let tgt = h.tgt && alive(h.tgt, k) ? h.tgt : nearestFoe(a, k);
-      if (!tgt) return;
-      if (a.isMain) {
-        const smr = isSkill ? summonInfo(i, action) : null;
-        if (smr) doSpawns(i, smr, k, raw ? st[i].level : levelLimits((S.stats[D.f[i].r.id] || {}).s || D.f[i].r.star).max, a.x);
-        if (smr && supportFor(i, action)) return; // 純召喚技能：只召喚，不另外強化或回血
-        if (isSkill && supportFor(i, action)) {
-          // 純輔助技能：不打對手、不會被閃避。一半機率下一擊 +50%，一半機率回復 20% 體力
-          if (rng() < 0.5) { a.buff = true; pushEvent({ k, target: i, attacker: i, dmg: 0, label: "下一擊 +50%", fx: "buff", noFx: true }); }
-          else { a.hp = Math.min(maxHp[i], a.hp + maxHp[i] * 0.2); pushEvent({ k, target: i, attacker: i, dmg: 0, label: "回復 20%", fx: "heal", noFx: true }); }
-          return;
-        }
-        const buffM = a.buff ? 1.5 : 1;
-        const o = raw ? { mul: buffM, sk: isSkill ? st[i].sk[action === "skill1" ? 0 : 1] : null } : { base: DMG[action] || 8, mul: comp[i] / (h.reps > 1 ? 1.6 : 1) * buffM };
-        const list = isSkill ? victimsOf(i, tgt, h.ar || 0, k) : [tgt];
-        let landed = false;
-        for (const t of list) if (strike(a, t, action, k, h.start, o)) landed = true;
-        if (landed || !raw) a.buff = false;
-        return;
-      }
-      // 召喚物／複製體
-      if (isSkill) {
-        doSpawns(i, skillSpawn(a.src, action), k, a.st.level, a.x); // 複製體放技能：用對手的技能資料（召喚、複製、傷害）
-        const sk = a.st.sk[action === "skill1" ? 0 : 1];
-        if (!sk || !sk.e || !sk.e.length) return; // 沒有傷害的技能
-        const o = raw ? { mul: a.atkR, sk } : { base: DMG[action] || 8, mul: a.atkR };
-        for (const t of victimsOf(i, tgt, h.ar || 0, k)) strike(a, t, action, k, h.start, o);
-        return;
-      }
-      strike(a, tgt, "attack", k, h.start, raw ? { mul: a.atkR } : { base: DMG.attack || 15, mul: a.atkR });
-    };
-
-    const maxK = limitK + 400;
-    for (let k = 0; k < maxK; k++) {
-      // 命中與持續傷害
-      for (let n = hits.length - 1; n >= 0; n--) if (hits[n].k === k) { const h = hits.splice(n, 1)[0]; if ((D.ko < 0 || h.k === D.ko) && !F[h.i].dead) resolve(F[h.i], h, k); }
-      for (let n = sumHits.length - 1; n >= 0; n--) if (sumHits[n].k === k) { const h = sumHits.splice(n, 1)[0]; if (D.ko < 0 && alive(h.s, k)) resolve(h.s, h, k); }
-      for (const j of [0, 1]) {
-        const t = F[j];
-        for (const d of t.dots) {
-          if (k >= d.next && k < d.until && !t.dead && D.ko < 0) {
-            const v = Math.max(1, d.per), before = t.hp;
-            t.hp = Math.max(0, t.hp - v); d.next += DFPS;
-            checkKb(j, before);
-            pushEvent({ k, target: j, attacker: d.from, dmg: v, label: "-" + Math.round(v).toLocaleString(), dotTick: true, noFx: true, ko: t.hp <= 0 });
-          }
-        }
-      }
-      for (const so of D.summons) {
-        if (!so.dots.length || !alive(so, k) || D.ko >= 0) continue;
-        for (const d of so.dots) if (k >= d.next && k < d.until && so.hp > 0) { d.next += DFPS; hurt(so, Math.max(1, d.per), k, d.from, "-" + Math.round(Math.max(1, d.per)).toLocaleString(), false, undefined, { dotTick: true }); }
-      }
-      // 勝負判定
-      if (D.ko < 0 && endK < 0) {
-        const dead = [F[0].hp <= 0, F[1].hp <= 0];
-        if (dead[0] || dead[1]) {
-          D.ko = k; D.resultK = k;
-          D.resultText = dead[0] && dead[1] ? "DRAW" : "K.O.";
-          D.winner = dead[0] && dead[1] ? -1 : dead[0] ? 1 : 0;
-          dead.forEach((x, i) => { if (x) { F[i].dead = true; F[i].pendingKb = true; F[i].kbKo = true; } });
-          endK = k + 60;
-          const last = [...D.events].reverse().find((e) => e.ko);
-          D.finalStart = last && last.start != null ? last.start : k - 20; D.finalTarget = D.winner === 0 ? 1 : 0;
-        } else if (k >= limitK) {
-          timeUp = true; D.resultK = k; D.resultText = "TIME UP";
-          const p0 = F[0].hp / maxHp[0], p1 = F[1].hp / maxHp[1];
-          D.winner = Math.abs(p0 - p1) < 1e-9 ? -1 : p0 > p1 ? 0 : 1;
-          endK = k + 50;
-        }
-      }
-      if (endK >= 0 && k >= endK) { D.simLen = k; break; }
-      const over = D.ko >= 0 || timeUp;
-      // 雙方各自行動
-      for (const i of [0, 1]) {
-        const me = F[i], op = F[1 - i], f = D.f[i];
-        const dir = i === 0 ? 1 : -1;
-        if (me.pendingKb) {
-          me.pendingKb = false;
-          // 打斷：還沒放出去的攻擊（近戰還沒打到、投射物還沒射出）全部取消
-          for (let n = hits.length - 1; n >= 0; n--) if (hits[n].i === i && hits[n].rel > k) hits.splice(n, 1);
-          D.projs = D.projs.filter((p) => !(p.own === i && p.spawn > k));
-          D.sfxEv = D.sfxEv.filter((e) => !(e.side === i && e.kind !== "skill" && e.k > k));
-          const kb = f.clips.knockback;
-          if (kb) {
-            const dur = startAnim(i, kb, k, false);
-            me.busy = k + dur;
-            me.slide = { from: me.x, to: me.x - dir * (me.kbKo ? 90 : 30), k0: k, k1: k + Math.round(dur * 0.6) };
-          }
-          continue;
-        }
-        if (k < me.busy) continue;
-        if (me.dead || over) { if (!me.dead) { const idle = f.clips.idle || f.clips.attack; if (!me.cur || me.cur.anim !== idle) startAnim(i, idle, k, true); } continue; }
-        const tgt = nearestFoe(me, k);
-        if (!tgt) { const idle = f.clips.idle || f.clips.attack; if (!me.cur || me.cur.anim !== idle) startAnim(i, idle, k, true); continue; }
-        const gap = gapTo(me, tgt);
-        const range = st[i].rg;
-        if (gap > range + 0.5) {
-          const step = Math.min(st[i].mv / DFPS * D.speed, gap - range);
-          me.x += dir * step;
-          if (f.clips.move && (!me.cur || me.cur.anim !== f.clips.move)) startAnim(i, f.clips.move, k, true);
-          continue;
-        }
-        let action = "attack";
-        if (raw) {
-          if (k < me.nextAtk) { const idle = f.clips.idle || f.clips.attack; if (!me.cur || (me.cur.anim !== idle && k >= me.busy)) startAnim(i, idle, k, true); continue; }
-          for (const s of [0, 1]) {
-            const sk = st[i].sk[s];
-            if (sk && k >= me.skillCd[s] && rng() < (sk.r || 0) / 100) { action = s ? "skill2" : "skill1"; me.skillCd[s] = k + (sk.cd || 0) * DFPS; break; }
-          }
-          me.nextAtk = k + Math.max(0.2, st[i].ai) * DFPS / D.speed;
-        } else {
-          const m = queues[i][me.qi % queues[i].length]; me.qi++;
-          action = m.action; me.reps = m.repeat || 1;
-        }
-        const anim = f.clips[action] || f.clips.attack;
-        const dur = startAnim(i, anim, k, false);
-        me.busy = k + dur + (raw ? 0 : 4);
-        let hitAt = k + Math.round(dur * hitFrac(f, anim)), rel = hitAt;
-        const cfg = D.projOn && !supportFor(i, action) ? f.proj[{ attack: "n", skill1: "s1", skill2: "s2" }[action]] : null;
-        const drp = cfg && f.bul[cfg.p];
-        const flight = drp && pickAnim(drp.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
-        if (drp && flight) {
-          const finish = pickAnim(drp.part, ["finish", "hit", "end"]);
-          const ready = f.part.animations[anim.replace(/_all$/, "_ready")];
-          const spawn = k + Math.round(dur * (ready && anim.endsWith("_all") ? ready.frame_count / f.part.animations[anim].frame_count : 0.3));
-          const g = tgt.isMain ? D.f[tgt.side] : tgt.f;
-          if ((cfg.m === "LINEAR" || cfg.m === "CURVE") && cfg.v > 0 && cfg.e) {
-            const stp = { x: me.x + dir * (f.ox + cfg.x * 0.5), y: f.oy - cfg.y * 0.5 };
-            const en = { x: tgt.x, y: -g.h * (cfg.m === "CURVE" ? 0.05 : 0.3) };
-            const dist = Math.hypot(en.x - stp.x, en.y - stp.y);
-            const fl = Math.max(2, Math.round(dist / (cfg.v * 60) * DFPS / D.speed));
-            hitAt = spawn + fl; rel = spawn;
-            D.projs.push({ own: i, spawn, fl, st: stp, en, curve: cfg.m === "CURVE", face: dir, dr: drp, flight, finish, a0: cfg.a0, a1: cfg.a1, rot: !!cfg.r, loop: !!cfg.l, dist });
-          } else {
-            D.projs.push({ own: i, direct: true, spawn: hitAt, en: { x: tgt.x, y: -g.h * 0.45 }, face: dir, dr: drp, flight, finish });
-          }
-        }
-        hits.push({ k: Math.max(k + 1, hitAt), rel: Math.max(k + 1, rel), i, j: 1 - i, action, start: k, reps: me.reps || 1, tgt, ar: action === "attack" ? 0 : skillAr(f.r.id, raw ? st[i] : null, action, st[i].rg) });
-        if (action === "attack") D.sfxEv.push({ k: Math.max(k + 1, hitAt), side: i, kind: "attack" });
-        else {
-          D.sfxEv.push({ k, side: i, kind: "skill" });
-          if (!supportFor(i, action)) D.sfxEv.push({ k: Math.max(k + 1, hitAt), side: i, kind: "skillhit" }); // 輔助技能不打人，沒有命中聲
-        }
-      }
-      // 召喚物、複製體：跟本人同一套規則（看最近的敵方單位）
-      for (const so of D.summons) {
-        if (k < so.k0 || k >= so.k1) continue;
-        const i = so.side, dir = i === 0 ? 1 : -1, sf = so.f;
-        const tgt = D.ko < 0 && !timeUp && k >= so.busy ? nearestFoe(so, k) : null;
-        if (tgt) {
-          const gap = gapTo(so, tgt);
-          if (gap > so.st.rg + 0.5) {
-            so.x += dir * Math.min(so.st.mv / DFPS * D.speed, gap - so.st.rg);
-            if (sf.clips.move && (!so.cur || so.cur.anim !== sf.clips.move)) sumAnim(so, sf.clips.move, k, true);
-          } else if (k >= so.nextAtk && sf.clips.attack) {
-            // 一般召喚物只會普攻；複製體照對手的發動率與冷卻放技能
-            let action = "attack";
-            if (so.copy) for (const s of [0, 1]) {
-              const sk = so.st.sk[s], clip = sf.clips[s ? "skill2" : "skill1"];
-              if (sk && clip && k >= so.skillCd[s] && rng() < (sk.r || 0) / 100) { action = s ? "skill2" : "skill1"; so.skillCd[s] = k + (sk.cd || 0) * DFPS; break; }
-            }
-            const clip = sf.clips[action] || sf.clips.attack;
-            const dur = sumAnim(so, clip, k, false);
-            so.busy = k + dur;
-            const hk = k + Math.max(1, Math.round(dur * hitFrac(sf, clip)));
-            if (hk < so.k1) {
-              sumHits.push({ k: hk, s: so, start: k, action, tgt, ar: action === "attack" ? 0 : skillAr(so.src, so.st, action, so.st && so.st.rg) });
-              if (action === "attack") D.sfxEv.push({ k: hk, side: i, kind: "attack" });
-              else D.sfxEv.push({ k, side: i, kind: "skill" }, { k: hk, side: i, kind: "skillhit" });
-            }
-            so.nextAtk = k + Math.max(0.3, so.st.ai) * DFPS / D.speed;
-          } else if (so.cur && so.cur.anim === sf.clips.move) so.cur = null;
-        }
-        so.fr.push(sumFrame(so, k));
-      }
-      // 記錄這一幀兩人的姿勢與位置
-      for (const i of [0, 1]) {
-        const me = F[i], f = D.f[i];
-        if (me.slide) {
-          const s2 = me.slide;
-          me.x = k >= s2.k1 ? s2.to : s2.from + (s2.to - s2.from) * ((k - s2.k0) / Math.max(1, s2.k1 - s2.k0));
-          if (k >= s2.k1) me.slide = null;
-        }
-        let anim, idx, start = -1;
-        if (me.cur && (me.cur.loop || k < me.cur.start + me.cur.dur)) {
-          const n = f.part.animations[me.cur.anim].frame_count;
-          idx = Math.floor((k - me.cur.start) / DFPS * me.cur.rate);
-          idx = me.cur.loop ? idx % n : Math.min(n - 1, idx);
-          anim = me.cur.anim; start = me.cur.loop ? -1 : me.cur.start;
-        } else if (me.dead && f.clips.knockback) {
-          anim = f.clips.knockback; idx = f.part.animations[anim].frame_count - 1;
-        } else {
-          anim = f.clips.idle || f.clips.attack;
-          idx = Math.floor(k / DFPS * (f.part.anim_rate || 24)) % f.part.animations[anim].frame_count;
-        }
-        D.frames[i].push({ anim, idx, x: me.x, start });
-      }
-      D.simLen = k + 1;
-    }
-    buildReplay();
-    let X0 = Infinity, X1 = -Infinity;
-    D.frames.forEach((fr, i) => { const hw = D.f[i].w / 2; for (const s of fr) { X0 = Math.min(X0, s.x - hw); X1 = Math.max(X1, s.x + hw); } });
-    for (const so of D.summons) for (const s of so.fr) { X0 = Math.min(X0, s.x - so.f.w / 2); X1 = Math.max(X1, s.x + so.f.w / 2); }
-    const bodyH = Math.max(A.h, B.h, 60);
-    D.cam = { cx: (X0 + X1) / 2, w: (X1 - X0) * 1.1 + 40, h: bodyH * 2.0, bodyH };
-    const who = D.winner === 0 ? "左方" : D.winner === 1 ? "右方" : "";
-    $("duelTotal").textContent = `共 ${D.len} 幀・約 ${(D.len / DFPS).toFixed(1)} 秒・` + (D.resultText === "TIME UP" ? `時間到，${who ? who + "獲勝" : "平手"}` : D.winner === -1 ? "平手" : who + "獲勝");
-    $("dscrub").max = String(D.len - 1);
-    if (raw) renderCheat();
-  }
-
   /* 真距離／原始數值設定面板 */
-  function kindChip() { return D.kind === "real" ? (D.raw ? "raw" : "real") : "classic"; }
   function renderRealPanel() {
     const hasStats = !!(S.stats && Object.keys(S.stats).length);
-    const wantRaw = D.kind === "real" && D.raw;
-    const real = D.kind === "real";
-    document.querySelectorAll("#dKinds .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.kind === (wantRaw ? "raw" : kindChip()))));
+    const wantRaw = isRaw();
+    const real = isSim();
+    $("rRerunHint").textContent = rerunHint(D.type);
+    document.querySelectorAll("#dKinds .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.kind === D.type)));
     $("realBox").hidden = !real;
     $("realLbl").textContent = wantRaw ? "原始數值設定" : "真距離設定";
     $("classicHint").hidden = real;
-    $("rRerunHint").textContent = RERUN_HINT[wantRaw ? "raw" : real ? "real" : "classic"];
     $("rRawMissing").hidden = !(wantRaw && !hasStats);
-    const zero = [0, 1].filter((i) => D.f[i] && hasStats && real && D.raw && !(statAt((S.stats[D.f[i].r.id] || {}).hp, 1, 1) > 1)).map((i) => D.f[i].r.name);
+    const zero = [0, 1].filter((i) => D.f[i] && hasStats && wantRaw && !(statAt((S.stats[D.f[i].r.id] || {}).hp, 1, 1) > 1)).map((i) => D.f[i].r.name);
     $("rZeroWarn").hidden = !zero.length;
     $("rZeroWarn").textContent = zero.length ? `「${zero.join("」「")}」在資料庫裡沒有自己的體力數值（多半是召喚物或主角），原始數值對戰會一碰就倒。可以用金手指自己填數值。` : "";
     $("rawBox").hidden = !(wantRaw && hasStats);
-    $("rCompHint").hidden = !!D.raw;
-    $("movesBox").hidden = real && D.raw;
+    $("rCompHint").hidden = wantRaw;
+    $("movesBox").hidden = wantRaw;
     $("rTime").value = D.timeLimit;
     const hm = D.hpMul || 1;
     document.querySelectorAll("#rHpMul .chip").forEach((c) => c.setAttribute("aria-pressed", String(+c.dataset.hpmul === hm)));
@@ -4416,7 +4522,7 @@ footer a { color: inherit; }
       $(`rLvMax${i}`).textContent = `／${lim.max}`;
       $(`rName${i}`).textContent = D.f[i].r.name;
     }
-    if (real && D.raw) renderCheat();
+    if (wantRaw) renderCheat();
   }
   function renderCheat() {
     const box = $("cheatGrid"); if (!box || !D.f[0] || !D.f[1]) return;
@@ -4483,7 +4589,7 @@ footer a { color: inherit; }
       go.onclick = () => { if (+ni.value > 0) applyMult(i, +ni.value); };
       mult.append(ni, go); col.appendChild(mult);
       const reset = document.createElement("button"); reset.className = "btn small"; reset.textContent = "恢復資料庫數值";
-      reset.onclick = () => { D.cheat[i] = {}; D.range[i] = null; D.mvs[i] = null; realChanged(); };
+      reset.onclick = () => { D.cheat[i] = {}; D.range[i] = null; D.mvs[i] = null; realChanged(); }; // 只還原這一邊
       col.appendChild(reset);
       box.appendChild(col);
     }
@@ -4496,58 +4602,51 @@ footer a { color: inherit; }
   }
   function realChanged() { compileDuel(); saveDuel(); renderRealPanel(); }
   function setKind(kind) {
-    D.kind = kind === "classic" ? "classic" : "real";
-    D.raw = kind === "raw";
+    setDuelSetting("type", kind);
     realChanged(); renderMoves(); setDuelMode(D.mode, false);
   }
 
 
   document.querySelectorAll("#dKinds .chip").forEach((c) => (c.onclick = () => setKind(c.dataset.kind)));
   document.querySelectorAll("#rHpMul .chip").forEach((c) => (c.onclick = () => { D.hpMul = +c.dataset.hpmul; realChanged(); }));
-  $("rHpMulIn").onchange = () => { const v = +$("rHpMulIn").value; D.hpMul = v > 0 ? Math.min(100000, v) : 1; realChanged(); };
-  $("rTime").onchange = () => { D.timeLimit = Math.max(5, Math.min(600, +$("rTime").value || 60)); realChanged(); };
+  $("rHpMulIn").onchange = () => { setDuelSetting("hpMul", $("rHpMulIn").value); realChanged(); };
+  $("rTime").onchange = () => { setDuelSetting("timeLimit", $("rTime").value); realChanged(); };
   for (const i of [0, 1]) {
-    $(`rRange${i}`).onchange = () => { const v = $(`rRange${i}`).value; D.range[i] = v === "" ? null : Math.max(0, +v); realChanged(); };
-    $(`rMove${i}`).onchange = () => { const v = $(`rMove${i}`).value; D.mvs[i] = v === "" ? null : Math.max(1, Math.min(2000, +v)); realChanged(); };
+    $(`rRange${i}`).onchange = () => { setDuelSetting("range", $(`rRange${i}`).value, i); realChanged(); };
+    $(`rMove${i}`).onchange = () => { setDuelSetting("mvs", $(`rMove${i}`).value, i); realChanged(); };
     $(`rLv${i}`).onchange = () => {
       D.level[i] = Math.max(1, +$(`rLv${i}`).value || 1);
       if (D.cheat[i]) for (const k of STAT5) delete D.cheat[i][k]; // 換等級時，體力攻防改回依等級計算
       realChanged();
     };
   }
-  $("dSumCap").onchange = () => { D.sumCap = Math.max(1, Math.min(20, Math.round(+$("dSumCap").value || 3))); D.sumCapSet = true; $("dSumCap").value = D.sumCap; compileDuel(); saveDuel(); D.pos = 0; };
-  const pctIn = (id, key, lo) => ($(id).onchange = () => { const v = $(id).value.trim(); D[key] = v === "" || !isFinite(+v) ? null : Math.max(lo, Math.min(1000, +v)); $(id).value = D[key] ?? ""; compileDuel(); saveDuel(); D.pos = 0; });
-  pctIn("dSumAtk", "sumAtk", 0); pctIn("dSumHp", "sumHp", 1);
-  $("rRangeReset").onclick = () => { D.range = [null, null]; D.mvs = [null, null]; realChanged(); };
+  for (const [id, key] of [["dSumCap", "sumCap"], ["dSumAtk", "sumAtk"], ["dSumHp", "sumHp"]]) {
+    $(id).onchange = () => { setDuelSetting(key, $(id).value.trim()); syncDuelInputs(); realChanged(); };
+  }
+  $("rRangeReset").onclick = () => { D.range = settingDef(SETTING.range); D.mvs = settingDef(SETTING.mvs); realChanged(); };
   /* 對戰類型下方的兩顆按鈕：三種類型共用，依目前類型決定做什麼 */
-  const RERUN_HINT = {
-    classic: "重新對戰：招式編排類型不變，換一組傷害浮動；隨機對打會再抽一套招式順序。全部恢復預設：雙方距離 320、整體速度 1×。",
-    real: "重新對戰：招式編排類型不變，重抽發動率、爆擊、閃避等機率；隨機對打會再抽一套招式順序。全部恢復預設：攻擊距離、移動速度、時間上限、整體速度。",
-    raw: "重新對戰：重抽發動率、爆擊、閃避等機率。全部恢復預設：雙方等級、金手指、攻擊距離、移動速度、血量倍率、時間上限、整體速度。",
+  const RERUN_WHAT = {
+    classic: "招式編排類型不變，換一組傷害浮動；隨機對打會再抽一套招式順序",
+    real: "招式編排類型不變，重抽發動率、爆擊、閃避等機率；隨機對打會再抽一套招式順序",
+    raw: "重抽發動率、爆擊、閃避等機率",
   };
-  const kindNow = () => (D.kind === "real" ? (D.raw ? "raw" : "real") : "classic");
+  const rerunHint = (type) => `重新對戰：${RERUN_WHAT[type]}。全部恢復預設：${resetLabels(type)}。`;
+  // 全部恢復預設：還原哪些設定由設定表的 reset 決定
   $("rResetAll").onclick = () => {
-    const kind = kindNow();
-    D.speed = 1; $("dSpeed").value = 1; $("dSpeedOut").textContent = "1.00×";
-    if (kind === "classic") { D.dist = 320; $("dDist").value = 320; $("dDistOut").textContent = 320; }
-    else {
-      D.range = [null, null]; D.mvs = [null, null]; D.timeLimit = 60;
-      if (kind === "raw") { D.level = [null, null]; D.cheat = [{}, {}]; D.hpMul = 1; }
-    }
-    realChanged(); renderMoves();
-    $("dStatus").textContent = "已恢復預設：" + RERUN_HINT[kind].split("全部恢復預設：")[1];
+    resetDuelSettings(D.type);
+    syncDuelInputs(); realChanged(); renderMoves();
+    $("dStatus").textContent = `已恢復預設：${resetLabels(D.type)}。`;
   };
   $("rRerun").onclick = () => {
     // 原始數值不看招式編排；經典、真距離保留編排類型，隨機對打再抽一套順序，自定義與你來我往的招式不動
-    if (kindNow() !== "raw" && D.mode === "random") D.moves = presetRandomDuel();
-    D.seed = Math.floor(Math.random() * 100000);
+    if (!isRaw() && D.mode === "random") D.moves = presetRandomDuel();
+    D.seed = newSeed(100000);
     realChanged(); renderMoves();
   };
 
   /* ---------- 分享：網址帶上目前的角色、動作、對戰設定；太長時改用專案檔 ---------- */
   const URLP = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
   const URLD = {}; // 網址裡壓縮過的長資料（d=）：惡搞片段、自訂招式、金手指、攻擊距離、移動速度
-  let urlSyncOn = false;
   const URL_WARN = 2000;
   const b64u = {
     enc: (str) => btoa(unescape(encodeURIComponent(str))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""),
@@ -4606,20 +4705,8 @@ footer a { color: inherit; }
     const p = new URLSearchParams(), d = {};
     if (S.app === "duel" && D.f[0] && D.f[1]) {
       p.set("app", "duel"); p.set("l", D.f[0].r.id); p.set("r", D.f[1].r.id);
-      p.set("type", D.kind === "real" ? (D.raw ? "raw" : "real") : "classic");
-      p.set("m", D.mode || "trade");
-      p.set("s", String(D.seed || 1));
       if (D.mode !== "trade" && D.moves.length) d.mv = encMoves(D.moves);
-      if (D.kind === "real" && D.raw) {
-        if ((D.hpMul || 1) !== 1) p.set("hp", String(D.hpMul));
-        if (D.level[0] || D.level[1]) p.set("lv", D.level.map((x) => x || "").join(","));
-        if (hasCheat(D.cheat)) d.ch = D.cheat;
-      }
-      if (D.range[0] != null || D.range[1] != null) d.rg = D.range;
-      if (D.kind === "real" && (D.mvs[0] != null || D.mvs[1] != null)) d.ms = D.mvs;
-      if ((D.sumCap || 3) !== 3) d.sc = D.sumCap;
-      if (D.sumAtk != null) d.sa = D.sumAtk;
-      if (D.sumHp != null) d.sh = D.sumHp;
+      settingsToUrl(p, d); // 其他設定：見 js-10 的 DUEL_SETTINGS
     } else if (S.unit) {
       p.set("app", "single"); p.set("u", S.unit.id);
       const ck = currentClipKey(); if (ck) p.set("clip", ck);
@@ -4628,11 +4715,12 @@ footer a { color: inherit; }
     if (Object.keys(d).length) p.set("d", await packD(d));
     return location.origin + location.pathname + "?" + p.toString();
   }
-  let syncTimer = 0;
+  // 網址列跟著目前畫面更新（只更新、不新增瀏覽紀錄）；短時間內多次呼叫只做最後一次。
+  // 任何時候都可以直接呼叫：啟動完成前（S.urlSync.on 還是 false）會略過。
   function syncUrl() {
-    if (!urlSyncOn) return;
-    clearTimeout(syncTimer);
-    syncTimer = setTimeout(async () => { try { const u = await shareUrl(); history.replaceState(history.state, "", "?" + u.split("?")[1]); } catch {} }, 250);
+    if (!S.urlSync.on) return;
+    clearTimeout(S.urlSync.timer);
+    S.urlSync.timer = setTimeout(async () => { try { const u = await shareUrl(); history.replaceState(history.state, "", "?" + u.split("?")[1]); } catch {} }, 250);
   }
   let toastTimer = 0;
   function toast(msg) {
@@ -4641,13 +4729,23 @@ footer a { color: inherit; }
     t.textContent = msg; t.hidden = false;
     clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2400);
   }
-  // 專案檔：完整設定（含金手指、音效選擇），不含自己上傳的音效與背景
+  /* 專案檔：完整設定（含金手指、音效選擇），不含自己上傳的音效與背景。
+     格式有不相容的改變時把 PROJECT_VER 加 1，並在 migrateProject 補上舊版轉新版的步驟；
+     雙人設定的舊欄位（kind／raw、召喚上限 5）由 settingsFromSaved 處理，不用改版號。 */
+  const PROJECT_VER = 1;
+  function migrateProject(obj) {
+    if (!obj || obj.app !== "ranger-kichiku") throw new Error("這不是惡搞工坊的專案檔");
+    const ver = +obj.ver || 1;
+    if (ver > PROJECT_VER) throw new Error("這個專案檔是用較新版的網頁存的，請重新整理網頁後再開啟");
+    // 之後的版本：if (ver < 2) { …把 obj 改成第 2 版的格式… }
+    return obj;
+  }
+  // 雙人對戰的存檔（瀏覽器與專案檔共用同一個格式）：角色、招式＋設定表的全部設定
   function duelState() {
-    return { a: D.f[0]?.r.id, b: D.f[1]?.r.id, moves: D.moves, dist: D.dist, speed: D.speed, shake: D.shake, invert: D.invert, numbers: D.numbers, bars: D.bars, seed: D.seed, projOn: D.projOn, mode: D.mode, finale: D.finale, ground: D.ground,
-      kind: D.kind, raw: D.raw, timeLimit: D.timeLimit, hpMul: D.hpMul, range: D.range, mvs: D.mvs, level: D.level, cheat: D.cheat, sumCap: D.sumCap, sumCapSet: D.sumCapSet, sumAtk: D.sumAtk, sumHp: D.sumHp };
+    return { a: D.f[0]?.r.id, b: D.f[1]?.r.id, moves: D.moves, ...settingsToSaved() };
   }
   function projectData() {
-    const base = { app: "ranger-kichiku", ver: 1, saved: new Date().toISOString() };
+    const base = { app: "ranger-kichiku", ver: PROJECT_VER, saved: new Date().toISOString() };
     if (S.app === "duel" && D.f[0] && D.f[1]) return { ...base, type: "duel", title: `${D.f[0].r.name} vs ${D.f[1].r.name}`, duel: duelState(), dsize: store.get("dsize", "1280x720"), sfx: SFX.cfg.duel };
     return { ...base, type: "single", title: S.unit ? S.unit.name : "", single: { u: S.unit && S.unit.id, part: S.partKey, clip: currentClipKey(), anim: S.animName, mode: S.mode, segs: S.segs, comps: S.comps, speed: S.speed }, sfx: SFX.cfg.single };
   }
@@ -4661,7 +4759,7 @@ footer a { color: inherit; }
   async function openProject(file) {
     let obj;
     try { obj = JSON.parse(await file.text()); } catch { throw new Error("檔案不是正確的格式"); }
-    if (!obj || obj.app !== "ranger-kichiku") throw new Error("這不是惡搞工坊的專案檔");
+    obj = migrateProject(obj);
     const has = (id) => id && S.index.some((r) => r.id === id);
     if (obj.type === "duel" && obj.duel) {
       if (!has(obj.duel.a) || !has(obj.duel.b)) throw new Error("專案裡的角色在目前資料中找不到");
@@ -4692,7 +4790,7 @@ footer a { color: inherit; }
     const m = $("shareModal");
     syncUrl();
     $("shareWhat").textContent = S.app === "duel" && D.f[0] && D.f[1]
-      ? `${D.f[0].r.name} vs ${D.f[1].r.name}・${D.kind === "real" ? (D.raw ? "原始數值對戰" : "真距離對戰") : "經典對戰"}`
+      ? `${D.f[0].r.name} vs ${D.f[1].r.name}・${KINDS[D.type].label}`
       : `${S.unit ? S.unit.name : ""}・${S.mode === "remix" ? "惡搞剪輯" : "原始動作"}`;
     $("shareStatus").textContent = "";
     $("shareLink").value = "產生連結中…";
@@ -4731,7 +4829,7 @@ footer a { color: inherit; }
   }
   // 隨機挑角色：排除召喚物與沒有名字的資料
   function randomUnit(excludeId) {
-    const pool = S.index.filter((r) => r.name && r.name !== r.id && !/sk-/.test(r.id) && r.id !== excludeId && available(r.id));
+    const pool = S.index.filter((r) => r.name && r.name !== r.id && !/sk-/.test(r.id) && r.id !== excludeId);
     return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
   }
   document.querySelectorAll(".share-btn").forEach((b) => (b.onclick = openShare));
@@ -4774,9 +4872,9 @@ footer a { color: inherit; }
     lines.push(`瀏覽器：${ua}`);
     lines.push(`畫面：${innerWidth}×${innerHeight}，像素比 ${devicePixelRatio || 1}${matchMedia("(pointer: coarse)").matches ? "，觸控" : ""}`);
     const duel = S.app === "duel";
-    const kind = duel ? (D.kind === "real" ? (D.raw ? "原始數值對戰" : "真距離對戰") : "經典對戰") : (S.mode === "remix" ? "惡搞" : "原始");
+    const kind = duel ? KINDS[D.type].label : (S.mode === "remix" ? "惡搞" : "原始");
     lines.push(`模式：${duel ? "雙人對戰・" + kind : "單人・" + kind}${duel && D.f[0] && D.f[1] ? `（${D.f[0].r.id} vs ${D.f[1].r.id}）` : S.unit ? `（${S.unit.id}・${S.animName || ""}）` : ""}`);
-    const c = duel ? dcv : cv, fps = duel ? DFPS : 30;
+    const c = duel ? dcv : cv, fps = duel ? FPS : 30;
     let rec = "不支援錄影";
     try {
       const sup = await offlineSupport(c.width, c.height, fps);
@@ -4795,7 +4893,7 @@ footer a { color: inherit; }
   window.__rk = Object.freeze({
     version: APP_VERSION,
     single: () => ({ unit: S.unit && S.unit.id, anim: S.animName, mode: S.mode, segs: S.segs.length, timeline: S.timeline.length, histAt: H.at, histLen: H.list.length, playing: S.playing, ready: !!(S.part && S.atlas) && $("overlay").hidden }),
-    duel: () => ({ inited: !!D.inited, a: D.f[0] && D.f[0].r.id, b: D.f[1] && D.f[1].r.id, kind: D.kind === "real" ? (D.raw ? "raw" : "real") : "classic", mode: D.mode, seed: D.seed,
+    duel: () => ({ inited: !!D.inited, a: D.f[0] && D.f[0].r.id, b: D.f[1] && D.f[1].r.id, kind: D.type, mode: D.mode, seed: D.seed, settings: settingsToSaved(),
       state: D.cd != null ? "countdown" : D.playing ? "playing" : D.idle ? (D.pos > 0 ? "ended" : "idle") : "paused", pos: Math.floor(D.pos || 0),
       sysSfx: duelSfxList().filter((e) => e.sys).map((e) => e.sys + "@" + e.k).join(","), ko: D.ko,
       moves: (D.moves || []).map((m) => m.who + ":" + m.action + (m.repeat > 1 ? "x" + m.repeat : "")).join(","), len: D.len, result: D.resultText, winner: D.winner,
@@ -4865,9 +4963,9 @@ footer a { color: inherit; }
     const want = store.get("unit", DEFAULT_UNIT);
     const pend = store.get("pendingSingle", null); store.set("pendingSingle", null);
     const urlApp = URLP.get("app");
-    const urlUnit = urlApp === "single" && URLP.get("u") ? S.index.find((x) => x.id === URLP.get("u") && available(x.id)) : null;
+    const urlUnit = urlApp === "single" && URLP.get("u") ? S.index.find((x) => x.id === URLP.get("u")) : null;
     const urlClip = urlUnit && CLIPS.some((c) => c.key === URLP.get("clip")) ? URLP.get("clip") : null;
-    let r = urlUnit || S.index.find((x) => x.id === want && available(x.id)) || S.index.find((x) => x.id === DEFAULT_UNIT && available(x.id)) || S.index.find((x) => available(x.id));
+    let r = urlUnit || S.index.find((x) => x.id === want) || S.index.find((x) => x.id === DEFAULT_UNIT) || S.index[0];
     $("q").value = r ? (urlUnit ? r.name : r.name.includes("風之痕") ? "風之痕" : r.name) : "";
     renderResults($("q").value);
     const pendOk = pend && !urlApp && r && r.id === want;
@@ -4891,7 +4989,7 @@ footer a { color: inherit; }
     }
     if (S.part) histReset(); // 分享連結或專案檔還原的狀態當作起點
     setApp(urlApp === "duel" || urlApp === "single" ? urlApp : store.get("app", "single"));
-    urlSyncOn = true; syncUrl();
+    S.urlSync.on = true; syncUrl();
     const pt = store.get("pendingToast", null);
     if (pt) { store.set("pendingToast", null); setTimeout(() => toast(pt), 600); }
     requestAnimationFrame(loop);

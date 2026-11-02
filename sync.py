@@ -360,8 +360,13 @@ def _num(v, default=0.0):
     return float(m.group()) if m else default
 
 
+# 手動對應表（sync_overrides.json）：資料命名規則對不上的地方，改這個檔就好，不用改程式
+OVERRIDES = load_json(ROOT / "sync_overrides.json", None)
+if OVERRIDES is None:
+    print("⚠️ 找不到 sync_overrides.json，召喚物系列對應會用不到（女僕兔兔、阿努比斯熊大系列會改用自己的召喚動畫）", flush=True)
+    OVERRIDES = {}
 # 召喚物動畫的固定對應：整個系列都召喚同一隻（不照名稱規則）
-SUMMON_SERIES = {"1501": "u1501sk-cony", "1502": "u1501sk-cony", "1241": "u1241sk-brown", "1242": "u1241sk-brown"}
+SUMMON_SERIES = {k: v for k, v in OVERRIDES.get("summon_series", {}).items() if not k.startswith("_")}
 
 
 def summon_anim_id(uid: str) -> str:

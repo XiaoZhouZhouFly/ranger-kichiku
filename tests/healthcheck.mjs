@@ -305,6 +305,37 @@ await test("重新對戰與全部恢復預設（三種類型）", async (open) =
   return out.join("、");
 });
 
+await test("雙人設定：分享連結、存檔、舊格式", async (open) => {
+  const p = await open();
+  const get = (pg) => pg.evaluate(() => { const d = window.__rk.duel(); return { len: d.len, result: d.result, dealt: d.dealt.join(","), st: d.settings }; });
+  const reopen = async (url) => { const q = await p.context().newPage(); await q.goto(url); await waitDuel(q); const r = await get(q); await q.close(); return r; };
+  // 1. 會影響結果的設定都要跟著分享連結走（v4.14 之前速度、投射物、重播、距離、時間上限會漏掉）
+  await p.goto(BASE + "?app=duel&type=real&l=x001-cube&r=x002-orb&s=9"); await waitDuel(p);
+  await p.evaluate(() => { const e = document.getElementById("dSpeed"); e.value = "1.5"; e.dispatchEvent(new Event("input", { bubbles: true })); });
+  await p.click("#dProj"); await p.click("#dFinale");
+  await p.fill("#rTime", "8"); await p.locator("#rTime").dispatchEvent("change"); await p.waitForTimeout(500);
+  const a = await get(p), url = await p.evaluate(() => location.href);
+  check(a.st.speed === 1.5 && a.st.projOn === false && a.st.finale === false && a.st.timeLimit === 8, `設定沒有生效：${JSON.stringify(a.st)}`);
+  const b = await reopen(url);
+  check(b.len === a.len && b.dealt === a.dealt && b.result === a.result, `分享連結打開的結果不同：${JSON.stringify([a, b].map((x) => [x.len, x.result, x.dealt]))}`);
+  // 經典對戰的雙方距離
+  await p.goto(BASE + "?app=duel&type=classic&l=x001-cube&r=x002-orb&s=2"); await waitDuel(p);
+  await p.evaluate(() => { const e = document.getElementById("dDist"); e.value = "560"; e.dispatchEvent(new Event("input", { bubbles: true })); }); await p.waitForTimeout(500);
+  const c = await get(p), d = await reopen(await p.evaluate(() => location.href));
+  check(d.st.dist === 560 && d.len === c.len, `經典對戰的距離沒有跟著連結：${d.st.dist}`);
+  // 2. 連結沒寫的設定用預設值，不能沿用開的人自己存的設定
+  await p.goto(BASE + "?app=duel&type=raw&l=x001-cube&r=x002-orb&s=4"); await waitDuel(p);
+  await p.click("[data-hpmul='5']"); await p.waitForTimeout(400);
+  const e = await reopen(BASE + "?app=duel&type=raw&l=x001-cube&r=x002-orb&s=4");
+  check(e.st.hpMul === 1, `連結沒有血量倍率，卻沿用了自己存的 ×${e.st.hpMul}`);
+  // 3. 舊版存檔（kind＋raw、召喚上限 5）能正確轉換
+  await p.evaluate(() => localStorage.setItem("rk_duel", JSON.stringify({ a: "x001-cube", b: "x002-orb", kind: "real", raw: true, sumCap: 5, hpMul: 3, seed: 7 })));
+  await p.goto(BASE + "?app=duel"); await waitDuel(p);
+  const f = await get(p);
+  check(f.st.type === "raw" && f.st.sumCap === 3 && f.st.hpMul === 3 && f.st.seed === 7, `舊版存檔轉換錯誤：${JSON.stringify(f.st)}`);
+  return `連結還原 ${a.len} 格、距離 ${d.st.dist}、舊存檔 → ${f.st.type}`;
+});
+
 await test("雙人播放：不自動播放、3 2 1 倒數、播完停住", async (open) => {
   const p = await open(); await p.goto(BASE + "?app=duel&type=raw&l=x001-cube&r=x002-orb&s=3"); await waitDuel(p);
   const st = () => p.evaluate(() => window.__rk.duel());
