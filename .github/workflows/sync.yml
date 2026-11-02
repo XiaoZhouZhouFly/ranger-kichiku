@@ -58,7 +58,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: tests
+          sparse-checkout: |
+            tests
+            src
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 檢查 index.html 是不是由 src/ 產生（忘了一起上傳時會在這裡擋下）
+        run: python build.py --check
       - name: 取得即將發布的網站
         uses: actions/download-artifact@v4
         with:
