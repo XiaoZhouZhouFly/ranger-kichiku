@@ -71,7 +71,7 @@ jobs:
       - name: 安裝測試用瀏覽器
         working-directory: tests
         run: |
-          npm install --no-save --no-audit --no-fund playwright@1.49.1
+          npm install --no-save --no-audit --no-fund playwright@1.63.0
           npx playwright install --with-deps chromium
       - name: 自動健檢
         run: node tests/healthcheck.mjs _site
