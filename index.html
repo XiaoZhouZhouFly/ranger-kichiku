@@ -512,7 +512,7 @@ footer a { color: inherit; }
                 </div>
                 <p class="hint">雙方最大體力一起乘上倍率（金手指改過的體力也會再乘），戰鬥會拉長，普攻、防禦、爆擊、閃避更有影響。打到時間上限就比剩餘血量 %。</p>
               </div>
-              <div class="row"><button class="btn small primary" id="rRerun">重新對戰（重抽機率）</button></div>
+              <div class="row"><button class="btn small primary" id="rRerun">重新對戰（重抽機率）</button><button class="btn small" id="rResetAll">↺ 全部恢復預設</button></div>
               <details class="more" id="cheatBox"><summary>金手指（直接改數值）</summary><div class="cheat-grid" id="cheatGrid"></div></details>
             </div>
           </div>
@@ -2112,7 +2112,7 @@ footer a { color: inherit; }
     if (!isFinite(x0)) return { x0: -40, x1: 40, y0: -100, y1: 0 };
     return { x0, x1, y0, y1 };
   }
-  function drawFighter(f, anim, idx, x, faceLeft, flash) {
+  function drawFighter(f, anim, idx, x, faceLeft, flash, mul = 1) {
     const a = f.part.animations[anim];
     if (!a) return;
     const frame = a.frames[Math.max(0, Math.min(a.frames.length - 1, idx))];
@@ -2124,7 +2124,7 @@ footer a { color: inherit; }
       const img = fSprite(f, t.name);
       if (!img) continue;
       dctx.save();
-      dctx.globalAlpha = Math.min(1, t.alpha);
+      dctx.globalAlpha = Math.min(1, t.alpha) * mul;
       dctx.transform(t.A, t.D, t.B, t.E, t.C, t.F);
       dctx.drawImage(img, 0, 0);
       if (flash) { dctx.globalCompositeOperation = "lighter"; dctx.globalAlpha = Math.min(1, t.alpha) * 0.7; dctx.drawImage(img, 0, 0); }
@@ -2192,6 +2192,52 @@ footer a { color: inherit; }
     D.simLen = D.len;
     buildReplay();
   }
+  // 召喚：技能資料有召喚物，而且召喚物的動畫已經載入
+  function summonInfo(i, action) {
+    if (action !== "skill1" && action !== "skill2") return null;
+    const f = D.f[i], st = f && S.stats[f.r.id], sk = st && st.sk && st.sk[action === "skill1" ? 0 : 1];
+    const sm = sk && sk.sum;
+    return sm && D.sumF && D.sumF[sm.id] ? sm : null;
+  }
+  async function loadSummons(i) {
+    const f = D.f[i], st = f && S.stats[f.r.id];
+    if (!st || !st.sk) return;
+    D.sumF = D.sumF || {};
+    for (const sk of st.sk) {
+      const sm = sk && sk.sum;
+      if (!sm || D.sumF[sm.id]) continue;
+      const r = S.index.find((x) => x.id === sm.id) || { id: sm.id, name: sm.id };
+      try { D.sumF[sm.id] = await loadFighter(r); } catch {}
+    }
+  }
+  function summonLevel(sm, L) {
+    const v = sm.lv ? +sm.lv[1] || 0 : 0;
+    if (!sm.lv) return L;
+    return Math.max(1, Math.round(sm.lv[0] === "fix" ? v : sm.lv[0] === "mul" ? L * v : L + v));
+  }
+  function summonStats(id, lv) {
+    const st = S.stats[id] || {}, lim = levelLimits(st.s || "1星");
+    const L = Math.max(1, Math.min(lim.max, Math.round(lv)));
+    const o = { level: L };
+    for (const k of STAT5) o[k] = Math.round(statAt(st[k], L, lim.cap));
+    Object.assign(o, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, hit: st.hit || 0, rg: st.rg || 100, mv: st.mv || 100 });
+    return o;
+  }
+  // 召喚物的動作：回傳這一幀要畫的動畫與幀號
+  function sumAnim(s, anim, k, loop) {
+    const rate = (s.f.part.anim_rate || 24) * D.speed;
+    const dur = Math.max(1, Math.round(s.f.part.animations[anim].frame_count / rate * DFPS));
+    s.cur = { anim, start: k, rate, loop, dur };
+    return dur;
+  }
+  function sumFrame(s, k) {
+    const idle = s.f.clips.idle || s.f.clips.attack;
+    if (!s.cur || (!s.cur.loop && k >= s.cur.start + s.cur.dur)) sumAnim(s, idle, k, true);
+    const n = s.f.part.animations[s.cur.anim].frame_count;
+    let idx = Math.floor((k - s.cur.start) / DFPS * s.cur.rate);
+    idx = s.cur.loop ? idx % n : Math.min(n - 1, idx);
+    return { anim: s.cur.anim, idx, x: s.x };
+  }
   // 真距離／原始數值對戰用。純輔助技能：資料庫裡這招沒有任何傷害倍率（例如只有攻擊力提升、無敵、回血）。
   // 沒有數值資料時無法判斷，當作攻擊技能。
   function isSupport(i, action) {
@@ -2203,7 +2249,7 @@ footer a { color: inherit; }
   }
   function compileOnce() {
     const [A, B] = D.f;
-    D.tracks = [[], []]; D.events = []; D.projs = []; D.len = 30; D.sfxEv = [];
+    D.tracks = [[], []]; D.events = []; D.projs = []; D.len = 30; D.sfxEv = []; D.summons = [];
     if (!A || !B) return;
     const pos = [-D.dist / 2, D.dist / 2];
     D.posKeys = [[{ k: 0, x: pos[0] }], [{ k: 0, x: pos[1] }]];
@@ -2259,6 +2305,21 @@ footer a { color: inherit; }
             D.projs.push({ direct: true, spawn: hitAt, en: { x: pos[j], y: -g.h * 0.45 }, face, dr, flight, finish });
           }
         }
+        // 召喚技能：召喚物在技能命中時出現在身旁，揮一次攻擊（經典對戰只做畫面）
+        const smc = summonInfo(i, m.action);
+        if (smc) {
+          const sf = D.sumF[smc.id], so = { side: i, f: sf, x: pos[i] + dir * (f.w * 0.5 + sf.w * 0.3), k0: hitAt, k1: 0, fr: [] };
+          const atkA = sf.clips.attack || sf.clips.idle, idleA = sf.clips.idle || atkA;
+          if (atkA) {
+            const fa = framesFor(sf, atkA, 1); 
+            for (let t = 0; t < fa.dur; t++) so.fr.push({ anim: atkA, idx: Math.min(sf.part.animations[atkA].frame_count - 1, Math.floor(t / DFPS * fa.rate)), x: so.x });
+            const fi = framesFor(sf, idleA, 1);
+            for (let t = 0; t < 24; t++) so.fr.push({ anim: idleA, idx: Math.floor(t / DFPS * fi.rate) % sf.part.animations[idleA].frame_count, x: so.x });
+            so.k1 = hitAt + so.fr.length;
+            D.summons.push(so);
+            D.sfxEv.push({ k: hitAt + Math.round(fa.dur * hitFrac(sf, atkA)), side: i, kind: "attack" });
+          }
+        }
         if (m.action === "attack") D.sfxEv.push({ k: hitAt, side: i, kind: "attack" });
         else D.sfxEv.push({ k, side: i, kind: "skill" }, { k: hitAt, side: i, kind: "skillhit" });
         const dmg = Math.max(1, Math.round((DMG[m.action] || 8) * (0.75 + rnd(mi * 10 + r) * 0.5) / (reps > 1 ? 1.6 : 1)));
@@ -2286,6 +2347,7 @@ footer a { color: inherit; }
       const hw = D.f[i].w / 2;
       for (const p of keys) { X0 = Math.min(X0, p.x - hw); X1 = Math.max(X1, p.x + hw); }
     });
+    for (const so of D.summons) { X0 = Math.min(X0, so.x - so.f.w / 2); X1 = Math.max(X1, so.x + so.f.w / 2); }
     const bodyH = Math.max(A.h, B.h, 60);
     D.cam = { cx: (X0 + X1) / 2, w: (X1 - X0) * 1.15 + 40, h: bodyH * 2.0, bodyH };
     $("duelTotal").textContent = `共 ${D.len} 幀・約 ${(D.len / DFPS).toFixed(1)} 秒${ko >= 0 ? "・" + (D.events.find((e) => e.ko).target === 0 ? "右方" : "左方") + "獲勝" : ""}`;
@@ -2360,6 +2422,20 @@ footer a { color: inherit; }
     const st = [stateAt(0, k), stateAt(1, k)];
     const order = st[0].start > st[1].start ? [1, 0] : [0, 1];
     for (const i of order) drawFighter(D.f[i], st[i].anim, st[i].idx, posAt(i, k), i === 1, flashT[i]);
+    // 召喚物：出場時淡入加一圈光環，離場時淡出
+    for (const so of D.summons || []) {
+      const rel = k - so.k0, last = so.fr.length - 1;
+      if (rel < 0 || last < 0) continue;
+      const fade = rel > last ? 1 - (rel - last) / 10 : rel < 6 ? (rel + 1) / 6 : 1;
+      if (fade <= 0) continue;
+      const fr = so.fr[Math.min(last, rel)];
+      drawFighter(so.f, fr.anim, fr.idx, fr.x, so.side === 1, false, fade);
+      if (rel < 14) {
+        const rr = 26 + rel * 9;
+        c.save(); c.globalAlpha = 1 - rel / 14; c.strokeStyle = so.side ? "#2f7cff" : "#ff3d7f"; c.lineWidth = 6 / sc;
+        c.beginPath(); c.ellipse(so.fr[0].x, 0, rr, rr * 0.28, 0, 0, Math.PI * 2); c.stroke(); c.restore();
+      }
+    }
     for (const p of D.projs) {
       const age = k - p.spawn;
       if (age < 0) continue;
@@ -2541,7 +2617,7 @@ footer a { color: inherit; }
   function actionLabel(i, a) {
     const f = D.f[i]; if (!f) return ACTION_LABEL[a];
     const sk = a === "skill1" ? f.skills[0] : a === "skill2" ? f.skills[1] : null;
-    return ACTION_LABEL[a] + (sk ? "・" + sk.name : "") + (D.kind === "real" && isSupport(i, a) ? "（輔助）" : "");
+    return ACTION_LABEL[a] + (sk ? "・" + sk.name : "") + (summonInfo(i, a) ? "（召喚）" : D.kind === "real" && isSupport(i, a) ? "（輔助）" : "");
   }
   function renderMoves() {
     const box = $("moves"); box.textContent = "";
@@ -2605,6 +2681,7 @@ footer a { color: inherit; }
     $("doverlay").hidden = false; $("doverlay").textContent = `載入 ${r.name} …`;
     try {
       D.f[i] = await loadFighter(r);
+      await loadSummons(i);
       D.range[i] = null; D.level[i] = null; D.cheat[i] = {};
       fighterPanel(i);
       if (!keepMoves || D.mode !== "custom") D.moves = D.mode === "random" ? presetRandomDuel() : presetTrade();
@@ -2821,6 +2898,7 @@ footer a { color: inherit; }
       // 輔助技能填了倍率，就當作有單次傷害
       if (!base.e.length && o.c && +o.c[0] > 0) e.push({ t: "hit", c: +o.c[0] / 100, b: "atk", d: 0 });
       return {
+        sum: base.sum,
         r: o.r !== undefined && o.r !== "" && isFinite(+o.r) ? +o.r : base.r,
         cd: o.cd !== undefined && o.cd !== "" && isFinite(+o.cd) ? +o.cd : base.cd,
         e,
@@ -2842,7 +2920,7 @@ footer a { color: inherit; }
 
   function compileReal() {
     const [A, B] = D.f;
-    D.frames = [[], []]; D.events = []; D.projs = []; D.tracks = [[], []]; D.sfxEv = [];
+    D.frames = [[], []]; D.events = []; D.projs = []; D.tracks = [[], []]; D.sfxEv = []; D.summons = [];
     D.ko = -1; D.resultK = -1; D.resultText = ""; D.timeMap = null;
     if (!A || !B) return;
     const rng = mulberry32(D.seed * 7919 + 13);
@@ -2890,6 +2968,38 @@ footer a { color: inherit; }
       const sk = st[i].sk[action === "skill1" ? 0 : 1];
       return !sk || !sk.e.length;
     };
+    const sumHits = [];
+    const spawnSummon = (i, sm, k) => {
+      const sf = D.sumF[sm.id]; if (!sf) return;
+      const dir = i === 0 ? 1 : -1;
+      const L = raw ? st[i].level : levelLimits((S.stats[D.f[i].r.id] || {}).s || D.f[i].r.star).max;
+      const lv = summonLevel(sm, L);
+      const sec = sm.dur ? (sm.dur[0] === "mul" ? L * (+sm.dur[1] || 0) : +sm.dur[1] || 10) : 10;
+      const mine = D.summons.filter((x) => x.side === i && x.k1 > k);
+      if (mine.length >= 3) mine[0].k1 = k; // 同一邊最多 3 隻，最舊的先離場
+      const ss = summonStats(sm.id, lv);
+      D.summons.push({ side: i, f: sf, x: F[i].x + dir * (D.f[i].w * 0.5 + sf.w * 0.3), k0: k, k1: k + Math.max(1, Math.round(sec * DFPS)), st: ss, nextAtk: k + 8, busy: 0, cur: null, fr: [] });
+      pushEvent({ k, target: i, attacker: i, dmg: 0, label: raw ? `召喚！Lv${ss.level}` : "召喚！", fx: "buff", noFx: true });
+    };
+    const applySummonHit = (h, k) => {
+      const so = h.s, i = so.side, j = 1 - i, t = F[j];
+      if (t.dead) return;
+      let dmg, label, crit = false;
+      if (raw) {
+        const stt = st[j];
+        if (rng() < Math.max(0, stt.dg - so.st.hit) / 100) { pushEvent({ k, target: j, attacker: i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
+        crit = rng() < so.st.cr / 100;
+        dmg = Math.max(1, (Math.max(0, so.st.pa - stt.pd) + Math.max(0, so.st.ma - stt.md)) * (crit ? so.st.cd / 100 : 1));
+        label = (crit ? "爆擊 " : "") + "-" + Math.round(dmg).toLocaleString();
+      } else {
+        dmg = (DMG.attack || 15) * (0.75 + rng() * 0.5);
+        label = `-${Math.round(dmg * 123)}`;
+      }
+      const before = t.hp;
+      t.hp = Math.max(0, t.hp - dmg);
+      checkKb(j, before);
+      pushEvent({ k, target: j, attacker: i, dmg, label, crit, ko: t.hp <= 0, start: h.start });
+    };
     const pushEvent = (e) => { e.hp = [F[0].hp, F[1].hp]; D.events.push(e); };
 
     const applyHit = (h, k) => {
@@ -2897,6 +3007,9 @@ footer a { color: inherit; }
       if (t.dead) return;
       const sa = st[h.i], stt = st[h.j];
       let dmg = 0, label = "", crit = false;
+      const smr = h.action !== "attack" ? summonInfo(h.i, h.action) : null;
+      if (smr) spawnSummon(h.i, smr, k);
+      if (smr && supportFor(h.i, h.action)) return; // 純召喚技能：只召喚，不另外強化或回血
       if (h.action !== "attack" && supportFor(h.i, h.action)) {
         // 純輔助技能：不打對手、不會被閃避。一半機率下一擊 +50%，一半機率回復 20% 體力
         if (rng() < 0.5) { a.buff = true; pushEvent({ k, target: h.i, attacker: h.i, dmg: 0, label: "下一擊 +50%", fx: "buff", noFx: true }); }
@@ -2939,6 +3052,7 @@ footer a { color: inherit; }
     for (let k = 0; k < maxK; k++) {
       // 命中與持續傷害
       for (let n = hits.length - 1; n >= 0; n--) if (hits[n].k === k) { const h = hits.splice(n, 1)[0]; if (D.ko < 0 || h.k === D.ko) applyHit(h, k); }
+      for (let n = sumHits.length - 1; n >= 0; n--) if (sumHits[n].k === k) { const h = sumHits.splice(n, 1)[0]; if (D.ko < 0 && h.s.k1 > k) applySummonHit(h, k); }
       for (const j of [0, 1]) {
         const t = F[j];
         for (const d of t.dots) {
@@ -3040,6 +3154,25 @@ footer a { color: inherit; }
           if (!supportFor(i, action)) D.sfxEv.push({ k: Math.max(k + 1, hitAt), side: i, kind: "skillhit" }); // 輔助技能不打人，沒有命中聲
         }
       }
+      // 召喚物：走到自己的射程、照攻速普攻對手；對手不會打召喚物
+      for (const so of D.summons) {
+        if (k < so.k0 || k >= so.k1) continue;
+        const i = so.side, op = F[1 - i], dir = i === 0 ? 1 : -1, sf = so.f;
+        if (D.ko < 0 && !timeUp && k >= so.busy) {
+          const gap = Math.abs(op.x - so.x) - (sf.w + D.f[1 - i].w) / 2;
+          if (gap > so.st.rg + 0.5) {
+            so.x += dir * Math.min(so.st.mv / DFPS * D.speed, gap - so.st.rg);
+            if (sf.clips.move && (!so.cur || so.cur.anim !== sf.clips.move)) sumAnim(so, sf.clips.move, k, true);
+          } else if (k >= so.nextAtk && sf.clips.attack) {
+            const dur = sumAnim(so, sf.clips.attack, k, false);
+            so.busy = k + dur;
+            const hk = k + Math.max(1, Math.round(dur * hitFrac(sf, sf.clips.attack)));
+            if (hk < so.k1) { sumHits.push({ k: hk, s: so, start: k }); D.sfxEv.push({ k: hk, side: i, kind: "attack" }); }
+            so.nextAtk = k + Math.max(0.3, so.st.ai) * DFPS / D.speed;
+          } else if (so.cur && so.cur.anim === sf.clips.move) so.cur = null;
+        }
+        so.fr.push(sumFrame(so, k));
+      }
       // 記錄這一幀兩人的姿勢與位置
       for (const i of [0, 1]) {
         const me = F[i], f = D.f[i];
@@ -3067,6 +3200,7 @@ footer a { color: inherit; }
     buildReplay();
     let X0 = Infinity, X1 = -Infinity;
     D.frames.forEach((fr, i) => { const hw = D.f[i].w / 2; for (const s of fr) { X0 = Math.min(X0, s.x - hw); X1 = Math.max(X1, s.x + hw); } });
+    for (const so of D.summons) for (const s of so.fr) { X0 = Math.min(X0, s.x - so.f.w / 2); X1 = Math.max(X1, s.x + so.f.w / 2); }
     const bodyH = Math.max(A.h, B.h, 60);
     D.cam = { cx: (X0 + X1) / 2, w: (X1 - X0) * 1.1 + 40, h: bodyH * 2.0, bodyH };
     const who = D.winner === 0 ? "左方" : D.winner === 1 ? "右方" : "";
@@ -3204,6 +3338,13 @@ footer a { color: inherit; }
     };
   }
   $("rRangeReset").onclick = () => { D.range = [null, null]; realChanged(); };
+  // 一鍵回到資料庫預設：雙方等級、金手指（含技能）、攻擊距離、血量倍率、時間上限
+  $("rResetAll").onclick = () => {
+    D.level = [null, null]; D.cheat = [{}, {}]; D.range = [null, null];
+    D.hpMul = 1; D.timeLimit = 60;
+    realChanged();
+    $("dStatus").textContent = "已恢復資料庫預設數值。";
+  };
   $("rRerun").onclick = () => { D.seed = Math.floor(Math.random() * 100000); realChanged(); D.playing = true; };
 
   /* ---------- 啟動 ---------- */

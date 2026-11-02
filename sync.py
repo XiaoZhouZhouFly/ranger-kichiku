@@ -33,6 +33,7 @@ from pathlib import Path
 RES_REPO = "https://github.com/mti0224/rangerbook_res.git"
 INDEX_URL = "https://raw.githubusercontent.com/mti0224/rangerbook/main/res/Ranger_index.json"
 RANGERS_DATA_URL = "https://raw.githubusercontent.com/mti0224/rangerbook/main/res/Rangers_data.json"
+RANGERS_V2_URL = "https://raw.githubusercontent.com/mti0224/rangerbook/main/res/v2/rangers.json"
 PROJECTILE_URL = "https://raw.githubusercontent.com/mti0224/rangerbook/main/res/projectile_data.json"
 
 ROOT = Path(__file__).resolve().parent
@@ -359,7 +360,43 @@ def _num(v, default=0.0):
     return float(m.group()) if m else default
 
 
-def sync_stats(rows) -> None:
+def fetch_summons() -> dict:
+    """召喚技能：召喚物是誰、幾等、存在幾秒（新版資料才有等級公式）。"""
+    try:
+        with urllib.request.urlopen(RANGERS_V2_URL, timeout=300) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:  # noqa: BLE001
+        log(f"⚠ 讀不到新版角色資料，召喚物先略過：{e}")
+        return {}
+    out = {}
+    for r in data.get("rangers") or []:
+        uid = r.get("rangerCode") or ""
+        m = re.match(r"u(\d+)([a-z]?)-(.+)$", uid)
+        if not m:
+            continue
+        evo = m.group(2)
+        sid = f"u{m.group(1)}{'' if evo in ('', 'e') else evo}sk-{m.group(3)}"
+        for si, sk in enumerate(r.get("skillSet") or []):
+            for e in sk.get("effects") or []:
+                if e.get("effectCode") != "SKILLEFF_SUMMON":
+                    continue
+                mg, du = e.get("magnitude") or {}, e.get("duration") or {}
+                lv = None
+                if mg.get("kind") == "gradeValue":
+                    lv = ["fix", mg.get("value")]
+                elif mg.get("kind") == "levelFormula":
+                    lv = ["mul" if mg.get("operator") == "MULTIPLY" else "add", mg.get("amount")]
+                if du.get("seconds") is not None:
+                    dur = ["fix", du.get("seconds")]
+                elif du.get("kind") == "levelFormula":
+                    dur = ["mul", du.get("amount")]
+                else:
+                    dur = None
+                out[(uid, si)] = {"id": sid, "lv": lv, "dur": dur}
+    return out
+
+
+def sync_stats(rows, summons=None) -> None:
     """真實力對戰用的原始數值：等級成長、爆擊閃避、攻速移速、技能倍率。"""
     if not rows:
         return
@@ -406,7 +443,15 @@ def sync_stats(rows) -> None:
                     "b": "hp" if coef.startswith("體力") else "atk",
                     "d": _num(e.get("有效時間")),
                 })
-            skills.append({"r": _num(sk.get("發動機率")), "cd": _num(sk.get("技能冷卻時間")), "e": effects})
+            entry = {"r": _num(sk.get("發動機率")), "cd": _num(sk.get("技能冷卻時間")), "e": effects}
+            si = len(skills)
+            sm = (summons or {}).get((uid, si))
+            if sm and any("召喚" in str(e.get("效果") or "") for e in sk.get("技能組") or []):
+                if not sm.get("dur"):
+                    sec = next((_num(e.get("有效時間")) for e in sk.get("技能組") or [] if "召喚" in str(e.get("效果") or "")), 10)
+                    sm["dur"] = ["fix", sec or 10]
+                entry["sum"] = sm
+            skills.append(entry)
         st["sk"] = skills
         out[uid] = st
     write_if_changed(STATS, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode())
@@ -421,7 +466,7 @@ def main() -> int:
     rows = fetch_rangers_data()
     sync_names(rows)
     sync_skills(rows)
-    sync_stats(rows)
+    sync_stats(rows, fetch_summons())
     sync_projectiles()
     if state.get("res_commit") != before or not STATE.exists():
         state["synced_at"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

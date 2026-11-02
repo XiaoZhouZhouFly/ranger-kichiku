@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.5-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.5"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.6-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.6"></a>
 </p>
 
 <p align="center">
@@ -36,18 +36,17 @@
 | **真距離對戰** | 比較攻擊距離的差異 | 依各自的攻擊距離走位、同時出手，距離短的一方有傷害加成 |
 | **原始數值對戰** | 用遊戲數值硬碰硬 | 照資料庫的等級、攻防、爆擊、閃避、技能倍率自動對戰，可調血量倍率，還有金手指可以改數值 |
 
-最後一擊會顯示 K.O.，再用黑白慢動作 REPLAY 重播一次。競技場可以換成白、黑、綠幕，或上傳自己的背景圖。
+會召喚的角色放技能時，召喚物也會出場一起打。最後一擊會顯示 K.O.，再用黑白慢動作 REPLAY 重播一次。競技場可以換成白、黑、綠幕，或上傳自己的背景圖。
 
 ### 📤 輸出
 
 - 單人與雙人畫面都能直接錄成影片，可選 16:9、1:1、9:16。
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂。
 
-## 最近更新（v4.5）
+## 最近更新（v4.6）
 
-- 新增音效：普攻命中、技能發動、技能命中可以分別設定，多種預設（含遊戲技能發動聲）或自己上傳，左右角色分開設定，會一起錄進影片。
-- K.O. 重播加上 REPLAY 字樣，濾鏡改為完全黑白加暗角。
-- 較長的說明改為可摺疊。
+- 新增召喚物：會召喚的角色發動技能時，召喚物會出場一起戰鬥（原始數值對戰照等級計算數值）。
+- 原始數值對戰：新增「全部恢復預設」按鈕。
 
 📜 [完整版本更新日誌](CHANGELOG.md)
 
