@@ -36,6 +36,15 @@
     1023410
    ]
   },
+  "l=x001-cube&r=x002-orb&type=real&m=trade&s=6&d=zq1bKLVayijY2MNAxMYitBQA": {
+   "len": 369,
+   "result": "K.O.",
+   "winner": 0,
+   "dealt": [
+    112,
+    70
+   ]
+  },
   "l=x001-cube&r=x002-orb&type=raw&m=trade&s=5&d=zq1ZKzlCyiq5WSklXsjIyMNBRKi5SsjI0NajVqa6NrQUA": {
    "len": 404,
    "result": "K.O.",

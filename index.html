@@ -623,13 +623,15 @@ footer a { color: inherit; }
           </div>
           <div class="group" id="realBox" hidden>
             <span class="lbl" id="realLbl">真距離設定</span>
-            <p class="hint">雙方同時行動，對手在自己的攻擊距離內就出手，打不到會自動走過去。開場距離 = 較長的攻擊距離 + 100。平常被打中不會擊退、也不會中斷出招；體力跌破一半、以及倒下時，會立刻被擊退並打斷正在出的招（還沒放出去的攻擊取消，已射出的投射物照常命中）。</p>
+            <p class="hint">雙方同時行動，對手在自己的攻擊距離內就出手，打不到會照自己的移動速度走過去（數字越大走越快，資料庫預設多在 50～150）。開場距離 = 較長的攻擊距離 + 100。平常被打中不會擊退、也不會中斷出招；體力跌破一半、以及倒下時，會立刻被擊退並打斷正在出的招（還沒放出去的攻擊取消，已射出的投射物照常命中）。</p>
             <div class="real-grid">
               <label class="field"><span id="rName0">左方</span>攻擊距離<input type="number" id="rRange0" min="0" step="5"></label>
               <label class="field"><span id="rName1">右方</span>攻擊距離<input type="number" id="rRange1" min="0" step="5"></label>
+              <label class="field"><span id="rMvName0">左方</span>移動速度<input type="number" id="rMove0" min="1" step="5"></label>
+              <label class="field"><span id="rMvName1">右方</span>移動速度<input type="number" id="rMove1" min="1" step="5"></label>
               <label class="field">時間上限（秒）<input type="number" id="rTime" min="5" max="600" step="5" value="60"></label>
             </div>
-            <div class="row"><button class="btn small" id="rRangeReset">攻擊距離恢復預設</button></div>
+            <div class="row"><button class="btn small" id="rRangeReset">攻擊距離、移動速度恢復預設</button></div>
             <p class="hint" id="rCompHint">距離補償：只加成攻擊距離較短的一方，傷害 ×（1 + 0.8 × 距離差 ÷ 較長的距離），最多 1.8 倍；長手不變。例如距離 200 對 400，短手傷害 ×1.4；50 對 550，短手 ×1.73。</p>
             <p class="hint warn" id="rRawMissing" hidden>網站上還沒有原始數值資料（data/stats.json），所以原始數值對戰暫時不能用。請確認 GitHub 上的 sync.py 已換成新版，並等同步跑完再重新整理。</p>
             <p class="hint warn" id="rZeroWarn" hidden></p>
@@ -732,7 +734,7 @@ footer a { color: inherit; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v4.10";
+  const APP_VERSION = "v4.10.1";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -2939,7 +2941,7 @@ footer a { color: inherit; }
   const D = {
     f: [null, null], moves: [], dist: 320, speed: 1, shake: true, invert: false, numbers: true, bars: true, projOn: true, projs: [],
     finale: true, finalKey: null, koInfo: null, finalStart: 0, finalTarget: 1, bgImg: null, ground: 8, mode: "trade",
-    kind: "classic", raw: false, timeLimit: 60, hpMul: 1, range: [null, null], level: [null, null], cheat: [{}, {}],
+    kind: "classic", raw: false, timeLimit: 60, hpMul: 1, range: [null, null], mvs: [null, null], level: [null, null], cheat: [{}, {}],
     frames: [[], []], timeMap: null, maxHp: [100, 100], resultK: -1, resultText: "", winner: -1, simLen: 0,
     tracks: [[], []], events: [], posKeys: [[], []], len: 1, cam: null,
     pos: 0, playing: true, recording: false, seed: 1,
@@ -3590,7 +3592,7 @@ footer a { color: inherit; }
       const old = D.f[i];
       D.f[i] = nf;
       await loadSummons(i);
-      D.range[i] = null; D.level[i] = null; D.cheat[i] = {};
+      D.range[i] = null; D.mvs[i] = null; D.level[i] = null; D.cheat[i] = {};
       fighterPanel(i);
       if (!keepMoves || D.mode !== "custom") D.moves = D.mode === "random" ? presetRandomDuel() : presetTrade();
       compileDuel(); renderMoves(); saveDuel(); renderRealPanel();
@@ -3679,7 +3681,7 @@ footer a { color: inherit; }
     $("dProj").checked = D.projOn;
     D.finale = saved.finale !== false; $("dFinale").checked = D.finale;
     D.kind = saved.kind || "classic"; D.raw = !!saved.raw; D.timeLimit = saved.timeLimit || 60; D.hpMul = saved.hpMul > 0 ? saved.hpMul : 1;
-    D.range = saved.range || [null, null]; D.level = saved.level || [null, null]; D.cheat = saved.cheat || [{}, {}];
+    D.range = saved.range || [null, null]; D.mvs = Array.isArray(saved.mvs) && saved.mvs.length === 2 ? saved.mvs : [null, null]; D.level = saved.level || [null, null]; D.cheat = saved.cheat || [{}, {}];
     D.ground = saved.ground ?? 8; $("dGround").value = D.ground; $("dGroundOut").textContent = D.ground + "%";
     await restoreDuelBg();
     $("dDist").value = D.dist; $("dDistOut").textContent = D.dist;
@@ -3697,6 +3699,7 @@ footer a { color: inherit; }
       if (URLP.get("lv")) D.level = URLP.get("lv").split(",").slice(0, 2).map((x) => (+x > 0 ? Math.round(+x) : null));
       D.cheat = Array.isArray(URLD.ch) && URLD.ch.length === 2 ? URLD.ch.map((x) => (x && typeof x === "object" ? x : {})) : [{}, {}];
       D.range = Array.isArray(URLD.rg) && URLD.rg.length === 2 ? URLD.rg.map((x) => (x == null || !(+x >= 0) ? null : +x)) : [null, null];
+      D.mvs = Array.isArray(URLD.ms) && URLD.ms.length === 2 ? URLD.ms.map((x) => (x == null || !(+x > 0) ? null : +x)) : [null, null];
     }
     const a = (fromUrl && find(URLP.get("l"))) || find(saved.a) || S.unit || find(DEFAULT_UNIT) || S.index[0];
     const b = (fromUrl && find(URLP.get("r"))) || find(saved.b) || find("u010u-clara") || find("u1001u-brown") || S.index.find((r) => r.id !== a.id);
@@ -3733,7 +3736,7 @@ footer a { color: inherit; }
     let t; $(`dq${i}`).addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => renderDuelResults(i), 250); });
     $(`dq${i}`).addEventListener("keydown", (e) => { if (e.key === "Enter") renderDuelResults(i); });
   });
-  $("dSwap").onclick = () => { D.f.reverse(); D.range.reverse(); D.level.reverse(); D.cheat.reverse(); renderRealPanel(); fighterPanel(0); fighterPanel(1); D.moves.forEach((m) => (m.who = m.who === "A" ? "B" : "A")); movesChanged(true); };
+  $("dSwap").onclick = () => { D.f.reverse(); D.range.reverse(); D.mvs.reverse(); D.level.reverse(); D.cheat.reverse(); renderRealPanel(); fighterPanel(0); fighterPanel(1); D.moves.forEach((m) => (m.who = m.who === "A" ? "B" : "A")); movesChanged(true); };
   $("dPlay").onclick = () => { D.playing = !D.playing; $("dPlay").textContent = D.playing ? "❚❚" : "▶"; $("dPlay").setAttribute("aria-label", D.playing ? "暫停" : "播放"); };
   $("dscrub").addEventListener("input", () => { dscrubbing = true; D.pos = +$("dscrub").value; D.playing = false; $("dPlay").textContent = "▶"; });
   $("dscrub").addEventListener("change", () => { dscrubbing = false; });
@@ -3839,6 +3842,12 @@ footer a { color: inherit; }
     return Math.round(st?.rg || f.proj.range || 100);
   }
   function rangeOf(i) { return D.range[i] != null ? D.range[i] : defaultRange(i); }
+  function defaultMove(i) {
+    const f = D.f[i]; if (!f) return 100;
+    const st = S.stats[f.r.id];
+    return Math.round(st?.mv || f.proj.speed || 100);
+  }
+  function moveOf(i) { return D.mvs && D.mvs[i] != null ? D.mvs[i] : defaultMove(i); }
   // 原始數值：等級換算 → 金手指覆蓋
   function rawStats(i) {
     const f = D.f[i], st = S.stats[f.r.id] || {};
@@ -3846,7 +3855,7 @@ footer a { color: inherit; }
     const lv = Math.max(1, Math.min(lim.max, D.level[i] || lim.max));
     const out = { level: lv, maxLevel: lim.max };
     for (const k of STAT5) out[k] = Math.round(statAt(st[k], lv, lim.cap));
-    Object.assign(out, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, dg: st.dg || 0, hit: st.hit || 0, sh: st.sh || 0, sdg: st.sdg || 0, sr: st.sr || 0, rg: rangeOf(i), mv: st.mv || f.proj.speed || 100 });
+    Object.assign(out, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, dg: st.dg || 0, hit: st.hit || 0, sh: st.sh || 0, sdg: st.sdg || 0, sr: st.sr || 0, rg: rangeOf(i), mv: moveOf(i) });
     const ov = D.cheat[i] || {};
     for (const [k] of CHEAT_FIELDS) if (ov[k] !== undefined && ov[k] !== "" && isFinite(+ov[k])) out[k] = +ov[k];
     // 技能：發動率、冷卻、各傷害效果的倍率都可以用金手指覆蓋
@@ -3868,7 +3877,7 @@ footer a { color: inherit; }
   }
   function basicStats(i) {
     const f = D.f[i], st = S.stats[f.r.id] || {};
-    return { rg: rangeOf(i), mv: st.mv || f.proj.speed || 100 };
+    return { rg: rangeOf(i), mv: moveOf(i) };
   }
   function realQueues() {
     // 真距離：左右各自的招式清單，「移動接近」改由自動走位取代
@@ -4192,6 +4201,9 @@ footer a { color: inherit; }
       if (!D.f[i]) continue;
       $(`rRange${i}`).value = rangeOf(i);
       $(`rRange${i}`).placeholder = defaultRange(i);
+      $(`rMove${i}`).value = moveOf(i);
+      $(`rMove${i}`).placeholder = defaultMove(i);
+      $(`rMvName${i}`).textContent = D.f[i].r.name;
       const lim = levelLimits((S.stats[D.f[i].r.id] || {}).s || D.f[i].r.star);
       $(`rLv${i}`).max = lim.max;
       $(`rLv${i}`).value = Math.min(lim.max, D.level[i] || lim.max);
@@ -4217,6 +4229,7 @@ footer a { color: inherit; }
         inp.onchange = () => {
           D.cheat[i] = D.cheat[i] || {};
           if (k === "rg") { D.range[i] = inp.value === "" ? null : +inp.value; delete D.cheat[i].rg; }
+          else if (k === "mv") { D.mvs[i] = inp.value === "" ? null : Math.max(1, +inp.value); delete D.cheat[i].mv; }
           else D.cheat[i][k] = inp.value === "" ? undefined : +inp.value;
           realChanged();
         };
@@ -4264,7 +4277,7 @@ footer a { color: inherit; }
       go.onclick = () => { if (+ni.value > 0) applyMult(i, +ni.value); };
       mult.append(ni, go); col.appendChild(mult);
       const reset = document.createElement("button"); reset.className = "btn small"; reset.textContent = "恢復資料庫數值";
-      reset.onclick = () => { D.cheat[i] = {}; D.range[i] = null; realChanged(); };
+      reset.onclick = () => { D.cheat[i] = {}; D.range[i] = null; D.mvs[i] = null; realChanged(); };
       col.appendChild(reset);
       box.appendChild(col);
     }
@@ -4289,16 +4302,17 @@ footer a { color: inherit; }
   $("rTime").onchange = () => { D.timeLimit = Math.max(5, Math.min(600, +$("rTime").value || 60)); realChanged(); };
   for (const i of [0, 1]) {
     $(`rRange${i}`).onchange = () => { const v = $(`rRange${i}`).value; D.range[i] = v === "" ? null : Math.max(0, +v); realChanged(); };
+    $(`rMove${i}`).onchange = () => { const v = $(`rMove${i}`).value; D.mvs[i] = v === "" ? null : Math.max(1, Math.min(2000, +v)); realChanged(); };
     $(`rLv${i}`).onchange = () => {
       D.level[i] = Math.max(1, +$(`rLv${i}`).value || 1);
       if (D.cheat[i]) for (const k of STAT5) delete D.cheat[i][k]; // 換等級時，體力攻防改回依等級計算
       realChanged();
     };
   }
-  $("rRangeReset").onclick = () => { D.range = [null, null]; realChanged(); };
+  $("rRangeReset").onclick = () => { D.range = [null, null]; D.mvs = [null, null]; realChanged(); };
   // 一鍵回到資料庫預設：雙方等級、金手指（含技能）、攻擊距離、血量倍率、時間上限
   $("rResetAll").onclick = () => {
-    D.level = [null, null]; D.cheat = [{}, {}]; D.range = [null, null];
+    D.level = [null, null]; D.cheat = [{}, {}]; D.range = [null, null]; D.mvs = [null, null];
     D.hpMul = 1; D.timeLimit = 60;
     realChanged();
     $("dStatus").textContent = "已恢復資料庫預設數值。";
@@ -4307,7 +4321,7 @@ footer a { color: inherit; }
 
   /* ---------- 分享：網址帶上目前的角色、動作、對戰設定；太長時改用專案檔 ---------- */
   const URLP = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
-  const URLD = {}; // 網址裡壓縮過的長資料（d=）：惡搞片段、自訂招式、金手指、攻擊距離
+  const URLD = {}; // 網址裡壓縮過的長資料（d=）：惡搞片段、自訂招式、金手指、攻擊距離、移動速度
   let urlSyncOn = false;
   const URL_WARN = 2000;
   const b64u = {
@@ -4377,6 +4391,7 @@ footer a { color: inherit; }
         if (hasCheat(D.cheat)) d.ch = D.cheat;
       }
       if (D.range[0] != null || D.range[1] != null) d.rg = D.range;
+      if (D.kind === "real" && (D.mvs[0] != null || D.mvs[1] != null)) d.ms = D.mvs;
     } else if (S.unit) {
       p.set("app", "single"); p.set("u", S.unit.id);
       const ck = currentClipKey(); if (ck) p.set("clip", ck);
@@ -4401,7 +4416,7 @@ footer a { color: inherit; }
   // 專案檔：完整設定（含金手指、音效選擇），不含自己上傳的音效與背景
   function duelState() {
     return { a: D.f[0]?.r.id, b: D.f[1]?.r.id, moves: D.moves, dist: D.dist, speed: D.speed, shake: D.shake, invert: D.invert, numbers: D.numbers, bars: D.bars, seed: D.seed, projOn: D.projOn, mode: D.mode, finale: D.finale, ground: D.ground,
-      kind: D.kind, raw: D.raw, timeLimit: D.timeLimit, hpMul: D.hpMul, range: D.range, level: D.level, cheat: D.cheat };
+      kind: D.kind, raw: D.raw, timeLimit: D.timeLimit, hpMul: D.hpMul, range: D.range, mvs: D.mvs, level: D.level, cheat: D.cheat };
   }
   function projectData() {
     const base = { app: "ranger-kichiku", ver: 1, saved: new Date().toISOString() };

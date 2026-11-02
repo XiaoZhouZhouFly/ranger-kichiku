@@ -74,13 +74,21 @@ const waitSingle = (page) => page.waitForFunction(() => window.__rk && window.__
 const waitDuel = (page) => page.waitForFunction(() => window.__rk && window.__rk.duel().ready && window.__rk.duel().len > 1, null, { timeout: 90000 });
 const nonBlank = (page, id) => page.evaluate((id) => { const c = document.getElementById(id), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4 * 97) if (d[i] < 235 || d[i + 1] < 235 || d[i + 2] < 235) n++; return n; }, id);
 function check(cond, msg) { if (!cond) throw new Error(msg); }
+// 不能逐格輸出時，說明是哪一個編碼器不支援
+const codecWhy = (page) => page.evaluate(async () => {
+  if (!window.VideoEncoder || !window.AudioEncoder) return "瀏覽器沒有 WebCodecs";
+  const v = await VideoEncoder.isConfigSupported({ codec: "avc1.42E01F", width: 720, height: 720, bitrate: 6e6, framerate: 30 }).then((r) => r.supported, () => false);
+  const a = await AudioEncoder.isConfigSupported({ codec: "opus", sampleRate: 48000, numberOfChannels: 2, bitrate: 160000 }).then((r) => r.supported, () => false);
+  return `H.264 影片編碼${v ? "可用" : "不支援"}、Opus 聲音編碼${a ? "可用" : "不支援"}（${navigator.userAgent.match(/Chrome\/[\d.]+/) || ""}）`;
+});
 async function test(name, fn) {
   const t0 = Date.now(); let page = null;
   const track = async (opts) => (page = await newPage(opts));
   try {
     const r = await fn(track);
     if (page && page.errors.length) throw new Error("頁面錯誤：" + page.errors.slice(0, 2).join(" | "));
-    results.push({ name, ok: r === "skip" ? "skip" : true, note: typeof r === "string" && r !== "skip" ? r : r === "skip" ? "這個環境不支援，略過" : "", ms: Date.now() - t0 });
+    const skip = typeof r === "string" && r.startsWith("skip");
+    results.push({ name, ok: skip ? "skip" : true, note: skip ? "略過：" + (r.slice(5) || "這個環境不支援") : typeof r === "string" ? r : "", ms: Date.now() - t0 });
   } catch (e) {
     let shot = "";
     if (page) { try { shot = path.join(OUT, name.replace(/[^\w一-鿿]+/g, "_") + ".png"); await page.screenshot({ path: shot, fullPage: false }); } catch {} }
@@ -160,6 +168,8 @@ const DUELS = [
   { label: "原始數值（防禦公式）", q: "type=raw&l=x001-cube&r=x002-orb&s=3" },
   { label: "原始數值（血量 3 倍）", q: "type=raw&l=x002-orb&r=x001-cube&s=4&hp=3" },
   // 左方金手指：閃避 200%、技能抗性 150%（檢查 95% 上限：仍有 5% 普攻命中、技能傷害剩 5%）
+  // 真距離：左方移動速度 300、右方 40
+  { label: "真距離對戰（移動速度）", q: "l=x001-cube&r=x002-orb&type=real&m=trade&s=6&d=zq1bKLVayijY2MNAxMYitBQA" },
   { label: "原始數值（95% 上限）", q: "l=x001-cube&r=x002-orb&type=raw&m=trade&s=5&d=zq1ZKzlCyiq5WSklXsjIyMNBRKi5SsjI0NajVqa6NrQUA" },
 ];
 for (const { label, q } of DUELS) {
@@ -175,6 +185,26 @@ for (const { label, q } of DUELS) {
   });
 }
 
+await test("真距離：移動速度設定", async (open) => {
+  const p = await open(); await p.goto(BASE + "?app=duel&type=real&l=x001-cube&r=x002-orb&s=6"); await waitDuel(p);
+  const d0 = await p.evaluate(() => window.__rk.duel());
+  check(await p.locator("#rMove0").isVisible(), "看不到移動速度欄位");
+  const def0 = await p.inputValue("#rMove0");
+  await p.fill("#rMove0", "300"); await p.locator("#rMove0").dispatchEvent("change"); await p.waitForTimeout(500);
+  const d1 = await p.evaluate(() => window.__rk.duel());
+  check(d1.len !== d0.len || JSON.stringify(d1.dealt) !== JSON.stringify(d0.dealt), "改了移動速度，對戰結果卻沒變");
+  await p.waitForTimeout(400);
+  const url = await p.evaluate(() => location.href);
+  check(url.includes("d="), "網址沒有記下移動速度");
+  const p2 = await p.context().newPage(); await p2.goto(url);
+  await p2.waitForFunction(() => window.__rk && window.__rk.duel().ready && window.__rk.duel().len > 1, null, { timeout: 90000 });
+  const d2 = await p2.evaluate(() => window.__rk.duel());
+  check(d2.len === d1.len && (await p2.inputValue("#rMove0")) === "300", `分享連結沒有還原移動速度：${JSON.stringify(d2)}`);
+  await p2.click("#rRangeReset"); await p2.waitForTimeout(400);
+  check((await p2.inputValue("#rMove0")) === def0 && (await p2.evaluate(() => window.__rk.duel())).len === d0.len, "恢復預設沒有還原移動速度");
+  return `預設 ${def0} → 300：${(d0.len / 30).toFixed(1)} 秒 → ${(d1.len / 30).toFixed(1)} 秒`;
+});
+
 await test("官方角色對戰可執行", async (open) => {
   const p = await open(); await p.goto(BASE + "?app=duel&type=raw"); await waitDuel(p);
   const d = await p.evaluate(() => window.__rk.duel());
@@ -184,7 +214,7 @@ await test("官方角色對戰可執行", async (open) => {
 
 await test("錄影：逐格輸出（單人）", async (open) => {
   const p = await open({ opus: true }); await p.goto(BASE + "?app=single&u=x001-cube&clip=attack"); await waitSingle(p);
-  if (!(await p.evaluate(() => window.__rk.offline(720, 720, 30)))) return "skip"; // 這個瀏覽器不能逐格輸出
+  if (!(await p.evaluate(() => window.__rk.offline(720, 720, 30)))) return "skip:" + (await codecWhy(p)); // 這個瀏覽器不能逐格輸出
   await p.click("[data-tab=out]");
   const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 120000 }), p.click("#recOrig")]);
   const f = path.join(OUT, "rec_single.mp4"); await dl.saveAs(f);
@@ -200,7 +230,7 @@ await test("錄影：逐格輸出（單人）", async (open) => {
 
 await test("錄影：逐格輸出（雙人）", async (open) => {
   const p = await open({ opus: true }); await p.goto(BASE + "?app=duel&type=raw&l=x001-cube&r=x002-orb&s=3"); await waitDuel(p);
-  if (!(await p.evaluate(() => window.__rk.offline(document.getElementById("dcv").width, document.getElementById("dcv").height, 30)))) return "skip";
+  if (!(await p.evaluate(() => window.__rk.offline(document.getElementById("dcv").width, document.getElementById("dcv").height, 30)))) return "skip:" + (await codecWhy(p));
   const len = (await p.evaluate(() => window.__rk.duel())).len;
   const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 300000 }), p.click("#dRec")]);
   const f = path.join(OUT, "rec_duel.mp4"); await dl.saveAs(f);

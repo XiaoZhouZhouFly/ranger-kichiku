@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.10-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.10"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.10.1-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.10.1"></a>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 | 類型 | 適合 | 怎麼打 |
 | --- | --- | --- |
 | **經典對戰** | 拍好看的對打片段 | 照招式順序輪流出招，可以選你來我往、隨機或自己排招 |
-| **真距離對戰** | 比較攻擊距離的差異 | 依各自的攻擊距離走位、同時出手，距離短的一方有傷害加成 |
+| **真距離對戰** | 比較攻擊距離的差異 | 依各自的攻擊距離與移動速度走位、同時出手，距離短的一方有傷害加成；距離和移動速度都能自己調 |
 | **原始數值對戰** | 用遊戲數值硬碰硬 | 照資料庫的等級、攻防、爆擊、閃避、技能倍率自動對戰，可調血量倍率，還有金手指可以改數值 |
 
 會召喚的角色放技能時，召喚物也會出場一起打。最後一擊會顯示 K.O.，再用黑白慢動作 REPLAY 重播一次。競技場可以換成白、黑、綠幕，或上傳自己的背景圖。
@@ -44,8 +44,9 @@
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v4.10）
+## 最近更新（v4.10.1）
 
+- 真距離、原始數值對戰可以分別設定雙方的移動速度。
 - 原始數值對戰：普攻改用防禦公式，閃避、技能閃避、技能抗性最多 95%。
 - 頁尾顯示版本號，可一鍵複製回報資訊；新增自動健檢，沒通過就不發布。
 - 新增兩隻自製測試角色「【自製】方塊騎士」「【自製】圓圓法師」，並在網站與 README 加上非官方聲明。
