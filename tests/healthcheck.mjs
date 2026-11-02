@@ -205,6 +205,45 @@ await test("真距離：移動速度設定", async (open) => {
   return `預設 ${def0} → 300：${(d0.len / 30).toFixed(1)} 秒 → ${(d1.len / 30).toFixed(1)} 秒`;
 });
 
+// 召喚：用官方角色（資料每天同步）。資料裡還沒有新版召喚格式時略過，不擋發布
+const findSummonDuel = async (p, q, want) => {
+  for (let s = 1; s <= 12; s++) {
+    await p.goto(BASE + `?app=duel&type=raw&${q}&s=${s}&hp=3`); await waitDuel(p);
+    const d = await p.evaluate(() => window.__rk.duel());
+    if (want(d)) return { s, d };
+  }
+  return null;
+};
+await test("召喚：一次 2 隻（亡者歸來）", async (open) => {
+  const p = await open(); await p.goto(BASE + "?app=single&u=x001-cube"); await waitSingle(p);
+  await p.click("#appDuel"); await waitDuel(p);
+  const sk = await p.evaluate(() => window.__rk.skill("u1241h-brown", 1));
+  if (!sk || sk.sums.length < 2) return "skip:資料裡還沒有一次多隻的召喚（新版 sync.py 尚未同步）";
+  check(sk.sums.every((x) => x === "u1241sk-brown"), `召喚物不是法老王的棺木：${sk.sums}`);
+  const r = await findSummonDuel(p, "l=u1241h-brown&r=u010u-clara", (d) => d.summons.length >= 2);
+  check(r, "12 場對戰裡都沒有召喚出 2 個棺木");
+  const two = r.d.summons.filter((x) => x.side === 0);
+  check(two.length >= 2 && two[0].k0 === two[1].k0, `應同時出現 2 個：${JSON.stringify(two)}`);
+  return `種子 ${r.s}：同時召喚 ${two.length} 個棺木`;
+});
+await test("召喚：對手複製體與上限", async (open) => {
+  const p = await open(); await p.goto(BASE + "?app=single&u=x001-cube"); await waitSingle(p);
+  await p.click("#appDuel"); await waitDuel(p);
+  const sk = await p.evaluate(() => window.__rk.skill("u1074u-cony", 1));
+  if (!sk || !sk.cpy) return "skip:資料裡還沒有複製體（新版 sync.py 尚未同步）";
+  const r = await findSummonDuel(p, "l=u1074u-cony&r=u1009e-sally", (d) => d.summons.some((x) => x.side === 0 && x.id.startsWith("copy:")));
+  check(r, "12 場對戰裡都沒有出現對手的複製體");
+  check(r.d.summons.find((x) => x.id.startsWith("copy:")).id === "copy:u1009e-sally", "複製體不是對手");
+  await p.fill("#dSumCap", "1"); await p.locator("#dSumCap").dispatchEvent("change"); await p.waitForTimeout(400);
+  const d1 = await p.evaluate(() => window.__rk.duel());
+  for (const side of [0, 1]) {
+    const list = d1.summons.filter((x) => x.side === side);
+    for (const a of list) for (const b of list) if (a !== b) check(!(a.k0 < b.k1 && b.k0 < a.k1), `上限 1 時，同一邊同時出現 2 隻：${JSON.stringify([a, b])}`);
+  }
+  check(d1.sumCap === 1, "上限沒有生效");
+  return `種子 ${r.s}：出現複製體；上限 1 時每邊同時最多 1 隻`;
+});
+
 await test("官方角色對戰可執行", async (open) => {
   const p = await open(); await p.goto(BASE + "?app=duel&type=raw"); await waitDuel(p);
   const d = await p.evaluate(() => window.__rk.duel());

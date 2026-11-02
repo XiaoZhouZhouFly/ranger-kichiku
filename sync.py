@@ -360,8 +360,36 @@ def _num(v, default=0.0):
     return float(m.group()) if m else default
 
 
+# 召喚物動畫的固定對應：整個系列都召喚同一隻（不照名稱規則）
+SUMMON_SERIES = {"1501": "u1501sk-cony", "1502": "u1501sk-cony", "1241": "u1241sk-brown", "1242": "u1241sk-brown"}
+
+
+def summon_anim_id(uid: str) -> str:
+    """召喚物動畫的 id：系列固定對應 → 自己的（u123usk-）→ 同系列基本型（u123sk-）。都找不到就回傳自己的。"""
+    m = re.match(r"u(\d+)([a-z]?)-(.+)$", uid)
+    if not m:
+        return ""
+    num, evo, name = m.groups()
+    own = f"u{num}{'' if evo in ('', 'e') else evo}sk-{name}"
+    cands = [SUMMON_SERIES.get(num), own, f"u{num}sk-{name}"]
+    for c in cands:
+        if c and ((UNITS / f"{c}.json.gz").exists() or (UNITS / f"{c}.json").exists()):
+            return c
+    return SUMMON_SERIES.get(num) or own
+
+
+def _sec(du: dict, default=10.0):
+    if du.get("seconds") is not None:
+        return ["fix", du.get("seconds")]
+    if du.get("kind") == "levelFormula":
+        return ["mul", du.get("amount")]
+    return None
+
+
 def fetch_summons() -> dict:
-    """召喚技能：召喚物是誰、幾等、存在幾秒（新版資料才有等級公式）。"""
+    """召喚技能。回傳 {(角色, 技能序): {"sums": [召喚物…], "cpy": 對手複製體}}。
+    sums：每一隻召喚物（id、等級公式、存在秒數），一個技能可以召喚好幾隻（例如亡者歸來 2 個棺木）。
+    cpy：「將範圍內敵人召喚為我方夥伴」＝在我方出現對手的複製體（固定等級、秒數）。"""
     try:
         with urllib.request.urlopen(RANGERS_V2_URL, timeout=300) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -371,28 +399,21 @@ def fetch_summons() -> dict:
     out = {}
     for r in data.get("rangers") or []:
         uid = r.get("rangerCode") or ""
-        m = re.match(r"u(\d+)([a-z]?)-(.+)$", uid)
-        if not m:
+        if not re.match(r"u(\d+)([a-z]?)-(.+)$", uid):
             continue
-        evo = m.group(2)
-        sid = f"u{m.group(1)}{'' if evo in ('', 'e') else evo}sk-{m.group(3)}"
         for si, sk in enumerate(r.get("skillSet") or []):
             for e in sk.get("effects") or []:
-                if e.get("effectCode") != "SKILLEFF_SUMMON":
-                    continue
+                code = e.get("effectCode")
                 mg, du = e.get("magnitude") or {}, e.get("duration") or {}
-                lv = None
-                if mg.get("kind") == "gradeValue":
-                    lv = ["fix", mg.get("value")]
-                elif mg.get("kind") == "levelFormula":
-                    lv = ["mul" if mg.get("operator") == "MULTIPLY" else "add", mg.get("amount")]
-                if du.get("seconds") is not None:
-                    dur = ["fix", du.get("seconds")]
-                elif du.get("kind") == "levelFormula":
-                    dur = ["mul", du.get("amount")]
-                else:
-                    dur = None
-                out[(uid, si)] = {"id": sid, "lv": lv, "dur": dur}
+                if code == "SKILLEFF_SUMMON":
+                    lv = None
+                    if mg.get("kind") == "gradeValue":
+                        lv = ["fix", mg.get("value")]
+                    elif mg.get("kind") == "levelFormula":
+                        lv = ["mul" if mg.get("operator") == "MULTIPLY" else "add", mg.get("amount")]
+                    out.setdefault((uid, si), {}).setdefault("sums", []).append({"id": summon_anim_id(uid), "lv": lv, "dur": _sec(du)})
+                elif code == "SKILLEFF_SUMMON_ENEMY" and mg.get("kind") == "summonLevel":
+                    out.setdefault((uid, si), {})["cpy"] = {"lv": mg.get("level"), "dur": _sec(du) or ["fix", 10]}
     return out
 
 
@@ -445,12 +466,18 @@ def sync_stats(rows, summons=None) -> None:
                 })
             entry = {"r": _num(sk.get("發動機率")), "cd": _num(sk.get("技能冷卻時間")), "e": effects}
             si = len(skills)
-            sm = (summons or {}).get((uid, si))
-            if sm and any("召喚" in str(e.get("效果") or "") for e in sk.get("技能組") or []):
-                if not sm.get("dur"):
-                    sec = next((_num(e.get("有效時間")) for e in sk.get("技能組") or [] if "召喚" in str(e.get("效果") or "")), 10)
-                    sm["dur"] = ["fix", sec or 10]
-                entry["sum"] = sm
+            info = (summons or {}).get((uid, si)) or {}
+            sums = info.get("sums") or []
+            if sums and any("召喚" in str(e.get("效果") or "") for e in sk.get("技能組") or []):
+                sec = next((_num(e.get("有效時間")) for e in sk.get("技能組") or [] if "召喚" in str(e.get("效果") or "")), 10)
+                for sm in sums:
+                    if not sm.get("dur"):
+                        sm["dur"] = ["fix", sec or 10]
+                entry["sum"] = sums[0]  # 舊版網頁相容
+                if len(sums) > 1:
+                    entry["sums"] = sums
+            if info.get("cpy"):
+                entry["cpy"] = info["cpy"]
             skills.append(entry)
         st["sk"] = skills
         out[uid] = st
