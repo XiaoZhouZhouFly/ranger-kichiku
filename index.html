@@ -316,6 +316,7 @@ details.more summary { cursor: pointer; font-size: 13px; font-weight: 700; color
 .status { font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--paper); border: 1.5px dashed var(--line); }
 .status:empty { display: none; }
 footer { font-size: 12px; color: var(--muted); }
+footer p { margin: 0 0 6px; line-height: 1.6; }
 footer a { color: inherit; }
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 </style>
@@ -708,7 +709,9 @@ footer a { color: inherit; }
   </section>
 
   <footer>
-    動畫資料每日同步自 <a href="https://rangerbook.warmycat.com/" target="_blank" rel="noopener">LINE Rangers 資料站</a>（蚯蚓貓）的公開素材庫。角色美術版權屬於 LINE，輸出內容請自行斟酌用途。
+    <p><strong>非官方粉絲工具・完全免費・非營利。</strong>本站與 LINE、LY Corporation 及 LINE Rangers 官方沒有任何關係，也未獲得其授權或背書。</p>
+    <p>LINE Rangers 的角色名稱、圖片、動畫與音效等權利皆屬 LY Corporation 及其授權方所有。動畫資料每日同步自 <a href="https://rangerbook.warmycat.com/" target="_blank" rel="noopener">LINE Rangers 資料站</a>（蚯蚓貓）的公開素材庫；名稱前標有「【自製】」的角色是本站自己畫的測試角色，不含官方素材。</p>
+    <p>權利人如認為本站內容有不當之處，請到 <a href="https://github.com/XiaoZhouZhouFly/ranger-kichiku/issues" target="_blank" rel="noopener">GitHub Issues</a> 聯絡，我們會立即配合移除或下架。輸出的影片請勿用於商業用途。</p>
   </footer>
 </div>
 
@@ -716,6 +719,9 @@ footer a { color: inherit; }
 (() => {
   "use strict";
   const LOCAL = "data/";
+  // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
+  const CUSTOM = "custom/", customIds = new Set();
+  const baseOf = (id) => (customIds.has(id) ? CUSTOM : LOCAL);
   const DEFAULT_UNIT = "u362e-blast";
   const FPS_OUT = 30;
 
@@ -809,8 +815,11 @@ footer a { color: inherit; }
     const note = $("modeNote");
     // 幾份索引同時下載；原始數值（stats.json）等第一次進雙人對戰才下載
     const get = (name, fb) => fetchFirst([LOCAL + name], "json").catch(() => fb);
-    const [idx, skills, proj, st] = await Promise.all([get("units.json", []), get("skills.json", {}), get("projectiles.json", {}), get("sync_state.json", {})]);
+    const getC = (name, fb) => fetchFirst([CUSTOM + name], "json").catch(() => fb);
+    const [idx, skills, proj, st, cIdx, cSkills] = await Promise.all([get("units.json", []), get("skills.json", {}), get("projectiles.json", {}), get("sync_state.json", {}), getC("units.json", []), getC("skills.json", {})]);
     S.index = Array.isArray(idx) ? idx : []; S.skills = skills || {}; S.proj = proj || {};
+    if (Array.isArray(cIdx)) for (const r of cIdx) if (r && r.id && !S.index.some((x) => x.id === r.id)) { customIds.add(r.id); S.index.push(r); }
+    Object.assign(S.skills, cSkills || {});
     S.index.forEach((r) => { if (!r.name) r.name = r.id; });
     let when = "";
     try { if (st && st.synced_at) when = `・資料更新於 ${new Date(st.synced_at).toLocaleDateString("zh-TW")}`; } catch {}
@@ -819,14 +828,18 @@ footer a { color: inherit; }
   }
   let statsPromise = null;
   function ensureStats() {
-    if (!statsPromise) statsPromise = fetchFirst([LOCAL + "stats.json"], "json").then((x) => { S.stats = x && typeof x === "object" ? x : {}; }, () => { S.stats = {}; });
+    if (!statsPromise) statsPromise = Promise.all([
+      fetchFirst([LOCAL + "stats.json"], "json").catch(() => ({})),
+      fetchFirst([CUSTOM + "stats.json"], "json").catch(() => ({})),
+    ]).then(([x, c]) => { S.stats = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); });
     return statsPromise;
   }
   const available = () => true;
 
   /* ---------- 搜尋 ---------- */
   function thumbUrls(id) {
-    return [`${LOCAL}res/${id}/${id}-thum-140.png`, `${LOCAL}res/${id}/${id}-thum.png`];
+    const b = baseOf(id);
+    return [`${b}res/${id}/${id}-thum-140.png`, `${b}res/${id}/${id}-thum.png`];
   }
   function renderResults(q) {
     const box = $("results");
@@ -945,11 +958,16 @@ footer a { color: inherit; }
     showOverlay(`載入 ${r.name} …`);
     try {
       let meta;
-      try { meta = await fetchGzJson(`${LOCAL}units/${r.id}.json.gz`); }
-      catch { meta = await fetchFirst([`${LOCAL}units/${r.id}.json`], "json"); }
+      const base = baseOf(r.id);
+      if (customIds.has(r.id)) meta = await fetchFirst([`${base}units/${r.id}.json`], "json");
+      else {
+        try { meta = await fetchGzJson(`${base}units/${r.id}.json.gz`); }
+        catch { meta = await fetchFirst([`${base}units/${r.id}.json`], "json"); }
+      }
+      meta.base = base;
       const bul = {};
       await Promise.all(Object.keys(meta.parts).filter((k) => k !== "body").map(async (k) => {
-        try { bul[k] = { part: meta.parts[k], atlas: await blobToImage(await fetchFirst([LOCAL + meta.parts[k].png], "blob")), sprites: new Map() }; } catch {}
+        try { bul[k] = { part: meta.parts[k], atlas: await blobToImage(await fetchFirst([base + meta.parts[k].png], "blob")), sprites: new Map() }; } catch {}
       }));
       const oldBul = S.bul;
       S.swapping = true; // 換角色途中先不畫，避免新舊資料混在一起
@@ -1028,7 +1046,7 @@ footer a { color: inherit; }
   async function selectPart(key, clipKey) {
     const part = S.meta.parts[key];
     $("parts").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.part === key)));
-    const atlas = await blobToImage(await fetchFirst([LOCAL + part.png], "blob"));
+    const atlas = await blobToImage(await fetchFirst([(S.meta.base || LOCAL) + part.png], "blob"));
     const oldAtlas = S.atlas;
     S.partKey = key; S.part = part; S.atlas = atlas;
     freeCanvases(S.sprites); freeCanvases(S.hueCache);
@@ -2914,10 +2932,14 @@ footer a { color: inherit; }
 
   async function loadFighter(r) {
     let meta;
-    try { meta = await fetchGzJson(`${LOCAL}units/${r.id}.json.gz`); }
-    catch { meta = await fetchFirst([`${LOCAL}units/${r.id}.json`], "json"); }
+    const base = baseOf(r.id);
+    if (customIds.has(r.id)) meta = await fetchFirst([`${base}units/${r.id}.json`], "json");
+    else {
+      try { meta = await fetchGzJson(`${base}units/${r.id}.json.gz`); }
+      catch { meta = await fetchFirst([`${base}units/${r.id}.json`], "json"); }
+    }
     const part = meta.parts.body || meta.parts[Object.keys(meta.parts)[0]];
-    const atlas = await blobToImage(await fetchFirst([LOCAL + part.png], "blob"));
+    const atlas = await blobToImage(await fetchFirst([base + part.png], "blob"));
     const f = { r, part, atlas, sprites: new Map() };
     const clip = (key) => { const c = CLIPS.find((x) => x.key === key); return c ? c.names.find((n) => part.animations[n]?.frames?.length) || null : null; };
     f.clips = { idle: clip("idle"), move: clip("move"), attack: clip("attack"), skill1: clip("skill1"), skill2: clip("skill2"), knockback: clip("knockback") };
@@ -2927,7 +2949,7 @@ footer a { color: inherit; }
     await Promise.all(Object.keys(meta.parts).filter((k) => k !== "body").map(async (k) => {
       try {
         const bp = meta.parts[k];
-        f.bul[k] = { part: bp, atlas: await blobToImage(await fetchFirst([LOCAL + bp.png], "blob")), sprites: new Map() };
+        f.bul[k] = { part: bp, atlas: await blobToImage(await fetchFirst([base + bp.png], "blob")), sprites: new Map() };
       } catch {}
     }));
     f.lb = fBounds(f, f.clips.idle || f.clips.attack);

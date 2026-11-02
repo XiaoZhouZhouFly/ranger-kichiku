@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.9-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.9"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.9.1-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.9.1"></a>
 </p>
 
 <p align="center">
@@ -44,8 +44,9 @@
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v4.9）
+## 最近更新（v4.9.1）
 
+- 新增兩隻自製測試角色「【自製】方塊騎士」「【自製】圓圓法師」，並在網站與 README 加上非官方聲明。
 - 錄影改成逐格輸出：比即時錄快好幾倍、不掉格，音效和畫面完全對齊（Chrome、Edge 等支援的瀏覽器）。
 - 修正 iPhone／iPad 錄的影片在內建播放器結尾卡住的問題（v4.8.1）。
 - 新增上一步／下一步：單人的惡搞片段和零件調整改錯了可以復原。
@@ -56,9 +57,13 @@
 
 📜 [完整版本更新日誌](CHANGELOG.md)
 
-## 說明
+## 聲明
 
-非官方粉絲工具，與 LINE 無關。角色美術版權屬於 LINE；動畫資料每日同步自 [LINE Rangers 資料站](https://rangerbook.warmycat.com/)（蚯蚓貓）的公開素材庫。
+- **非官方粉絲工具，完全免費、非營利。** 本專案與 LINE、LY Corporation 及 LINE Rangers 官方沒有任何關係，也未獲得其授權或背書。
+- LINE Rangers 的角色名稱、圖片、動畫與音效等權利，皆屬 LY Corporation 及其授權方所有。角色動畫資料每日同步自 [LINE Rangers 資料站](https://rangerbook.warmycat.com/)（蚯蚓貓）的公開素材庫。
+- 名稱前標有「【自製】」的角色（方塊騎士、圓圓法師）由本專案自行繪製，不含任何官方素材；網站的播放、剪輯、對戰、錄影功能都能只用這些角色運作。
+- 權利人如認為本專案內容有不當之處，請開 [Issue](https://github.com/XiaoZhouZhouFly/ranger-kichiku/issues) 聯絡，我們會立即配合移除或下架。
+- 用本工具輸出的影片請勿用於商業用途。
 
 ---
 
@@ -74,6 +79,8 @@
 | `.github/workflows/sync.yml` | 每天自動執行同步並發布網站 |
 | `.github/*.gif` | README 用的示範動圖 |
 | `sfx/` | 預設音效檔（遊戲技能發動聲） |
+| `custom/` | 自製測試角色（不含官方素材，不受每日同步影響） |
+| `tools/make_custom_chars.py` | 產生自製測試角色的程式（需要 Pillow） |
 | `assets/` | 分享預覽圖、主畫面圖示與設定（manifest） |
 | `CHANGELOG.md` | 版本更新日誌 |
 | `data/` | 同步下來的角色資料（自動產生，不用手動改） |
