@@ -736,7 +736,9 @@ footer a { color: inherit; }
       try {
         const r = await fetch(u);
         if (!r.ok) throw new Error(r.status + " " + u);
-        return kind === "json" ? await r.json() : await r.blob();
+        const out = kind === "json" ? await r.json() : await r.blob();
+        markDirty();
+        return out;
       } catch (e) { lastErr = e; }
     }
     throw lastErr || new Error("無法讀取");
@@ -745,9 +747,18 @@ footer a { color: inherit; }
     if (window.createImageBitmap) { try { return await createImageBitmap(blob); } catch {} }
     return await new Promise((res, rej) => {
       const img = new Image(); const url = URL.createObjectURL(blob);
-      img.onload = () => res(img); img.onerror = rej; img.src = url;
+      img.onload = () => { URL.revokeObjectURL(url); res(img); }; img.onerror = (e) => { URL.revokeObjectURL(url); rej(e); }; img.src = url;
     });
   }
+  // 換角色時把舊的圖片還給系統，連續換很多隻角色記憶體也不會一直累積
+  function freeImage(img) { try { if (img && img.close) img.close(); } catch {} }
+  function freeCanvases(map) {
+    if (!map) return;
+    for (const c of map.values()) if (c && c.getContext) { c.width = 0; c.height = 0; }
+    map.clear();
+  }
+  function freeBul(bul) { for (const k in bul || {}) { freeImage(bul[k].atlas); freeCanvases(bul[k].sprites); } }
+  function freeFighter(f) { if (!f) return; freeImage(f.atlas); freeCanvases(f.sprites); freeBul(f.bul); }
   let pakoPromise = null;
   function loadPako() {
     if (window.pako) return Promise.resolve();
@@ -774,18 +785,20 @@ footer a { color: inherit; }
 
   async function loadIndex() {
     const note = $("modeNote");
-    try { S.index = await fetchFirst([LOCAL + "units.json"], "json"); } catch { S.index = []; }
+    // 幾份索引同時下載；原始數值（stats.json）等第一次進雙人對戰才下載
+    const get = (name, fb) => fetchFirst([LOCAL + name], "json").catch(() => fb);
+    const [idx, skills, proj, st] = await Promise.all([get("units.json", []), get("skills.json", {}), get("projectiles.json", {}), get("sync_state.json", {})]);
+    S.index = Array.isArray(idx) ? idx : []; S.skills = skills || {}; S.proj = proj || {};
     S.index.forEach((r) => { if (!r.name) r.name = r.id; });
-    try { S.skills = await fetchFirst([LOCAL + "skills.json"], "json"); } catch { S.skills = {}; }
-    try { S.proj = await fetchFirst([LOCAL + "projectiles.json"], "json"); } catch { S.proj = {}; }
-    try { S.stats = await fetchFirst([LOCAL + "stats.json"], "json"); } catch { S.stats = {}; }
     let when = "";
-    try {
-      const st = await fetchFirst([LOCAL + "sync_state.json"], "json");
-      if (st.synced_at) when = `・資料更新於 ${new Date(st.synced_at).toLocaleDateString("zh-TW")}`;
-    } catch {}
+    try { if (st && st.synced_at) when = `・資料更新於 ${new Date(st.synced_at).toLocaleDateString("zh-TW")}`; } catch {}
     if (S.index.length) { note.textContent = `共 ${S.index.length} 隻角色${when}`; note.classList.remove("off"); }
     else { note.textContent = "還沒有角色資料。第一次同步完成後重新整理即可。"; note.classList.add("off"); }
+  }
+  let statsPromise = null;
+  function ensureStats() {
+    if (!statsPromise) statsPromise = fetchFirst([LOCAL + "stats.json"], "json").then((x) => { S.stats = x && typeof x === "object" ? x : {}; }, () => { S.stats = {}; });
+    return statsPromise;
   }
   const available = () => true;
 
@@ -912,11 +925,14 @@ footer a { color: inherit; }
       let meta;
       try { meta = await fetchGzJson(`${LOCAL}units/${r.id}.json.gz`); }
       catch { meta = await fetchFirst([`${LOCAL}units/${r.id}.json`], "json"); }
-      S.unit = r; S.meta = meta;
-      S.bul = {};
+      const bul = {};
       await Promise.all(Object.keys(meta.parts).filter((k) => k !== "body").map(async (k) => {
-        try { S.bul[k] = { part: meta.parts[k], atlas: await blobToImage(await fetchFirst([LOCAL + meta.parts[k].png], "blob")), sprites: new Map() }; } catch {}
+        try { bul[k] = { part: meta.parts[k], atlas: await blobToImage(await fetchFirst([LOCAL + meta.parts[k].png], "blob")), sprites: new Map() }; } catch {}
       }));
+      const oldBul = S.bul;
+      S.swapping = true; // 換角色途中先不畫，避免新舊資料混在一起
+      S.unit = r; S.meta = meta; S.bul = bul;
+      if (oldBul !== bul) freeBul(oldBul);
       $("unitName").textContent = r.name;
       $("unitTag").textContent = [r.id, r.star, r.type, r.element].filter(Boolean).join("・");
       store.set("unit", r.id);
@@ -928,7 +944,7 @@ footer a { color: inherit; }
       hideOverlay();
     } catch (e) {
       showOverlay(`讀取 ${r.name} 失敗：${e.message || e}`, true);
-    }
+    } finally { S.swapping = false; markDirty(); }
   }
   const skillIconUrl = (icon) => icon ? `${LOCAL}res/skill_icon/${icon}` : "";
   function unitSkills() { return (S.unit && S.skills[S.unit.id]) || []; }
@@ -988,10 +1004,13 @@ footer a { color: inherit; }
     return b;
   }
   async function selectPart(key, clipKey) {
-    S.partKey = key; S.part = S.meta.parts[key];
+    const part = S.meta.parts[key];
     $("parts").querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.part === key)));
-    S.atlas = await blobToImage(await fetchFirst([LOCAL + S.part.png], "blob"));
-    S.sprites.clear(); S.hueCache.clear();
+    const atlas = await blobToImage(await fetchFirst([LOCAL + part.png], "blob"));
+    const oldAtlas = S.atlas;
+    S.partKey = key; S.part = part; S.atlas = atlas;
+    freeCanvases(S.sprites); freeCanvases(S.hueCache);
+    if (oldAtlas !== atlas) freeImage(oldAtlas);
     buildClips();
     const anim = resolveClip(clipKey) || firstAnim();
     selectAnim(anim);
@@ -1375,7 +1394,7 @@ footer a { color: inherit; }
   function totalLen() { return S.mode === "remix" ? S.timeline.length : (anim() ? clipN() : 0); }
   function rate() { return S.mode === "remix" ? FPS_OUT : (S.part?.anim_rate || 24) * S.speed; }
   function drawCurrent() {
-    if (!S.part || !anim() || !S.atlas) return; // 切換角色載入中時先不畫
+    if (!S.part || !anim() || !S.atlas || S.swapping) return; // 切換角色載入中時先不畫
     const k = Math.floor(S.pos);
     if (S.mode === "remix") {
       const st = remixState(k);
@@ -1387,6 +1406,19 @@ footer a { color: inherit; }
     if (!scrubbing) $("scrub").value = String(k);
   }
   let scrubbing = false;
+  /* 暫停時不重畫：只有畫面可能變了（操作、下載完成、視窗大小改變）才畫，
+     另外每秒保底畫一次，以防漏掉。播放中照常每格都畫。 */
+  let needDraw = true, dirtyUntil = 0, lastDraw = 0;
+  function markDirty(ms = 0) { needDraw = true; if (ms) dirtyUntil = Math.max(dirtyUntil, performance.now() + ms); }
+  function shouldDraw(playing) {
+    const now = performance.now();
+    if (playing || needDraw || now < dirtyUntil || now - lastDraw > 1000) { needDraw = false; lastDraw = now; return true; }
+    return false;
+  }
+  ["input", "change", "click", "pointerdown", "pointerup", "keydown", "wheel", "drop"].forEach((ev) => document.addEventListener(ev, () => markDirty(600), { capture: true, passive: true }));
+  document.addEventListener("pointermove", (e) => { if (e.buttons) markDirty(300); }, { capture: true, passive: true });
+  window.addEventListener("resize", () => markDirty(300));
+  document.addEventListener("visibilitychange", () => markDirty());
   function updateScrub() { $("scrub").max = String(Math.max(0, totalLen() - 1)); }
   function loop(ts) {
     requestAnimationFrame(loop);
@@ -1408,7 +1440,7 @@ footer a { color: inherit; }
       if (S.playing) { const sl = singleSfxList(); sfxRun(S.sfxSt, sl.list, S.sfxAbs, rate(), sl.len, singleSfxPlay); }
       S.sfxPosRef = S.pos;
     } else if (S.sfxAbs != null) { S.sfxAbs = null; sfxStopPending(); }
-    drawCurrent();
+    if (shouldDraw(S.playing)) drawCurrent();
   }
   function setPlaying(p) {
     S.playing = p;
@@ -2421,6 +2453,13 @@ footer a { color: inherit; }
       try { D.sumF[sm.id] = await loadFighter(r); } catch {}
     }
   }
+  // 已經沒有角色會用到的召喚物，圖片釋放掉
+  function pruneSummons() {
+    if (!D.sumF) return;
+    const keep = new Set();
+    for (const f of D.f) { const st = f && S.stats[f.r.id]; for (const sk of (st && st.sk) || []) if (sk && sk.sum) keep.add(sk.sum.id); }
+    for (const id of Object.keys(D.sumF)) if (!keep.has(id)) { freeFighter(D.sumF[id]); delete D.sumF[id]; }
+  }
   function summonLevel(sm, L) {
     const v = sm.lv ? +sm.lv[1] || 0 : 0;
     if (!sm.lv) return L;
@@ -2794,6 +2833,7 @@ footer a { color: inherit; }
       sfxRun(D.sfxSt, duelSfxList(), D.sfxAbs, DFPS, D.len, duelSfxPlay);
       D.sfxPosRef = D.pos;
     } else if (D.sfxAbs != null) { D.sfxAbs = null; sfxStopPending(); }
+    if (!shouldDraw(D.playing && D.f[0] && D.f[1])) return;
     renderDuel(Math.floor(D.pos));
     $("dframeNo").textContent = `${Math.floor(D.pos)} / ${Math.max(0, D.len - 1)}`;
     if (!dscrubbing) $("dscrub").value = String(Math.floor(D.pos));
@@ -2888,12 +2928,16 @@ footer a { color: inherit; }
   async function setFighter(i, r, keepMoves) {
     setLoad($("doverlay"), `載入 ${r.name} …`);
     try {
-      D.f[i] = await loadFighter(r);
+      const nf = await loadFighter(r);
+      const old = D.f[i];
+      D.f[i] = nf;
       await loadSummons(i);
       D.range[i] = null; D.level[i] = null; D.cheat[i] = {};
       fighterPanel(i);
       if (!keepMoves || D.mode !== "custom") D.moves = D.mode === "random" ? presetRandomDuel() : presetTrade();
       compileDuel(); renderMoves(); saveDuel(); renderRealPanel();
+      if (old && old !== D.f[0] && old !== D.f[1]) freeFighter(old);
+      pruneSummons();
       D.pos = 0;
       $("doverlay").hidden = true;
     } catch (e) {
@@ -2984,7 +3028,7 @@ footer a { color: inherit; }
     const a = (fromUrl && find(URLP.get("l"))) || find(saved.a) || S.unit || find(DEFAULT_UNIT) || S.index[0];
     const b = (fromUrl && find(URLP.get("r"))) || find(saved.b) || find("u010u-clara") || find("u1001u-brown") || S.index.find((r) => r.id !== a.id);
     setLoad($("doverlay"), "載入角色中…");
-    const [fa, fb] = await Promise.all([loadFighter(a), loadFighter(b)]);
+    const [fa, fb] = await Promise.all([loadFighter(a), loadFighter(b), ensureStats()]);
     D.f = [fa, fb]; fighterPanel(0); fighterPanel(1);
     await loadSummons(0); await loadSummons(1);
     D.mode = saved.mode || "trade";
