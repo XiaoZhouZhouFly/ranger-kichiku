@@ -144,6 +144,12 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 /* 手機：雙人的幀數移到第二行，讓進度條寬一點 */
 @media (max-width: 480px) { .transport.duel-transport .frame-no { grid-column: 1 / -1; grid-row: 2; justify-self: end; margin-top: -2px; } }
 .transport-row2 { display: flex; align-items: center; gap: 8px; }
+.saved-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted, #667); margin-top: 6px; }
+.saved-line span { min-width: 0; overflow-wrap: anywhere; }
+.saved-files .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.saved-files .saved-sum { font-size: 13px; font-weight: 700; }
+.transport-row2 .undo-wrap { margin-left: auto; display: inline-flex; gap: 8px; }
+.transport-row2 .btn.icon { width: 40px; height: 40px; min-height: 40px; padding: 0; display: inline-grid; place-items: center; box-sizing: border-box; }
 .moves { display: grid; gap: 6px; }
 .move { display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1.3fr); gap: 6px 8px; align-items: center; padding: 8px; border-radius: 10px; background: var(--paper); border: 1.5px solid var(--line); border-left: 6px solid var(--hot); }
 .move.is-b { border-left-color: var(--cool); }
@@ -386,6 +392,10 @@ footer a { color: inherit; }
           <button id="modeOrig" aria-pressed="true">原始</button>
           <button id="modeRemix" aria-pressed="false">惡搞</button>
         </div>
+        <span class="undo-wrap">
+          <button class="btn icon" id="undoBtn" type="button" aria-label="上一步" title="上一步（Ctrl+Z）" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 7 4.5 11.5 9 16M5 11.5h9.5a5 5 0 0 1 0 10H11" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button class="btn icon" id="redoBtn" type="button" aria-label="下一步" title="下一步（Ctrl+Shift+Z）" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m15 7 4.5 4.5L15 16m4-4.5H9.5a5 5 0 0 0 0 10H13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </span>
       </div>
       <p class="hint">拖曳畫面可平移鏡頭，雙擊畫面重設。</p>
       <div class="skills" id="skills" aria-label="技能"></div>
@@ -480,8 +490,15 @@ footer a { color: inherit; }
         <div class="group">
           <span class="lbl">背景音樂（選用）</span>
           <input type="file" id="audioFile" accept="audio/*">
+          <div class="saved-line" data-saved="bgm" hidden><span></span><button class="btn small" type="button">移除音樂</button></div>
           <label class="slider">音樂起點 <input type="range" id="audioStart" min="0" max="60" step="0.1" value="0"><output id="audioStartOut">0.0s</output></label>
           <p class="hint">錄製時會從指定秒數開始播放並一起錄進影片。請使用你有權使用的音樂。</p>
+        </div>
+        <div class="group">
+          <div class="saved-files" hidden>
+            <div class="row"><span class="saved-sum"></span><button class="btn small saved-clear" type="button">清除已存的檔案</button></div>
+            <p class="hint">自己上傳的音效、背景音樂和競技場背景會存在這台裝置的瀏覽器裡，重新整理後不用再上傳。換手機、換瀏覽器或清除瀏覽資料後就會不見；iPhone／iPad 超過約 7 天沒打開這個網站，也可能被系統自動清掉。</p>
+          </div>
         </div>
         <div class="group">
           <span class="lbl">錄製</span>
@@ -677,6 +694,11 @@ footer a { color: inherit; }
               <button class="chip" data-size="720x1280" aria-pressed="false">9:16 直式</button>
             </div>
             <label class="field">背景音樂（選用）<input type="file" id="dAudio" accept="audio/*"></label>
+            <div class="saved-line" data-saved="bgm" hidden><span></span><button class="btn small" type="button">移除音樂</button></div>
+            <div class="saved-files" hidden>
+            <div class="row"><span class="saved-sum"></span><button class="btn small saved-clear" type="button">清除已存的檔案</button></div>
+            <p class="hint">自己上傳的音效、背景音樂和競技場背景會存在這台裝置的瀏覽器裡，重新整理後不用再上傳。換手機、換瀏覽器或清除瀏覽資料後就會不見；iPhone／iPad 超過約 7 天沒打開這個網站，也可能被系統自動清掉。</p>
+          </div>
             <p class="hint">要錄製影片，按播放列右邊的下載圖示。</p>
             <div class="status" id="dStatus"></div>
           </div>
@@ -1093,6 +1115,7 @@ footer a { color: inherit; }
     rebuildTimeline();
     updateScrub();
     drawCurrent();
+    histReset();
   }
   const anim = () => S.part.animations[S.animName];
   // 播放長度：有投射物時延長到投射物飛完、命中特效播完（角色停在最後一幀）
@@ -1476,7 +1499,7 @@ footer a { color: inherit; }
     const nm = document.createElement("div"); nm.className = "cname"; nm.textContent = name.replace(/^.*-(body|bul\d?)_/, "");
     const lab = document.createElement("label"); lab.className = "check";
     const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = cp.show;
-    cb.onchange = () => { cp.show = cb.checked; card.classList.toggle("off", !cp.show); drawCurrent(); };
+    cb.onchange = () => { cp.show = cb.checked; card.classList.toggle("off", !cp.show); compsChanged(); };
     lab.append(cb, document.createTextNode(" 顯示"));
     info.append(nm, lab);
     head.append(c, info);
@@ -1485,7 +1508,7 @@ footer a { color: inherit; }
       const l = document.createElement("label"); l.className = "slider";
       const r = document.createElement("input"); r.type = "range"; r.min = min; r.max = max; r.step = step; r.value = cp[key];
       const o = document.createElement("output"); o.textContent = fmt(cp[key]);
-      r.oninput = () => { cp[key] = +r.value; o.textContent = fmt(cp[key]); drawCurrent(); };
+      r.oninput = () => { cp[key] = +r.value; o.textContent = fmt(cp[key]); compsChanged(); };
       l.append(document.createTextNode(label), r, o);
       return l;
     };
@@ -1559,7 +1582,35 @@ footer a { color: inherit; }
     setTimeout(syncUrl, 0);
     if (S.unit && S.animName) store.set("segs:" + S.unit.id + ":" + S.partKey + ":" + S.animName, S.segs);
   }
+  /* ---------- 上一步／下一步（單人：惡搞片段與零件調整） ----------
+     每次變動後 0.4 秒記一筆快照（拖滑桿只記一筆）；換角色、部位或動作時重新開始。 */
+  const H = { list: [], at: -1, timer: 0, restoring: false };
+  const histSnap = () => JSON.stringify({ segs: S.segs, comps: S.comps });
+  function histUi() { $("undoBtn").disabled = H.at <= 0; $("redoBtn").disabled = H.at >= H.list.length - 1; }
+  function histReset() { clearTimeout(H.timer); H.timer = 0; H.list = [histSnap()]; H.at = 0; histUi(); }
+  function histCommit() {
+    clearTimeout(H.timer); H.timer = 0;
+    const snap = histSnap();
+    if (snap === H.list[H.at]) return;
+    H.list = H.list.slice(0, H.at + 1); H.list.push(snap);
+    if (H.list.length > 100) H.list.shift();
+    H.at = H.list.length - 1; histUi();
+  }
+  function histMark() { if (H.restoring || !H.list.length) return; clearTimeout(H.timer); H.timer = setTimeout(histCommit, 400); }
+  function histGo(step) {
+    if (H.timer) histCommit(); // 還沒記下的變動先記，才不會漏掉
+    const to = H.at + step;
+    if (to < 0 || to >= H.list.length) return;
+    H.at = to;
+    const st = JSON.parse(H.list[to]);
+    H.restoring = true;
+    try { S.segs = st.segs; S.comps = st.comps || {}; buildComps(); segsChanged(); drawCurrent(); markDirty(); }
+    finally { H.restoring = false; }
+    histUi();
+  }
+  function compsChanged() { drawCurrent(); histMark(); }
   function segsChanged(rebuild = true) {
+    histMark();
     rebuildTimeline(); saveSegs();
     if (S.mode === "remix") { updateScrub(); if (S.pos >= totalLen()) S.pos = 0; drawCurrent(); }
     if (rebuild) renderSegs();
@@ -1692,6 +1743,88 @@ footer a { color: inherit; }
     const c = SFX.ctx || (OAC ? new OAC(1, 1, 44100) : null);
     if (!c) return Promise.reject(new Error("no audio"));
     return new Promise((ok, bad) => { const p = c.decodeAudioData(ab, ok, bad); if (p && p.then) p.then(ok, bad); });
+  }
+  /* ---------- 自己上傳的檔案存在這台裝置（IndexedDB） ----------
+     key：sfx:<single|duel0|duel1>-<atk|skill|hit>、bgm、duelBg
+     值：{ data: ArrayBuffer, type, name, size, saved }（存 ArrayBuffer 而不是 Blob，舊版 Safari 也能存） */
+  const FILES = { db: null, meta: {}, clearArm: 0 };
+  function filesDb() {
+    if (!FILES.db) {
+      FILES.db = new Promise((ok, bad) => {
+        try {
+          const rq = indexedDB.open("ranger-kichiku", 1);
+          rq.onupgradeneeded = () => rq.result.createObjectStore("files");
+          rq.onsuccess = () => ok(rq.result); rq.onerror = () => bad(rq.error); rq.onblocked = () => bad(new Error("blocked"));
+        } catch (e) { bad(e); }
+      });
+      FILES.db.catch(() => {});
+    }
+    return FILES.db;
+  }
+  async function fileTx(mode, fn) {
+    const db = await filesDb();
+    return new Promise((ok, bad) => {
+      const tx = db.transaction("files", mode); let out;
+      const rq = fn(tx.objectStore("files")); if (rq) rq.onsuccess = () => { out = rq.result; };
+      tx.oncomplete = () => ok(out); tx.onerror = () => bad(tx.error); tx.onabort = () => bad(tx.error);
+    });
+  }
+  async function fileGet(key) { try { return (await fileTx("readonly", (st) => st.get(key))) || null; } catch { return null; } }
+  async function fileAll() {
+    const out = {};
+    try { await fileTx("readonly", (st) => { const rq = st.openCursor(); rq.onsuccess = () => { const c = rq.result; if (c) { out[c.key] = c.value; c.continue(); } }; }); } catch {}
+    return out;
+  }
+  async function filePut(key, blob, name) {
+    if (!blob || blob.size > 60 * 1024 * 1024) return false; // 超過 60 MB 不存
+    try {
+      const rec = { data: await blob.arrayBuffer(), type: blob.type || "", name: name || "", size: blob.size, saved: Date.now() };
+      await fileTx("readwrite", (st) => st.put(rec, key));
+      FILES.meta[key] = { name: rec.name, size: rec.size }; filesUi();
+      try { if (navigator.storage && navigator.storage.persist && !/firefox/i.test(navigator.userAgent)) navigator.storage.persist(); } catch {}
+      return true;
+    } catch { return false; }
+  }
+  async function fileDel(key) { try { await fileTx("readwrite", (st) => st.delete(key)); } catch {} delete FILES.meta[key]; filesUi(); }
+  const recBlob = (rec) => new Blob([rec.data], { type: rec.type || "" });
+  function fmtSize(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
+  function filesUi() {
+    const keys = Object.keys(FILES.meta);
+    const total = keys.reduce((a, k) => a + (FILES.meta[k].size || 0), 0);
+    document.querySelectorAll(".saved-files").forEach((box) => {
+      box.hidden = !keys.length;
+      box.querySelector(".saved-sum").textContent = `這台裝置已存 ${keys.length} 個上傳檔（共 ${fmtSize(total)}）`;
+    });
+    document.querySelectorAll('[data-saved="bgm"]').forEach((el) => {
+      el.hidden = !S.audioUrl;
+      el.querySelector("span").textContent = S.audioUrl ? `目前音樂：${S.audioName || "（未命名）"}${FILES.meta.bgm ? "（已存在這台裝置）" : ""}` : "";
+    });
+    (SFX.refreshers || []).forEach((f) => f());
+  }
+  function setBgm(blob, name) {
+    if (S.audioUrl) URL.revokeObjectURL(S.audioUrl);
+    S.audioUrl = blob ? URL.createObjectURL(blob) : null; S.audioName = blob ? name || "" : "";
+    filesUi();
+  }
+  // 開網頁時把存著的音效、背景音樂放回去（競技場背景在進雙人對戰時讀）
+  async function filesRestore() {
+    const all = await fileAll();
+    for (const [key, rec] of Object.entries(all)) {
+      if (!rec || !rec.data) continue;
+      FILES.meta[key] = { name: rec.name, size: rec.size || rec.data.byteLength };
+      if (key.startsWith("sfx:")) { try { SFX.custom[key.slice(4)] = await sfxDecode(rec.data.slice(0)); } catch {} }
+      else if (key === "bgm" && !S.audioUrl) setBgm(recBlob(rec), rec.name);
+    }
+    filesUi();
+  }
+  async function filesClearAll() {
+    try { await fileTx("readwrite", (st) => st.clear()); } catch {}
+    FILES.meta = {}; SFX.custom = {};
+    setBgm(null); $("audioFile").value = ""; $("dAudio").value = "";
+    if (D.bgImg) { applyDuelBg(null); $("dBgFile").value = ""; }
+    try { localStorage.removeItem("rk_duelBg"); } catch {}
+    document.querySelectorAll(".sfx-row input[type=file]").forEach((i) => (i.value = ""));
+    filesUi();
   }
   async function sfxLoad() {
     const ids = SFX_PRESETS.map((p) => p[0]).filter((id) => !["none", "game", "custom"].includes(id));
@@ -1894,7 +2027,12 @@ footer a { color: inherit; }
       const file = document.createElement("input"); file.type = "file"; file.accept = "audio/*"; file.hidden = sel.value !== "custom";
       const ck = keyPrefix + "-" + kind;
       const note = document.createElement("span"); note.className = "sfx-note";
-      const refresh = () => { file.hidden = sel.value !== "custom"; note.textContent = sel.value === "custom" && !SFX.custom[ck] ? "請選擇音效檔" : ""; };
+      const refresh = () => {
+        file.hidden = sel.value !== "custom";
+        const m = FILES.meta["sfx:" + ck];
+        note.textContent = sel.value !== "custom" ? "" : !SFX.custom[ck] ? "請選擇音效檔" : m ? `已存：${m.name || "音效檔"}` : "";
+      };
+      (SFX.refreshers = SFX.refreshers || []).push(refresh);
       const preview = async () => {
         const ctx = sfxCtx(); if (!ctx) return;
         try { await ctx.resume(); } catch {}
@@ -1905,7 +2043,8 @@ footer a { color: inherit; }
       file.onchange = async () => {
         const f = file.files && file.files[0]; if (!f) return;
         try { SFX.custom[ck] = await sfxDecode(await f.arrayBuffer()); note.textContent = ""; preview(); }
-        catch { note.textContent = "這個檔案無法讀取"; }
+        catch { note.textContent = "這個檔案無法讀取"; return; }
+        await filePut("sfx:" + ck, f, f.name); refresh();
       };
       const test = document.createElement("button"); test.className = "btn small"; test.textContent = "▶ 試聽"; test.type = "button";
       test.onclick = preview;
@@ -2240,8 +2379,8 @@ footer a { color: inherit; }
   }));
   $("remixAnim").onchange = (e) => { selectAnim(e.target.value); setMode("remix"); setPlaying(true); };
   $("segAdd").onclick = () => { const n = clipN(); S.segs.push(defSeg(n)); segsChanged(); };
-  $("compReset").onclick = () => { for (const k in S.comps) S.comps[k] = defComp(); buildComps(); drawCurrent(); };
-  $("compShowAll").onclick = () => { for (const k in S.comps) S.comps[k].show = true; buildComps(); drawCurrent(); };
+  $("compReset").onclick = () => { for (const k in S.comps) S.comps[k] = defComp(); buildComps(); compsChanged(); };
+  $("compShowAll").onclick = () => { for (const k in S.comps) S.comps[k].show = true; buildComps(); compsChanged(); };
   $("compChaos").onclick = () => {
     const R = Math.random;
     for (const k in S.comps) {
@@ -2252,17 +2391,41 @@ footer a { color: inherit; }
       c.jitter = R() < 0.25 ? Math.round(R() * 20) : 0;
       c.show = R() > 0.05;
     }
-    buildComps(); drawCurrent();
+    buildComps(); compsChanged();
   };
+  $("undoBtn").onclick = () => histGo(-1);
+  $("redoBtn").onclick = () => histGo(1);
+  document.addEventListener("keydown", (e) => {
+    if (S.app !== "single" || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const t = e.target, tag = t && t.tagName;
+    if (tag === "TEXTAREA" || tag === "SELECT" || (tag === "INPUT" && !["range", "checkbox", "radio", "button"].includes(t.type)) || (t && t.isContentEditable)) return; // 輸入框裡交給瀏覽器
+    if (document.querySelector(".modal:not([hidden])")) return;
+    const k = e.key.toLowerCase();
+    if (k === "z" && !e.shiftKey) { e.preventDefault(); histGo(-1); }
+    else if ((k === "z" && e.shiftKey) || k === "y") { e.preventDefault(); histGo(1); }
+  });
   $("recRemix").onclick = () => record("remix");
   $("recOrig").onclick = () => record("orig");
   $("savePng").onclick = savePng;
-  $("audioFile").onchange = (e) => {
+  $("audioFile").onchange = async (e) => {
     const f = e.target.files && e.target.files[0];
-    if (S.audioUrl) URL.revokeObjectURL(S.audioUrl);
-    S.audioUrl = f ? URL.createObjectURL(f) : null;
-    $("outStatus").textContent = f ? `已載入音樂：${f.name}` : "";
+    if (!f) return;
+    setBgm(f, f.name); $("outStatus").textContent = `已載入音樂：${f.name}`;
+    await filePut("bgm", f, f.name);
   };
+  document.querySelectorAll('[data-saved="bgm"] button').forEach((b) => (b.onclick = () => { setBgm(null); $("audioFile").value = ""; $("dAudio").value = ""; fileDel("bgm"); }));
+  document.querySelectorAll(".saved-clear").forEach((b) => (b.onclick = () => {
+    // 按兩次才清除，避免誤觸
+    if (Date.now() - FILES.clearArm > 4000) {
+      FILES.clearArm = Date.now();
+      document.querySelectorAll(".saved-clear").forEach((x) => (x.textContent = "再按一次確定清除"));
+      setTimeout(() => document.querySelectorAll(".saved-clear").forEach((x) => (x.textContent = "清除已存的檔案")), 4000);
+      return;
+    }
+    FILES.clearArm = 0;
+    document.querySelectorAll(".saved-clear").forEach((x) => (x.textContent = "清除已存的檔案"));
+    filesClearAll();
+  }));
 
   // 拖曳平移
   let drag = null;
@@ -3008,7 +3171,7 @@ footer a { color: inherit; }
     D.kind = saved.kind || "classic"; D.raw = !!saved.raw; D.timeLimit = saved.timeLimit || 60; D.hpMul = saved.hpMul > 0 ? saved.hpMul : 1;
     D.range = saved.range || [null, null]; D.level = saved.level || [null, null]; D.cheat = saved.cheat || [{}, {}];
     D.ground = saved.ground ?? 8; $("dGround").value = D.ground; $("dGroundOut").textContent = D.ground + "%";
-    try { const u = localStorage.getItem("rk_duelBg"); if (u) applyDuelBg(await loadDuelBg(u)); } catch {}
+    await restoreDuelBg();
     $("dDist").value = D.dist; $("dDistOut").textContent = D.dist;
     $("dSpeed").value = D.speed; $("dSpeedOut").textContent = D.speed.toFixed(2) + "×";
     $("dShake").checked = D.shake; $("dInvert").checked = D.invert; $("dNumbers").checked = D.numbers; $("dBars").checked = D.bars;
@@ -3092,6 +3255,7 @@ footer a { color: inherit; }
   $("dProj").onchange = () => { D.projOn = $("dProj").checked; movesChanged(); };
   $("dFinale").onchange = () => { D.finale = $("dFinale").checked; movesChanged(); };
   function applyDuelBg(img) {
+    if (D.bgImg && D.bgImg.src && D.bgImg.src.startsWith("blob:") && D.bgImg !== img) URL.revokeObjectURL(D.bgImg.src);
     D.bgImg = img;
     $("dBgClear").hidden = !img; $("dGroundRow").hidden = !img; $("dBgHint").hidden = !img;
   }
@@ -3101,25 +3265,36 @@ footer a { color: inherit; }
   $("dBgFile").onchange = async (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
-    const raw = await loadDuelBg(URL.createObjectURL(f));
+    const rawUrl = URL.createObjectURL(f), raw = await loadDuelBg(rawUrl);
+    setTimeout(() => URL.revokeObjectURL(rawUrl), 0);
     if (!raw) { $("dStatus").textContent = "這張圖片讀不出來，請換一張 JPG 或 PNG。"; return; }
     // 縮小到 1600 寬存起來，下次打開還在
     const s = Math.min(1, 1600 / raw.width), cvs = document.createElement("canvas");
     cvs.width = Math.round(raw.width * s); cvs.height = Math.round(raw.height * s);
     cvs.getContext("2d").drawImage(raw, 0, 0, cvs.width, cvs.height);
-    const url = cvs.toDataURL("image/jpeg", 0.85);
-    applyDuelBg(await loadDuelBg(url));
-    try { localStorage.setItem("rk_duelBg", url); } catch {}
+    const blob = await new Promise((ok) => cvs.toBlob(ok, "image/jpeg", 0.85));
+    if (!blob) return;
+    applyDuelBg(await loadDuelBg(URL.createObjectURL(blob)));
+    await filePut("duelBg", blob, f.name);
   };
-  $("dBgClear").onclick = () => { applyDuelBg(null); $("dBgFile").value = ""; try { localStorage.removeItem("rk_duelBg"); } catch {} };
+  $("dBgClear").onclick = () => { applyDuelBg(null); $("dBgFile").value = ""; fileDel("duelBg"); try { localStorage.removeItem("rk_duelBg"); } catch {} };
+  async function restoreDuelBg() {
+    // 舊版存在 localStorage 的背景圖搬進 IndexedDB
+    try {
+      const old = localStorage.getItem("rk_duelBg");
+      if (old) { const b = await (await fetch(old)).blob(); if (await filePut("duelBg", b, "競技場背景")) localStorage.removeItem("rk_duelBg"); }
+    } catch {}
+    const rec = await fileGet("duelBg");
+    if (rec && rec.data) { const img = await loadDuelBg(URL.createObjectURL(recBlob(rec))); if (img) applyDuelBg(img); }
+  }
   $("dGround").addEventListener("input", () => { D.ground = +$("dGround").value; $("dGroundOut").textContent = D.ground + "%"; saveDuel(); });
   document.querySelectorAll("#dsizes .chip").forEach((c) => (c.onclick = () => setDuelSize(c.dataset.size)));
   $("dRec").onclick = recordDuel;
-  $("dAudio").onchange = (e) => {
+  $("dAudio").onchange = async (e) => {
     const f = e.target.files && e.target.files[0];
-    if (S.audioUrl) URL.revokeObjectURL(S.audioUrl);
-    S.audioUrl = f ? URL.createObjectURL(f) : null;
-    $("dStatus").textContent = f ? `已載入音樂：${f.name}` : "";
+    if (!f) return;
+    setBgm(f, f.name); $("dStatus").textContent = `已載入音樂：${f.name}`;
+    await filePut("bgm", f, f.name);
   };
 
   /* ---------- 真距離／原始數值對戰（內部 kind = "real"，原始數值為 D.raw） ---------- */
@@ -3842,9 +4017,10 @@ footer a { color: inherit; }
     sfxControls($("sfxDuel"), () => SFX.cfg.duel[0], "duel0", "左方");
     sfxControls($("sfxDuel"), () => SFX.cfg.duel[1], "duel1", "右方");
     sfxVolControl($("sfxDuel"));
+    filesRestore();
     for (const id of ["sfxSingle", "sfxDuel"]) {
       const h = document.createElement("p"); h.className = "hint";
-      h.textContent = "普攻在命中時播放；技能在發動和命中時各播一次，可以分別設定。錄影時會一起錄進去。上傳的音效重新整理後要再選一次。";
+      h.textContent = "普攻在命中時播放；技能在發動和命中時各播一次，可以分別設定。錄影時會一起錄進去。上傳的音效會存在這台裝置，重新整理後不用再選。";
       $(id).appendChild(h);
     }
     // 太長的說明收起來，點「說明」才展開
@@ -3894,6 +4070,7 @@ footer a { color: inherit; }
       if (+pend.speed > 0) { S.speed = +pend.speed; if ($("speed")) { $("speed").value = S.speed; $("speed").dispatchEvent(new Event("input")); } }
       if (pend.mode === "remix") setMode("remix");
     }
+    if (S.part) histReset(); // 分享連結或專案檔還原的狀態當作起點
     setApp(urlApp === "duel" || urlApp === "single" ? urlApp : store.get("app", "single"));
     urlSyncOn = true; syncUrl();
     const pt = store.get("pendingToast", null);
