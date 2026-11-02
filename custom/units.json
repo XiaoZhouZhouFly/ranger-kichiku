@@ -1,0 +1,20 @@
+[
+ {
+  "id": "x001-cube",
+  "name": "【自製】方塊騎士",
+  "star": "自製測試",
+  "type": "力量型",
+  "element": "無",
+  "date": "2026/11/02",
+  "custom": true
+ },
+ {
+  "id": "x002-orb",
+  "name": "【自製】圓圓法師",
+  "star": "自製測試",
+  "type": "魔法型",
+  "element": "無",
+  "date": "2026/11/02",
+  "custom": true
+ }
+]
