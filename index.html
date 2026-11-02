@@ -3,17 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="LINE Rangers 角色動畫惡搞工坊：播放技能動作、剪成惡搞影片，或讓兩隻角色上場對打。打開網頁就能用。">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="LR 角色動畫惡搞工坊：播放技能動作、剪成惡搞影片，或讓兩隻角色上場對打。打開網頁就能用。">
 <meta name="theme-color" content="#1b2038">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Ranger 惡搞工坊">
 <meta property="og:title" content="Ranger 惡搞工坊">
-<meta property="og:description" content="LINE Rangers 角色動畫惡搞剪輯・雙人對戰模擬。播放技能、剪成惡搞影片，或讓兩隻角色上場對打。">
+<meta property="og:description" content="LR 角色動畫惡搞剪輯・雙人對戰模擬。播放技能、剪成惡搞影片，或讓兩隻角色上場對打。">
 <meta property="og:url" content="https://xiaozhouzhoufly.github.io/ranger-kichiku/">
 <meta property="og:image" content="https://xiaozhouzhoufly.github.io/ranger-kichiku/assets/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Ranger 惡搞工坊：黑白風之痕對天神宙斯熊大">
+<meta property="og:image:alt" content="Ranger 惡搞工坊：兩隻角色對戰的畫面">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="manifest" href="assets/manifest.webmanifest">
 <link rel="icon" type="image/png" href="assets/icon-192.png">
@@ -317,6 +318,8 @@ details.more summary { cursor: pointer; font-size: 13px; font-weight: 700; color
 .status:empty { display: none; }
 footer { font-size: 12px; color: var(--muted); }
 footer p { margin: 0 0 6px; line-height: 1.6; }
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+.report-text { width: 100%; min-height: 220px; box-sizing: border-box; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; padding: 8px; border: 2px solid var(--line, #ccd); border-radius: 10px; background: var(--paper); color: var(--ink); resize: vertical; }
 footer a { color: inherit; }
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
 </style>
@@ -515,6 +518,16 @@ footer a { color: inherit; }
     </div>
   </div>
 
+  <div class="modal" id="reportModal" hidden role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+    <div class="modal-card">
+      <div class="modal-head"><strong id="reportTitle">回報資訊</strong><button class="btn icon modal-x" id="reportClose" type="button" aria-label="關閉">✕</button></div>
+      <p class="hint">遇到問題時，把下面這段文字和問題描述一起貼給開發者，就能知道你用的是哪一版、哪種瀏覽器，並用最後的連結重現當下的畫面。</p>
+      <textarea class="report-text" id="reportText" readonly aria-label="回報資訊"></textarea>
+      <div class="share-actions"><button class="btn primary" id="reportCopy" type="button" disabled>📋 複製</button></div>
+      <div class="status" id="reportStatus"></div>
+    </div>
+  </div>
+
   <div class="modal" id="shareModal" hidden role="dialog" aria-modal="true" aria-labelledby="shareTitle">
     <div class="modal-card">
       <div class="modal-head"><strong id="shareTitle">分享</strong><button class="btn icon modal-x" id="shareClose" type="button" aria-label="關閉">✕</button></div>
@@ -625,7 +638,7 @@ footer a { color: inherit; }
                 <label class="field">左方等級<span class="lv"><input type="number" id="rLv0" min="1" step="1"><span id="rLvMax0"></span></span></label>
                 <label class="field">右方等級<span class="lv"><input type="number" id="rLv1" min="1" step="1"><span id="rLvMax1"></span></span></label>
               </div>
-              <p class="hint">傷害 =（攻擊 − 對方防禦）× 倍率，最少 1 點，物理、魔法分開計算。照攻擊速度自動出招：先判定技能 1、再判定技能 2，都沒發動就普通攻擊。普通攻擊看「普攻閃避 − 普攻命中」，技能看「技能閃避 − 技能命中」。技能抗性會讓受到的技能傷害（含持續傷害）減少同樣的 %，不影響普通攻擊。爆擊只算普通攻擊；持續傷害每秒結算，多次附加可以疊加。金手指裡也能改每個技能的發動率、冷卻與傷害倍率。不使用距離補償。<br>純輔助技能（沒有傷害倍率）發動時：50% 機率下一次攻擊 +50%，50% 機率回復 20% 體力。</p>
+              <p class="hint">普通攻擊傷害 = 攻擊 × 18000 ÷（18000 + 對方防禦），物理、魔法分開計算，最少 1 點；技能傷害 = 攻擊 × 倍率，不看防禦。照攻擊速度自動出招：先判定技能 1、再判定技能 2，都沒發動就普通攻擊。普通攻擊看「普攻閃避 − 普攻命中」，技能看「技能閃避 − 技能命中」；閃避、技能閃避最多算 95%（先套上限再扣命中）。技能抗性會讓受到的技能傷害（含持續傷害）減少同樣的 %，最多 95%，不影響普通攻擊。爆擊只算普通攻擊；持續傷害每秒結算，多次附加可以疊加。金手指裡也能改每個技能的發動率、冷卻與傷害倍率。不使用距離補償。<br>純輔助技能（沒有傷害倍率）發動時：50% 機率下一次攻擊 +50%，50% 機率回復 20% 體力。</p>
               <div class="group hp-mul">
                 <span class="lbl">血量倍率</span>
                 <div class="chips" id="rHpMul">
@@ -712,12 +725,14 @@ footer a { color: inherit; }
     <p><strong>非官方粉絲工具・完全免費・非營利。</strong>本站與 LINE、LY Corporation 及 LINE Rangers 官方沒有任何關係，也未獲得其授權或背書。</p>
     <p>LINE Rangers 的角色名稱、圖片、動畫與音效等權利皆屬 LY Corporation 及其授權方所有。動畫資料每日同步自 <a href="https://rangerbook.warmycat.com/" target="_blank" rel="noopener">LINE Rangers 資料站</a>（蚯蚓貓）的公開素材庫；名稱前標有「【自製】」的角色是本站自己畫的測試角色，不含官方素材。</p>
     <p>權利人如認為本站內容有不當之處，請到 <a href="https://github.com/XiaoZhouZhouFly/ranger-kichiku/issues" target="_blank" rel="noopener">GitHub Issues</a> 聯絡，我們會立即配合移除或下架。輸出的影片請勿用於商業用途。</p>
+    <p class="ver-line">版本 <strong id="appVer"></strong> ・ <button class="linklike" id="reportBtn" type="button">複製回報資訊</button>（遇到問題時，把這段資訊貼給開發者）</p>
   </footer>
 </div>
 
 <script>
 (() => {
   "use strict";
+  const APP_VERSION = "v4.10";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -3800,6 +3815,10 @@ footer a { color: inherit; }
     ["sdg", "技能閃避 %"], ["sh", "技能命中 %"], ["sr", "技能抗性 %"],
     ["rg", "攻擊距離"], ["mv", "移動速度"],
   ];
+  const DEF_K = 18000;
+  const cap95 = (v) => Math.min(95, Math.max(0, +v || 0));
+  // 普通攻擊：物理、魔法各自依對方防禦打折
+  const atkDmg = (a, t) => a.pa * DEF_K / (DEF_K + Math.max(0, t.pd || 0)) + a.ma * DEF_K / (DEF_K + Math.max(0, t.md || 0));
   function mulberry32(a) {
     return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   }
@@ -3885,10 +3904,8 @@ footer a { color: inherit; }
     const limitK = Math.max(5, D.timeLimit || 60) * DFPS;
     const hits = [];
     let endK = -1, timeUp = false;
-    const dmgCalc = (a, t, coef, base) => {
-      if (base === "hp") return Math.max(0, a.hp - (a.pa > 0 ? t.pd : t.md)) * coef;
-      return (Math.max(0, a.pa - t.pd) + Math.max(0, a.ma - t.md)) * coef;
-    };
+    // v4.10：普攻用防禦公式（攻擊 × K ÷ (K + 防禦)），技能不看防禦；閃避、技能閃避、技能抗性最多 95%
+    const dmgCalc = (a, t, coef, base) => (base === "hp" ? a.hp : a.pa + a.ma) * coef;
     const startAnim = (i, anim, k, loop) => {
       const f = D.f[i];
       const rate = (f.part.anim_rate || 24) * D.speed;
@@ -3928,9 +3945,9 @@ footer a { color: inherit; }
       let dmg, label, crit = false;
       if (raw) {
         const stt = st[j];
-        if (rng() < Math.max(0, stt.dg - so.st.hit) / 100) { pushEvent({ k, target: j, attacker: i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
+        if (rng() < Math.max(0, cap95(stt.dg) - so.st.hit) / 100) { pushEvent({ k, target: j, attacker: i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
         crit = rng() < so.st.cr / 100;
-        dmg = Math.max(1, (Math.max(0, so.st.pa - stt.pd) + Math.max(0, so.st.ma - stt.md)) * (crit ? so.st.cd / 100 : 1));
+        dmg = Math.max(1, atkDmg(so.st, stt) * (crit ? so.st.cd / 100 : 1));
         label = (crit ? "爆擊 " : "") + "-" + Math.round(dmg).toLocaleString();
       } else {
         dmg = (DMG.attack || 15) * (0.75 + rng() * 0.5);
@@ -3962,16 +3979,16 @@ footer a { color: inherit; }
         a.buff = false;
         label = `-${Math.round(dmg * 123)}`;
       } else if (h.action === "attack") {
-        if (rng() < Math.max(0, stt.dg - sa.hit) / 100) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
+        if (rng() < Math.max(0, cap95(stt.dg) - sa.hit) / 100) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
         crit = rng() < sa.cr / 100;
-        dmg = Math.max(1, dmgCalc(sa, stt, 1, "atk") * (crit ? sa.cd / 100 : 1) * (a.buff ? 1.5 : 1));
+        dmg = Math.max(1, atkDmg(sa, stt) * (crit ? sa.cd / 100 : 1) * (a.buff ? 1.5 : 1));
         a.buff = false;
         label = (crit ? "爆擊 " : "") + "-" + Math.round(dmg).toLocaleString();
       } else {
         const sk = sa.sk[h.action === "skill1" ? 0 : 1] || { e: [] };
-        if (rng() < Math.max(0, stt.sdg - sa.sh) / 100) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
+        if (rng() < Math.max(0, cap95(stt.sdg) - sa.sh) / 100) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
         // 技能抗性：技能傷害（單次與持續）照比例減少
-        const mult = (a.buff ? 1.5 : 1) * (1 - Math.max(0, Math.min(100, stt.sr || 0)) / 100);
+        const mult = (a.buff ? 1.5 : 1) * (1 - cap95(stt.sr) / 100);
         for (const e of sk.e) {
           const v = dmgCalc(sa, stt, e.c, e.b) * mult;
           if (e.t === "dot") t.dots.push({ per: Math.max(1, v), next: k + DFPS, until: k + Math.max(1, e.d) * DFPS + 1, from: h.i });
@@ -4503,6 +4520,62 @@ footer a { color: inherit; }
     const a = randomUnit(), b = randomUnit(a && a.id);
     if (a) await setFighter(0, a, true);
     if (b) await setFighter(1, b, true);
+  };
+
+  /* ---------- 回報資訊 ----------
+     一鍵整理：版本、瀏覽器、螢幕、目前模式、錄影會走哪條路、音效狀態，以及能重現當下畫面的分享連結。 */
+  async function reportInfo() {
+    const ua = navigator.userAgent;
+    const lines = [`Ranger 惡搞工坊 ${APP_VERSION}`];
+    lines.push(`時間：${new Date().toLocaleString("zh-TW", { hour12: false })}`);
+    lines.push(`瀏覽器：${ua}`);
+    lines.push(`畫面：${innerWidth}×${innerHeight}，像素比 ${devicePixelRatio || 1}${matchMedia("(pointer: coarse)").matches ? "，觸控" : ""}`);
+    const duel = S.app === "duel";
+    const kind = duel ? (D.kind === "real" ? (D.raw ? "原始數值對戰" : "真距離對戰") : "經典對戰") : (S.mode === "remix" ? "惡搞" : "原始");
+    lines.push(`模式：${duel ? "雙人對戰・" + kind : "單人・" + kind}${duel && D.f[0] && D.f[1] ? `（${D.f[0].r.id} vs ${D.f[1].r.id}）` : S.unit ? `（${S.unit.id}・${S.animName || ""}）` : ""}`);
+    const c = duel ? dcv : cv, fps = duel ? DFPS : 30;
+    let rec = "不支援錄影";
+    try {
+      const sup = await offlineSupport(c.width, c.height, fps);
+      if (sup) rec = `逐格輸出（${sup.vcfg.codec}＋${sup.acfg.codec}）`;
+      else { const m = pickMime(); rec = m === null ? "不支援錄影" : `即時錄影（${m || "瀏覽器預設格式"}）`; }
+    } catch (e) { rec = "檢查失敗：" + (e && e.message || e); }
+    lines.push(`錄影方式：${rec}，輸出尺寸 ${c.width}×${c.height}`);
+    lines.push(`音效：${sfxRunning() ? "已啟動" : "尚未啟動"}，音量 ${Math.round(SFX.vol * 100)}%${SFX.muted ? "（靜音）" : ""}；已存上傳檔 ${Object.keys(FILES.meta).length} 個`);
+    lines.push(`支援：WebCodecs ${window.VideoEncoder ? "有" : "無"}、MediaRecorder ${window.MediaRecorder ? "有" : "無"}、IndexedDB ${window.indexedDB ? "有" : "無"}、CompressionStream ${window.CompressionStream ? "有" : "無"}`);
+    let url = ""; try { url = await shareUrl(); } catch {}
+    lines.push(`目前畫面：${url || location.href}`);
+    return lines.join("\n");
+  }
+  $("appVer").textContent = APP_VERSION;
+  // 自動健檢用：只讀取狀態摘要，不會改變任何東西
+  window.__rk = Object.freeze({
+    version: APP_VERSION,
+    single: () => ({ unit: S.unit && S.unit.id, anim: S.animName, mode: S.mode, segs: S.segs.length, timeline: S.timeline.length, histAt: H.at, histLen: H.list.length, playing: S.playing, ready: !!(S.part && S.atlas) && $("overlay").hidden }),
+    duel: () => ({ inited: !!D.inited, a: D.f[0] && D.f[0].r.id, b: D.f[1] && D.f[1].r.id, kind: D.kind === "real" ? (D.raw ? "raw" : "real") : "classic", len: D.len, result: D.resultText, winner: D.winner,
+      dealt: [0, 1].map((i) => Math.round((D.events || []).filter((e) => e.attacker === i && e.target !== i && e.dmg > 0).reduce((t, e) => t + e.dmg, 0))),
+      ready: !!(D.f[0] && D.f[1]) && $("doverlay").hidden }),
+    files: () => Object.keys(FILES.meta),
+    offline: async (w, h, fps) => { const r = await offlineSupport(w, h, fps); return r ? `${r.vcfg.codec}+${r.acfg.codec}` : ""; },
+    index: () => ({ total: S.index.length, custom: [...customIds] }),
+  });
+  $("reportBtn").onclick = async () => {
+    $("reportText").value = "整理中…"; $("reportStatus").textContent = ""; $("reportCopy").disabled = true;
+    openModal($("reportModal"));
+    $("reportText").value = await reportInfo();
+    $("reportCopy").disabled = false;
+  };
+  $("reportClose").onclick = () => closeModal($("reportModal"));
+  $("reportCopy").onclick = () => {
+    const text = $("reportText").value, ta = $("reportText");
+    const ok = () => { $("reportStatus").textContent = "已複製，可以直接貼上。"; toast("已複製回報資訊"); };
+    const fallback = () => {
+      ta.removeAttribute("readonly"); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+      let done = false; try { done = document.execCommand("copy"); } catch {}
+      ta.setAttribute("readonly", ""); ta.blur();
+      if (done) ok(); else { $("reportStatus").textContent = "這個瀏覽器不讓網頁自動複製，請長按上面的文字，全選後手動複製。"; ta.select(); }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, fallback); else fallback();
   };
 
   /* ---------- 啟動 ---------- */

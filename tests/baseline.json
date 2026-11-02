@@ -1,0 +1,49 @@
+{
+ "duel": {
+  "type=classic&l=x001-cube&r=x002-orb&s=1": {
+   "len": 646,
+   "result": "K.O.",
+   "winner": -1,
+   "dealt": [
+    125,
+    80
+   ]
+  },
+  "type=real&l=x001-cube&r=x002-orb&s=2": {
+   "len": 415,
+   "result": "K.O.",
+   "winner": 1,
+   "dealt": [
+    88,
+    108
+   ]
+  },
+  "type=raw&l=x001-cube&r=x002-orb&s=3": {
+   "len": 596,
+   "result": "K.O.",
+   "winner": 0,
+   "dealt": [
+    402188,
+    198940
+   ]
+  },
+  "type=raw&l=x002-orb&r=x001-cube&s=4&hp=3": {
+   "len": 985,
+   "result": "K.O.",
+   "winner": 1,
+   "dealt": [
+    932232,
+    1023410
+   ]
+  },
+  "l=x001-cube&r=x002-orb&type=raw&m=trade&s=5&d=zq1ZKzlCyiq5WSklXsjIyMNBRKi5SsjI0NajVqa6NrQUA": {
+   "len": 404,
+   "result": "K.O.",
+   "winner": 0,
+   "dealt": [
+    316591,
+    9907
+   ]
+  }
+ }
+}

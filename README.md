@@ -2,14 +2,14 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.9.1-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.9.1"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.10-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.10"></a>
 </p>
 
 <p align="center">
   <img src=".github/duel.gif" alt="雙人對戰：黑白風之痕 vs 白女巫克拉拉，最後 K.O. 並慢動作重播" width="640">
 </p>
 
-把 LINE Rangers 的角色動畫拿來玩：播放任何角色的技能與動作、拆開零件亂改、剪成惡搞影片，或讓兩隻角色上場對打。打開網頁就能用，不用安裝，手機也可以。
+把 LR 手遊角色的動畫拿來玩：播放任何角色的技能與動作、拆開零件亂改、剪成惡搞影片，或讓兩隻角色上場對打。打開網頁就能用，不用安裝，手機也可以。
 
 ### 👉 [點這裡開啟網站](https://xiaozhouzhoufly.github.io/ranger-kichiku/)
 
@@ -44,8 +44,10 @@
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v4.9.1）
+## 最近更新（v4.10）
 
+- 原始數值對戰：普攻改用防禦公式，閃避、技能閃避、技能抗性最多 95%。
+- 頁尾顯示版本號，可一鍵複製回報資訊；新增自動健檢，沒通過就不發布。
 - 新增兩隻自製測試角色「【自製】方塊騎士」「【自製】圓圓法師」，並在網站與 README 加上非官方聲明。
 - 錄影改成逐格輸出：比即時錄快好幾倍、不掉格，音效和畫面完全對齊（Chrome、Edge 等支援的瀏覽器）。
 - 修正 iPhone／iPad 錄的影片在內建播放器結尾卡住的問題（v4.8.1）。
@@ -81,6 +83,7 @@
 | `sfx/` | 預設音效檔（遊戲技能發動聲） |
 | `custom/` | 自製測試角色（不含官方素材，不受每日同步影響） |
 | `tools/make_custom_chars.py` | 產生自製測試角色的程式（需要 Pillow） |
+| `tests/` | 自動健檢（`healthcheck.mjs`）與對戰標準結果（`baseline.json`） |
 | `assets/` | 分享預覽圖、主畫面圖示與設定（manifest） |
 | `CHANGELOG.md` | 版本更新日誌 |
 | `data/` | 同步下來的角色資料（自動產生，不用手動改） |
@@ -91,6 +94,8 @@
 - 只新增、不刪除：上游刪檔或消失時，已同步的角色全部保留，網站照常運作。
 - 上游連不上時會跳過，不會清空現有資料。
 - 想立刻更新：到 **Actions → 同步角色資料並發布網站 → Run workflow**。
+- 每次發布前會先跑**自動健檢**，全部通過才更新網站。結果在 Actions 該次執行的 **Summary** 頁面（表格列出每一項）；失敗時網站維持上一個正常版本，GitHub 會寄信通知，失敗截圖在同一頁下方的 `healthcheck-screenshots`。
+- 在自己電腦跑健檢：`cd tests && npm install playwright && npx playwright install chromium`，再回到上一層執行 `node tests/healthcheck.mjs .`。
 
 ### 注意
 
