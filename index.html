@@ -2115,9 +2115,166 @@ footer a { color: inherit; }
   async function fixVideoDuration(blob, type, elapsedMs) {
     try {
       const buf = new Uint8Array(await blob.arrayBuffer());
-      const out = type.includes("mp4") ? fixMp4Duration(buf, elapsedMs) : fixWebmDuration(buf, elapsedMs);
+      let out = null;
+      if (type.includes("mp4")) { try { out = defragMp4(buf); } catch { out = null; } if (!out) out = fixMp4Duration(buf, elapsedMs); }
+      else out = fixWebmDuration(buf, elapsedMs);
       return out ? new Blob([out], { type }) : blob;
     } catch { return blob; }
+  }
+  /* ---------- 分段式 MP4 → 一般 MP4 ----------
+     瀏覽器錄出的 MP4 是分段式（moov 裡沒有樣本表，每段資料前面各有一個 moof）。
+     iPhone／iPad 內建播放器讀這種檔案會把時間軸算錯，結尾一直停在最後一格。
+     這裡不重新編碼，只把每一格的時間、大小、位置整理成一般 MP4 的樣本表，
+     並把 moov 放在檔案開頭（faststart）。失敗就回傳 null，交給舊的補長度方式處理。 */
+  function defragMp4(b) {
+    const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+    const u32 = (o) => dv.getUint32(o), i32 = (o) => dv.getInt32(o);
+    const typ = (o) => String.fromCharCode(b[o + 4], b[o + 5], b[o + 6], b[o + 7]);
+    const kids = (start, end) => {
+      const list = [];
+      for (let o = start; o + 8 <= end;) {
+        let size = u32(o), hdr = 8;
+        if (size === 1) { size = Number(dv.getBigUint64(o + 8)); hdr = 16; }
+        if (size === 0) size = end - o;
+        if (size < 8 || o + size > end) break;
+        list.push({ o, size, hdr, t: typ(o), end: o + size, body: o + hdr });
+        o += size;
+      }
+      return list;
+    };
+    const find = (list, t) => list.find((x) => x.t === t);
+    const sub = (box) => kids(box.body, box.end);
+    const raw = (box) => b.subarray(box.o, box.end);
+
+    const top = kids(0, b.length);
+    const moov = find(top, "moov"), moofs = top.filter((x) => x.t === "moof");
+    if (!moov || !moofs.length) return null;
+    const mk = sub(moov), mvhd = find(mk, "mvhd"), mvex = find(mk, "mvex");
+    if (!mvhd) return null;
+    const movieTs = b[mvhd.body] === 1 ? u32(mvhd.body + 20) : u32(mvhd.body + 12);
+    const trex = {};
+    if (mvex) for (const x of sub(mvex)) if (x.t === "trex") trex[u32(x.body + 4)] = { dur: u32(x.body + 12), size: u32(x.body + 16), flags: u32(x.body + 20) };
+
+    // 各軌道的固定資料
+    const tracks = [];
+    for (const t of mk.filter((x) => x.t === "trak")) {
+      const tk = sub(t), tkhd = find(tk, "tkhd"), mdia = find(tk, "mdia");
+      if (!tkhd || !mdia) return null;
+      const md = sub(mdia), mdhd = find(md, "mdhd"), hdlr = find(md, "hdlr"), minf = find(md, "minf");
+      if (!mdhd || !hdlr || !minf) return null;
+      const mi = sub(minf), stbl = find(mi, "stbl"), stsd = stbl && find(sub(stbl), "stsd");
+      if (!stsd) return null;
+      tracks.push({
+        id: b[tkhd.body] === 1 ? u32(tkhd.body + 20) : u32(tkhd.body + 12),
+        ts: b[mdhd.body] === 1 ? u32(mdhd.body + 20) : u32(mdhd.body + 12),
+        kind: typ(hdlr.body + 4), tkhd, mdhd, hdlr, minfOther: mi.filter((x) => x.t !== "stbl"), stsd,
+        dts: [], size: [], off: [], flags: [], cto: [], cursor: null,
+      });
+    }
+    const byId = {}; tracks.forEach((t) => (byId[t.id] = t));
+
+    // 讀出每一段（moof）裡每一格的時間、大小、位置
+    for (const moof of moofs) {
+      let prevEnd = moof.o;
+      for (const traf of sub(moof).filter((x) => x.t === "traf")) {
+        const tf = sub(traf), tfhd = find(tf, "tfhd"); if (!tfhd) return null;
+        const fl = u32(tfhd.body) & 0xffffff, tr = byId[u32(tfhd.body + 4)]; if (!tr) return null;
+        const dflt = trex[tr.id] || { dur: 0, size: 0, flags: 0 };
+        let p = tfhd.body + 8, base = moof.o;
+        if (fl & 1) { base = Number(dv.getBigUint64(p)); p += 8; }
+        if (fl & 2) p += 4;
+        const defDur = fl & 8 ? u32(p) : dflt.dur; if (fl & 8) p += 4;
+        const defSize = fl & 0x10 ? u32(p) : dflt.size; if (fl & 0x10) p += 4;
+        const defFlags = fl & 0x20 ? u32(p) : dflt.flags;
+        const tfdt = find(tf, "tfdt");
+        if (tfdt) tr.cursor = b[tfdt.body] === 1 ? Number(dv.getBigUint64(tfdt.body + 4)) : u32(tfdt.body + 4);
+        if (tr.cursor == null) tr.cursor = 0;
+        let pos = prevEnd;
+        for (const trun of tf.filter((x) => x.t === "trun")) {
+          const v = b[trun.body], rf = u32(trun.body) & 0xffffff, n = u32(trun.body + 4);
+          let q = trun.body + 8;
+          if (rf & 1) { pos = base + i32(q); q += 4; }
+          let first = null; if (rf & 4) { first = u32(q); q += 4; }
+          for (let i = 0; i < n; i++) {
+            const d = rf & 0x100 ? u32(q) : defDur; if (rf & 0x100) q += 4;
+            const s = rf & 0x200 ? u32(q) : defSize; if (rf & 0x200) q += 4;
+            let f = rf & 0x400 ? u32(q) : i === 0 && first != null ? first : defFlags; if (rf & 0x400) q += 4;
+            let c = 0; if (rf & 0x800) { c = v === 1 ? i32(q) : u32(q); q += 4; }
+            if (pos < 0 || pos + s > b.length) return null;
+            tr.dts.push(tr.cursor); tr.size.push(s); tr.off.push(pos); tr.flags.push(f); tr.cto.push(c);
+            tr.cursor += d; pos += s;
+          }
+        }
+        prevEnd = pos;
+      }
+    }
+    if (tracks.some((t) => !t.dts.length)) return null;
+
+    // 小工具：組 box
+    const enc = (s) => Uint8Array.from(s, (ch) => ch.charCodeAt(0));
+    const cat = (parts) => { let n = 0; for (const x of parts) n += x.length; const out = new Uint8Array(n); let w = 0; for (const x of parts) { out.set(x, w); w += x.length; } return out; };
+    const box = (type, ...parts) => { const body = cat(parts), h = new Uint8Array(8); new DataView(h.buffer).setUint32(0, body.length + 8); h.set(enc(type), 4); return cat([h, body]); };
+    const u32s = (arr, vf = 0) => { const a = new Uint8Array(4 + arr.length * 4), d = new DataView(a.buffer); d.setUint32(0, vf); arr.forEach((x, i) => d.setUint32(4 + i * 4, x >>> 0)); return a; };
+    const patchDur = (src, durOff0, durOff1, val) => {
+      const c = src.slice(), d = new DataView(c.buffer);
+      if (c[8] === 1) d.setBigUint64(8 + durOff1, BigInt(Math.round(val))); else d.setUint32(8 + durOff0, Math.min(0xffffffff, Math.round(val)));
+      return c;
+    };
+
+    // 每格的長度：用下一格的時間相減；最後一格沿用前一格
+    for (const t of tracks) {
+      const n = t.dts.length, d0 = t.dts[0];
+      t.start = d0; t.durs = [];
+      for (let i = 0; i < n; i++) t.durs.push(i < n - 1 ? Math.max(1, t.dts[i + 1] - t.dts[i]) : (n > 1 ? t.durs[n - 2] : 1));
+      t.mediaDur = t.durs.reduce((a, x) => a + x, 0);
+      t.emptyMovie = Math.round(t.start / t.ts * movieTs);
+      t.trackMovie = t.emptyMovie + Math.round(t.mediaDur / t.ts * movieTs);
+    }
+    const movieDur = Math.max(...tracks.map((t) => t.trackMovie));
+
+    // 資料依時間順序交錯排進 mdat
+    const order = [];
+    tracks.forEach((t, ti) => t.dts.forEach((d, i) => order.push([d / t.ts, ti, i])));
+    order.sort((a, c) => a[0] - c[0] || a[1] - c[1]);
+    let mdatLen = 0; for (const [, ti, i] of order) mdatLen += tracks[ti].size[i];
+    if (mdatLen + 8 > 0xffffffff) return null;
+
+    const buildMoov = (chunkOffsets) => {
+      const traks = tracks.map((t, ti) => {
+        const rle = (arr) => { const out = []; for (const x of arr) { const l = out[out.length - 1]; if (l && l[1] === x) l[0]++; else out.push([1, x]); } return out; };
+        const stts = rle(t.durs);
+        const parts = [raw(t.stsd), box("stts", u32s([stts.length, ...stts.flat()]))];
+        if (t.cto.some((c) => c !== 0)) { const ct = rle(t.cto); parts.push(box("ctts", u32s([ct.length, ...ct.flat()], t.cto.some((c) => c < 0) ? 0x01000000 : 0))); }
+        if (t.kind === "vide") { const sync = []; t.flags.forEach((f, i) => { if (!(f & 0x10000)) sync.push(i + 1); }); if (sync.length && sync.length < t.flags.length) parts.push(box("stss", u32s([sync.length, ...sync]))); }
+        parts.push(box("stsc", u32s([1, 1, 1, 1])));
+        parts.push(box("stsz", u32s([0, t.size.length, ...t.size])));
+        parts.push(box("stco", u32s([t.size.length, ...(chunkOffsets ? chunkOffsets[ti] : t.size.map(() => 0))])));
+        const stbl = box("stbl", ...parts);
+        const minf = box("minf", ...t.minfOther.map(raw), stbl);
+        const mdia = box("mdia", patchDur(raw(t.mdhd), 16, 24, t.mediaDur), raw(t.hdlr), minf);
+        const tkhd = patchDur(raw(t.tkhd), 20, 28, t.trackMovie);
+        const edits = t.emptyMovie > 0 ? [[t.emptyMovie, -1], [t.trackMovie - t.emptyMovie, 0]] : [[t.trackMovie, 0]];
+        const el = new Uint8Array(8 + edits.length * 12), ed = new DataView(el.buffer);
+        ed.setUint32(4, edits.length);
+        edits.forEach(([sd, mt], k) => { ed.setUint32(8 + k * 12, sd); ed.setInt32(12 + k * 12, mt); ed.setUint32(16 + k * 12, 0x00010000); });
+        return box("trak", tkhd, box("edts", box("elst", el)), mdia);
+      });
+      const others = mk.filter((x) => x.t !== "mvhd" && x.t !== "trak" && x.t !== "mvex").map(raw);
+      return box("moov", patchDur(raw(mvhd), 16, 24, movieDur), ...traks, ...others);
+    };
+    const ftyp = box("ftyp", enc("isom"), u32s([0x200]).subarray(4), enc("isomiso2avc1mp41"));
+    const moovSize = buildMoov(null).length;
+    let w = ftyp.length + moovSize + 8;
+    const offsets = tracks.map(() => []);
+    for (const [, ti, i] of order) { offsets[ti][i] = w; w += tracks[ti].size[i]; }
+    const moovOut = buildMoov(offsets);
+    if (moovOut.length !== moovSize) return null;
+    const out = new Uint8Array(w), od = new DataView(out.buffer);
+    out.set(ftyp, 0); out.set(moovOut, ftyp.length);
+    let p = ftyp.length + moovSize;
+    od.setUint32(p, mdatLen + 8); out.set(enc("mdat"), p + 4); p += 8;
+    for (const [, ti, i] of order) { const t = tracks[ti]; out.set(b.subarray(t.off[i], t.off[i] + t.size[i]), p); p += t.size[i]; }
+    return out;
   }
   function fixMp4Duration(b, elapsedMs) {
     const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
