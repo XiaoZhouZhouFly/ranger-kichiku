@@ -244,6 +244,34 @@ await test("召喚：對手複製體與上限", async (open) => {
   return `種子 ${r.s}：出現複製體；上限 1 時每邊同時最多 1 隻`;
 });
 
+await test("召喚物會被打倒（多打多規則）", async (open) => {
+  const p = await open(); await p.goto(BASE + "?app=single&u=x001-cube"); await waitSingle(p);
+  await p.click("#appDuel"); await waitDuel(p);
+  const sk = await p.evaluate(() => window.__rk.skill("u1241h-brown", 1));
+  if (!sk || sk.sums.length < 2) return "skip:資料裡還沒有新版召喚格式（新版 sync.py 尚未同步）";
+  let hit = null, behind = 0;
+  for (let s = 1; s <= 15 && !(hit && behind); s++) {
+    await p.goto(BASE + `?app=duel&type=real&l=u1241h-brown&r=u010u-clara&s=${s}&hp=3`); await waitDuel(p);
+    const d = await p.evaluate(() => window.__rk.duel());
+    if (d.sumKilled > 0 && !hit) hit = { s, d };
+    behind += d.mainHitWithSum || 0;
+  }
+  check(hit, "15 場真距離對戰裡，召喚物都沒有被打倒");
+  // 召喚物擋在前面時，本人還是要吃得到技能（v4.12 修正：技能只打到召喚物）
+  check(behind > 0, "召喚物在場時，本人完全沒被打中（技能範圍沒有波及召喚物後面的本人）");
+  // 血量比例調高後，同一場召喚物不該再被打倒；設定要寫進網址
+  await p.fill("#dSumHp", "1000"); await p.locator("#dSumHp").dispatchEvent("change");
+  await p.fill("#dSumAtk", "20"); await p.locator("#dSumAtk").dispatchEvent("change"); await p.waitForTimeout(500);
+  const d2 = await p.evaluate(() => window.__rk.duel());
+  check(d2.sumKilled < hit.d.sumKilled, `血量比例 1000% 時召喚物還是一樣容易被打倒：${hit.d.sumKilled} → ${d2.sumKilled}`);
+  const url = await p.evaluate(() => location.href);
+  const p2 = await p.context().newPage(); await p2.goto(url);
+  await p2.waitForFunction(() => window.__rk && window.__rk.duel().ready && window.__rk.duel().len > 1, null, { timeout: 90000 });
+  const d3 = await p2.evaluate(() => window.__rk.duel());
+  check(d3.sumHp === 1000 && d3.sumAtk === 20 && d3.len === d2.len, `分享連結沒有還原比例設定：${JSON.stringify({ sumHp: d3.sumHp, sumAtk: d3.sumAtk })}`);
+  return `種子 ${hit.s}：召喚物被打 ${hit.d.sumHit} 下、被打倒 ${hit.d.sumKilled} 隻；召喚物在場時本人被打中 ${behind} 下；血量 1000% 時被打倒 ${d2.sumKilled} 隻`;
+});
+
 await test("官方角色對戰可執行", async (open) => {
   const p = await open(); await p.goto(BASE + "?app=duel&type=raw"); await waitDuel(p);
   const d = await p.evaluate(() => window.__rk.duel());

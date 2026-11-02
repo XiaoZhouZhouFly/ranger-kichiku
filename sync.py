@@ -387,7 +387,7 @@ def _sec(du: dict, default=10.0):
 
 
 def fetch_summons() -> dict:
-    """召喚技能。回傳 {(角色, 技能序): {"sums": [召喚物…], "cpy": 對手複製體}}。
+    """新版資料的技能細節。回傳 {(角色, 技能序): {"sums": [召喚物…], "cpy": 對手複製體, "ar": 技能範圍}}。
     sums：每一隻召喚物（id、等級公式、存在秒數），一個技能可以召喚好幾隻（例如亡者歸來 2 個棺木）。
     cpy：「將範圍內敵人召喚為我方夥伴」＝在我方出現對手的複製體（固定等級、秒數）。"""
     try:
@@ -402,7 +402,13 @@ def fetch_summons() -> dict:
         if not re.match(r"u(\d+)([a-z]?)-(.+)$", uid):
             continue
         for si, sk in enumerate(r.get("skillSet") or []):
-            for e in sk.get("effects") or []:
+            # 技能範圍（ar）：以觸發的敵人為中心、左右各 ar。優先看傷害類效果的範圍，沒有就取所有效果裡最大的
+            effs = sk.get("effects") or []
+            dmg_r = [_num(e.get("rangePoints")) for e in effs if re.search(r"DMG|DOT", str(e.get("effectCode") or "")) and _num(e.get("rangePoints")) > 0]
+            all_r = [_num(e.get("rangePoints")) for e in effs if _num(e.get("rangePoints")) > 0]
+            if dmg_r or all_r:
+                out.setdefault((uid, si), {})["ar"] = max(dmg_r or all_r)
+            for e in effs:
                 code = e.get("effectCode")
                 mg, du = e.get("magnitude") or {}, e.get("duration") or {}
                 if code == "SKILLEFF_SUMMON":
@@ -478,6 +484,8 @@ def sync_stats(rows, summons=None) -> None:
                     entry["sums"] = sums
             if info.get("cpy"):
                 entry["cpy"] = info["cpy"]
+            if info.get("ar"):
+                entry["ar"] = info["ar"]
             skills.append(entry)
         st["sk"] = skills
         out[uid] = st

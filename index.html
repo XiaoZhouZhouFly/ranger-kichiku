@@ -110,6 +110,7 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 .f-thumb img { width: 100%; height: 100%; object-fit: contain; }
 .f-name { font-size: 15px; font-weight: 900; line-height: 1.25; overflow-wrap: anywhere; }
 .swap { align-self: center; }
+.sum-set { display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .sum-cap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sum-cap input { width: 64px; padding: 4px 6px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-family: var(--font-mono); }
 .real-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
@@ -687,7 +688,12 @@ footer a { color: inherit; }
               <label class="check"><input type="checkbox" id="dBars" checked> 血條</label>
               <label class="check"><input type="checkbox" id="dProj" checked> 投射物</label>
               <label class="check"><input type="checkbox" id="dFinale" checked> K.O. 後慢動作重播最後一擊（黑白 REPLAY）</label>
-              <label class="field sum-cap">每方召喚物上限（含複製體）<input type="number" id="dSumCap" min="1" max="20" step="1" value="5"></label>
+              <div class="sum-set">
+                <label class="field sum-cap">每方召喚物上限<input type="number" id="dSumCap" min="1" max="20" step="1" value="3"></label>
+                <label class="field sum-cap">召喚物攻擊比例 %<input type="number" id="dSumAtk" min="0" max="1000" step="5" placeholder="自動"></label>
+                <label class="field sum-cap">召喚物血量比例 %<input type="number" id="dSumHp" min="1" max="1000" step="5" placeholder="自動"></label>
+              </div>
+              <p class="hint">召喚物與複製體（含在上限內）只在真距離、原始數值對戰會被打。比例留空＝自動：真距離的攻擊是「召喚物攻擊 ÷ 召喚者攻擊」最多 50%、血量是召喚者的 30%；原始數值照召喚物自己的數值（100%）。填了數字，真距離就直接用這個比例，原始數值則再乘上這個比例。</p>
             </div>
             <div class="chips">
               <button class="chip" data-bg="white" aria-pressed="true">白</button>
@@ -737,7 +743,7 @@ footer a { color: inherit; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v4.11";
+  const APP_VERSION = "v4.12";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -2944,7 +2950,7 @@ footer a { color: inherit; }
   const D = {
     f: [null, null], moves: [], dist: 320, speed: 1, shake: true, invert: false, numbers: true, bars: true, projOn: true, projs: [],
     finale: true, finalKey: null, koInfo: null, finalStart: 0, finalTarget: 1, bgImg: null, ground: 8, mode: "trade",
-    kind: "classic", raw: false, timeLimit: 60, hpMul: 1, range: [null, null], mvs: [null, null], level: [null, null], cheat: [{}, {}], sumCap: 5,
+    kind: "classic", raw: false, timeLimit: 60, hpMul: 1, range: [null, null], mvs: [null, null], level: [null, null], cheat: [{}, {}], sumCap: 3, sumAtk: null, sumHp: null,
     frames: [[], []], timeMap: null, maxHp: [100, 100], resultK: -1, resultText: "", winner: -1, simLen: 0,
     tracks: [[], []], events: [], posKeys: [[], []], len: 1, cam: null,
     pos: 0, playing: true, recording: false, seed: 1,
@@ -3110,7 +3116,7 @@ footer a { color: inherit; }
     return sums.length || cpy ? { sums, cpy } : null;
   }
   function summonInfo(i, action) { const f = D.f[i]; return f ? skillSpawn(f.r.id, action) : null; }
-  const sumCap = () => Math.max(1, Math.min(20, Math.round(D.sumCap || 5)));
+  const sumCap = () => Math.max(1, Math.min(20, Math.round(D.sumCap || 3)));
   async function loadSummons(i) {
     const f = D.f[i], st = f && S.stats[f.r.id];
     if (!st || !st.sk) return;
@@ -3147,7 +3153,7 @@ footer a { color: inherit; }
     const L = Math.max(1, Math.min(lim.max, Math.round(lv)));
     const o = { level: L };
     for (const k of STAT5) o[k] = Math.round(statAt(st[k], L, lim.cap));
-    Object.assign(o, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, hit: st.hit || 0, rg: st.rg || 100, mv: st.mv || 100 });
+    Object.assign(o, { ai: st.ai || 2.5, cr: st.cr || 0, cd: st.cd || 100, hit: st.hit || 0, sh: st.sh || 0, dg: st.dg || 0, sdg: st.sdg || 0, sr: st.sr || 0, rg: st.rg || 100, mv: st.mv || 100 });
     return o;
   }
   // 召喚物的動作：回傳這一幀要畫的動畫與幀號
@@ -3400,7 +3406,7 @@ footer a { color: inherit; }
       for (const e of D.events) {
         const d = k - e.k;
         if (d < 0 || d >= 26) continue;
-        const x = posAt(e.target, k), y = -D.cam.bodyH * 1.05 - d * 2.2;
+        const x = e.tx != null ? e.tx : posAt(e.target, k), y = (e.sumTarget ? -D.cam.bodyH * 0.8 : -D.cam.bodyH * 1.05) - d * 2.2;
         c.save(); c.translate(x, y); c.scale(1 / sc, 1 / sc);
         c.globalAlpha = d < 18 ? 1 : 1 - (d - 18) / 8;
         const big = e.ko || e.crit;
@@ -3705,7 +3711,9 @@ footer a { color: inherit; }
     $("dProj").checked = D.projOn;
     D.finale = saved.finale !== false; $("dFinale").checked = D.finale;
     D.kind = saved.kind || "classic"; D.raw = !!saved.raw; D.timeLimit = saved.timeLimit || 60; D.hpMul = saved.hpMul > 0 ? saved.hpMul : 1;
-    D.sumCap = saved.sumCap > 0 ? saved.sumCap : 5; $("dSumCap").value = D.sumCap;
+    D.sumCap = saved.sumCap > 0 && (saved.sumCapSet || saved.sumCap !== 5) ? saved.sumCap : 3; D.sumCapSet = !!saved.sumCapSet;
+    D.sumAtk = saved.sumAtk != null && isFinite(+saved.sumAtk) ? +saved.sumAtk : null; D.sumHp = saved.sumHp != null && isFinite(+saved.sumHp) ? +saved.sumHp : null;
+    $("dSumCap").value = D.sumCap; $("dSumAtk").value = D.sumAtk ?? ""; $("dSumHp").value = D.sumHp ?? "";
     D.range = saved.range || [null, null]; D.mvs = Array.isArray(saved.mvs) && saved.mvs.length === 2 ? saved.mvs : [null, null]; D.level = saved.level || [null, null]; D.cheat = saved.cheat || [{}, {}];
     D.ground = saved.ground ?? 8; $("dGround").value = D.ground; $("dGroundOut").textContent = D.ground + "%";
     await restoreDuelBg();
@@ -3725,7 +3733,9 @@ footer a { color: inherit; }
       D.cheat = Array.isArray(URLD.ch) && URLD.ch.length === 2 ? URLD.ch.map((x) => (x && typeof x === "object" ? x : {})) : [{}, {}];
       D.range = Array.isArray(URLD.rg) && URLD.rg.length === 2 ? URLD.rg.map((x) => (x == null || !(+x >= 0) ? null : +x)) : [null, null];
       D.mvs = Array.isArray(URLD.ms) && URLD.ms.length === 2 ? URLD.ms.map((x) => (x == null || !(+x > 0) ? null : +x)) : [null, null];
-      D.sumCap = +URLD.sc > 0 ? Math.min(20, Math.round(+URLD.sc)) : 5; $("dSumCap").value = D.sumCap;
+      D.sumCap = +URLD.sc > 0 ? Math.min(20, Math.round(+URLD.sc)) : 3; D.sumCapSet = +URLD.sc > 0;
+      D.sumAtk = URLD.sa != null && isFinite(+URLD.sa) ? +URLD.sa : null; D.sumHp = URLD.sh != null && isFinite(+URLD.sh) ? +URLD.sh : null;
+      $("dSumCap").value = D.sumCap; $("dSumAtk").value = D.sumAtk ?? ""; $("dSumHp").value = D.sumHp ?? "";
     }
     const a = (fromUrl && find(URLP.get("l"))) || find(saved.a) || S.unit || find(DEFAULT_UNIT) || S.index[0];
     const b = (fromUrl && find(URLP.get("r"))) || find(saved.b) || find("u010u-clara") || find("u1001u-brown") || S.index.find((r) => r.id !== a.id);
@@ -3893,7 +3903,7 @@ footer a { color: inherit; }
       // 輔助技能填了倍率，就當作有單次傷害
       if (!base.e.length && o.c && +o.c[0] > 0) e.push({ t: "hit", c: +o.c[0] / 100, b: "atk", d: 0 });
       return {
-        sum: base.sum, sums: base.sums, cpy: base.cpy,
+        sum: base.sum, sums: base.sums, cpy: base.cpy, ar: base.ar,
         r: o.r !== undefined && o.r !== "" && isFinite(+o.r) ? +o.r : base.r,
         cd: o.cd !== undefined && o.cd !== "" && isFinite(+o.cd) ? +o.cd : base.cd,
         e,
@@ -3931,10 +3941,48 @@ footer a { color: inherit; }
     const comp = r0 === r1 ? [1, 1] : r0 < r1 ? [bonus, 1] : [1, bonus];
     const gap0 = Math.max(r0, r1) + 100;
     const cd0 = gap0 + (A.w + B.w) / 2;
+    /* 單位（多打多預備）：本人、召喚物、複製體都是單位，各有陣營、位置、寬度、血量、數值。
+       - 每個單位只看離自己最近的敵方單位：進到自己的射程就出手，否則往它走。
+       - 普攻打最近（最前面）的那一個；技能以觸發的那一個為中心，左右各一個技能範圍內的敵方單位都會被打到。
+       - 只有本人倒下才算 K.O.；召喚物、複製體血扣完就提早消失。擊退只發生在本人身上。 */
     const F = [0, 1].map((i) => ({
+      side: i, isMain: true, w: D.f[i].w, st: st[i], maxHp: maxHp[i],
       x: i ? cd0 / 2 : -cd0 / 2, hp: maxHp[i], busy: 0, pendingKb: false, kbKo: false, qi: 0, nextAtk: 0,
       skillCd: [0, 0], buff: false, dots: [], cur: null, dead: false,
     }));
+    const alive = (u, k) => (u.isMain ? !u.dead : k >= u.k0 && k < u.k1 && u.hp > 0);
+    const foes = (side, k) => {
+      const out = [], m = F[1 - side];
+      if (alive(m, k)) out.push(m);
+      for (const x of D.summons) if (x.side !== side && alive(x, k)) out.push(x);
+      return out;
+    };
+    const gapTo = (a, b) => Math.abs(b.x - a.x) - (a.w + b.w) / 2;
+    const nearestFoe = (u, k) => { let best = null, bg = Infinity; for (const t of foes(u.side, k)) { const g = gapTo(u, t); if (g < bg) { bg = g; best = t; } } return best; };
+    // 技能範圍：以中心目標為準，左右各 ar
+    const victimsOf = (side, center, ar, k) => (ar > 0 ? foes(side, k).filter((u) => u === center || Math.abs(u.x - center.x) <= ar) : [center]);
+    // 資料庫的技能範圍；沒有範圍資料（舊資料、自製角色）時用出手者的攻擊距離，至少 AR_DEF（資料庫技能範圍的中位數），
+    // 避免技能只打到擋在前面的召喚物
+    const AR_DEF = 300;
+    const skillAr = (fid, sts, action, rg) => {
+      const n = action === "skill1" ? 0 : 1;
+      const sk = (sts && sts.sk && sts.sk[n]) || (((S.stats[fid] || {}).sk || [])[n]);
+      return sk && +sk.ar > 0 ? +sk.ar : Math.max(AR_DEF, +rg || 0);
+    };
+    // 召喚物的攻擊、血量比例：空白＝自動
+    const atkPct = D.sumAtk != null && D.sumAtk !== "" && isFinite(+D.sumAtk) ? Math.max(0, +D.sumAtk) / 100 : null;
+    const hpPct = D.sumHp != null && D.sumHp !== "" && isFinite(+D.sumHp) ? Math.max(0, +D.sumHp) / 100 : null;
+    const atkOf = (x) => (x.pa || 0) + (x.ma || 0);
+    const fullAtk = (fid) => { const fs = S.stats[fid]; return fs ? atkOf(copyStats(fid, levelLimits(fs.s || "").max)) : 0; };
+    // 自動：真距離＝召喚物攻擊 ÷ 召喚者（複製體則是對手本人）攻擊，最多 50%；原始數值＝100%（照召喚物自己的數值）
+    const autoAtkR = (ss, refAtk) => (raw ? 1 : refAtk > 0 ? Math.min(0.5, atkOf(ss) / refAtk) : 0.5);
+    const sumAtkR = (ss, refAtk) => (atkPct != null ? atkPct : autoAtkR(ss, refAtk));
+    // 自動：真距離＝召喚者血量的 30%；原始數值＝召喚物自己資料的體力（沒有資料時用召喚者的 30%），並乘上血量倍率
+    const sumMaxHp = (ss, i) => {
+      if (!raw) return Math.max(1, maxHp[i] * (hpPct != null ? hpPct : 0.3));
+      const base = ss.hp > 0 ? ss.hp * hpMul : maxHp[i] * 0.3;
+      return Math.max(1, base * (hpPct != null ? hpPct : 1));
+    };
     const queues = realQueues();
     const limitK = Math.max(5, D.timeLimit || 60) * DFPS;
     const hits = [];
@@ -3971,7 +4019,8 @@ footer a { color: inherit; }
       const lv = summonLevel(sm, L);
       const sec = sm.dur ? (sm.dur[0] === "mul" ? L * (+sm.dur[1] || 0) : +sm.dur[1] || 10) : 10;
       const ss = summonStats(sm.id, lv);
-      D.summons.push({ side: i, f: sf, x: x0 + dir * (D.f[i].w * 0.5 + sf.w * 0.3 + n * 26), k0: k, k1: k + Math.max(1, Math.round(Math.max(1, sec) * DFPS)), st: ss, nextAtk: k + 8, busy: 0, cur: null, fr: [] });
+      const hp0 = sumMaxHp(ss, i);
+      D.summons.push({ side: i, isMain: false, f: sf, w: sf.w, x: x0 + dir * (D.f[i].w * 0.5 + sf.w * 0.3 + n * 26), k0: k, k1: k + Math.max(1, Math.round(Math.max(1, sec) * DFPS)), st: ss, hp: hp0, maxHp: hp0, dots: [], atkR: sumAtkR(ss, raw ? atkOf(st[i]) : fullAtk(D.f[i].r.id)), nextAtk: k + 8, busy: 0, cur: null, fr: [] });
       pushEvent({ k, target: i, attacker: i, dmg: 0, label: raw ? `召喚！Lv${ss.level}` : "召喚！", fx: "buff", noFx: true });
     };
     // 將敵人召喚為我方夥伴：在我方出現對手的複製體（固定等級、會放技能）
@@ -3981,7 +4030,8 @@ footer a { color: inherit; }
       const dir = i === 0 ? 1 : -1;
       const ss = copyStats(src.r.id, +cpy.lv || 60);
       const sec = cpy.dur ? +cpy.dur[1] || 10 : 10;
-      D.summons.push({ side: i, f: src, copy: true, src: src.r.id, x: x0 + dir * (D.f[i].w * 0.5 + src.w * 0.4), k0: k, k1: k + Math.max(1, Math.round(sec * DFPS)), st: ss, skillCd: [0, 0], nextAtk: k + 8, busy: 0, cur: null, fr: [] });
+      const hp0 = sumMaxHp(ss, i);
+      D.summons.push({ side: i, isMain: false, f: src, w: src.w, copy: true, src: src.r.id, x: x0 + dir * (D.f[i].w * 0.5 + src.w * 0.4), k0: k, k1: k + Math.max(1, Math.round(sec * DFPS)), st: ss, hp: hp0, maxHp: hp0, dots: [], atkR: sumAtkR(ss, fullAtk(src.r.id)), skillCd: [0, 0], nextAtk: k + 8, busy: 0, cur: null, fr: [] });
       pushEvent({ k, target: i, attacker: i, dmg: 0, label: raw ? `複製對手！Lv${ss.level}` : "複製對手！", fx: "buff", noFx: true });
     };
     const doSpawns = (i, info, k, L, x0) => {
@@ -3989,106 +4039,89 @@ footer a { color: inherit; }
       info.sums.forEach((sm, n) => spawnSummon(i, sm, k, L, x0, n));
       if (info.cpy) spawnCopy(i, info.cpy, k, x0);
     };
-    const applySummonHit = (h, k) => {
-      const so = h.s, i = so.side, j = 1 - i, t = F[j];
-      if (t.dead) return;
-      let dmg, label, crit = false;
-      if (so.copy && h.action !== "attack") {
-        // 複製體放技能：用對手的技能資料（召喚、複製、傷害）
-        doSpawns(i, skillSpawn(so.src, h.action), k, so.st.level, so.x);
-        const sk = so.st.sk[h.action === "skill1" ? 0 : 1] || { e: [] };
-        if (!sk.e || !sk.e.length) return; // 沒有傷害的技能
-        if (raw) {
-          const stt = st[j];
-          if (rng() < Math.max(0, cap95(stt.sdg) - so.st.sh) / 100) { pushEvent({ k, target: j, attacker: i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
-          const mult = 1 - cap95(stt.sr) / 100;
-          dmg = 0;
-          for (const e of sk.e) {
-            const v = dmgCalc(so.st, stt, e.c, e.b) * mult;
-            if (e.t === "dot") t.dots.push({ per: Math.max(1, v), next: k + DFPS, until: k + Math.max(1, e.d) * DFPS + 1, from: i });
-            else dmg += v;
-          }
-          if (!sk.e.some((e) => e.t !== "dot")) { pushEvent({ k, target: j, attacker: i, dmg: 0, label: "持續傷害", fx: "dot", noFx: true }); return; }
-          dmg = Math.max(1, dmg);
-          label = "-" + Math.round(dmg).toLocaleString();
-        } else {
-          dmg = (DMG[h.action] || 8) * (0.75 + rng() * 0.5);
-          label = `-${Math.round(dmg * 123)}`;
-        }
-        const before = t.hp;
-        t.hp = Math.max(0, t.hp - dmg);
-        checkKb(j, before);
-        pushEvent({ k, target: j, attacker: i, dmg, label, ko: t.hp <= 0, start: h.start });
-        return;
-      }
-      if (raw) {
-        const stt = st[j];
-        if (rng() < Math.max(0, cap95(stt.dg) - so.st.hit) / 100) { pushEvent({ k, target: j, attacker: i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
-        crit = rng() < so.st.cr / 100;
-        dmg = Math.max(1, atkDmg(so.st, stt) * (crit ? so.st.cd / 100 : 1));
-        label = (crit ? "爆擊 " : "") + "-" + Math.round(dmg).toLocaleString();
-      } else {
-        dmg = (DMG.attack || 15) * (0.75 + rng() * 0.5);
-        label = `-${Math.round(dmg * 123)}`;
-      }
+    const pushEvent = (e) => { e.hp = [F[0].hp, F[1].hp]; D.events.push(e); };
+    // 扣血：本人會觸發擊退與 K.O.；召喚物血扣完就提早離場
+    const hurt = (t, dmg, k, from, label, crit, start, extra) => {
       const before = t.hp;
       t.hp = Math.max(0, t.hp - dmg);
-      checkKb(j, before);
-      pushEvent({ k, target: j, attacker: i, dmg, label, crit, ko: t.hp <= 0, start: h.start });
-    };
-    const pushEvent = (e) => { e.hp = [F[0].hp, F[1].hp]; D.events.push(e); };
-
-    const applyHit = (h, k) => {
-      const a = F[h.i], t = F[h.j];
-      if (t.dead) return;
-      const sa = st[h.i], stt = st[h.j];
-      let dmg = 0, label = "", crit = false;
-      const smr = h.action !== "attack" ? summonInfo(h.i, h.action) : null;
-      if (smr) doSpawns(h.i, smr, k, raw ? st[h.i].level : levelLimits((S.stats[D.f[h.i].r.id] || {}).s || D.f[h.i].r.star).max, a.x);
-      if (smr && supportFor(h.i, h.action)) return; // 純召喚技能：只召喚，不另外強化或回血
-      if (h.action !== "attack" && supportFor(h.i, h.action)) {
-        // 純輔助技能：不打對手、不會被閃避。一半機率下一擊 +50%，一半機率回復 20% 體力
-        if (rng() < 0.5) { a.buff = true; pushEvent({ k, target: h.i, attacker: h.i, dmg: 0, label: "下一擊 +50%", fx: "buff", noFx: true }); }
-        else { a.hp = Math.min(maxHp[h.i], a.hp + maxHp[h.i] * 0.2); pushEvent({ k, target: h.i, attacker: h.i, dmg: 0, label: "回復 20%", fx: "heal", noFx: true }); }
-        return;
+      if (t.isMain) {
+        checkKb(t.side, before);
+        pushEvent(Object.assign({ k, target: t.side, attacker: from, dmg, label, crit, ko: t.hp <= 0, start }, extra));
+      } else {
+        pushEvent(Object.assign({ k, target: t.side, attacker: from, dmg, label, crit, sumTarget: true, tx: t.x, noFx: true, start }, extra));
+        if (t.hp <= 0) { t.k1 = Math.min(t.k1, k + 1); pushEvent({ k, target: t.side, attacker: from, dmg: 0, label: "擊倒召喚物", fx: "buff", sumTarget: true, tx: t.x, noFx: true }); }
       }
+    };
+    const missEv = (t, k, from) => pushEvent(t.isMain ? { k, target: t.side, attacker: from, dmg: 0, label: "MISS", miss: true, noFx: true } : { k, target: t.side, attacker: from, dmg: 0, label: "MISS", miss: true, noFx: true, sumTarget: true, tx: t.x });
+    // 對一個目標結算一次攻擊。a＝攻擊方單位；o.base＝真距離的基礎傷害；o.mul＝其他倍率；o.sk＝原始數值的技能資料
+    const strike = (a, t, action, k, start, o) => {
+      const tst = t.st;
+      let dmg = 0, label = "", crit = false;
       if (!raw) {
-        dmg = (DMG[h.action] || 8) * (0.75 + rng() * 0.5) * comp[h.i] / (h.reps > 1 ? 1.6 : 1) * (a.buff ? 1.5 : 1);
-        a.buff = false;
+        dmg = o.base * (0.75 + rng() * 0.5) * o.mul;
         label = `-${Math.round(dmg * 123)}`;
-      } else if (h.action === "attack") {
-        if (rng() < Math.max(0, cap95(stt.dg) - sa.hit) / 100) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
-        crit = rng() < sa.cr / 100;
-        dmg = Math.max(1, atkDmg(sa, stt) * (crit ? sa.cd / 100 : 1) * (a.buff ? 1.5 : 1));
-        a.buff = false;
+      } else if (action === "attack") {
+        if (rng() < Math.max(0, cap95(tst.dg) - a.st.hit) / 100) { missEv(t, k, a.side); return false; }
+        crit = rng() < a.st.cr / 100;
+        dmg = Math.max(1, atkDmg(a.st, tst) * (crit ? a.st.cd / 100 : 1) * o.mul);
         label = (crit ? "爆擊 " : "") + "-" + Math.round(dmg).toLocaleString();
       } else {
-        const sk = sa.sk[h.action === "skill1" ? 0 : 1] || { e: [] };
-        if (rng() < Math.max(0, cap95(stt.sdg) - sa.sh) / 100) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "MISS", miss: true, noFx: true }); return; }
+        const sk = o.sk || { e: [] };
+        if (rng() < Math.max(0, cap95(tst.sdg) - a.st.sh) / 100) { missEv(t, k, a.side); return false; }
         // 技能抗性：技能傷害（單次與持續）照比例減少
-        const mult = (a.buff ? 1.5 : 1) * (1 - cap95(stt.sr) / 100);
+        const mult = o.mul * (1 - cap95(tst.sr) / 100);
         for (const e of sk.e) {
-          const v = dmgCalc(sa, stt, e.c, e.b) * mult;
-          if (e.t === "dot") t.dots.push({ per: Math.max(1, v), next: k + DFPS, until: k + Math.max(1, e.d) * DFPS + 1, from: h.i });
+          const v = dmgCalc(a.st, tst, e.c, e.b) * mult;
+          if (e.t === "dot") t.dots.push({ per: Math.max(1, v), next: k + DFPS, until: k + Math.max(1, e.d) * DFPS + 1, from: a.side });
           else dmg += v;
         }
-        a.buff = false;
-        if (!sk.e.some((e) => e.t !== "dot")) { pushEvent({ k, target: h.j, attacker: h.i, dmg: 0, label: "持續傷害", fx: "dot", noFx: true }); return; }
+        if (!sk.e.some((e) => e.t !== "dot")) { pushEvent(t.isMain ? { k, target: t.side, attacker: a.side, dmg: 0, label: "持續傷害", fx: "dot", noFx: true } : { k, target: t.side, attacker: a.side, dmg: 0, label: "持續傷害", fx: "dot", noFx: true, sumTarget: true, tx: t.x }); return true; }
         dmg = Math.max(1, dmg);
         label = "-" + Math.round(dmg).toLocaleString();
       }
-      const before = t.hp;
-      t.hp = Math.max(0, t.hp - dmg);
-      const ko = t.hp <= 0;
-      checkKb(h.j, before);
-      pushEvent({ k, target: h.j, attacker: h.i, dmg: raw ? dmg : dmg, label, crit, ko, start: h.start });
+      hurt(t, dmg, k, a.side, label, crit, start);
+      return true; // 沒被閃避（「下一擊 +50%」只在打中時用掉）
+    };
+    // 一次出手命中時：先召喚／複製，再依普攻（單一目標）或技能（範圍）結算
+    const resolve = (a, h, k) => {
+      const i = a.side, action = h.action, isSkill = action !== "attack";
+      let tgt = h.tgt && alive(h.tgt, k) ? h.tgt : nearestFoe(a, k);
+      if (!tgt) return;
+      if (a.isMain) {
+        const smr = isSkill ? summonInfo(i, action) : null;
+        if (smr) doSpawns(i, smr, k, raw ? st[i].level : levelLimits((S.stats[D.f[i].r.id] || {}).s || D.f[i].r.star).max, a.x);
+        if (smr && supportFor(i, action)) return; // 純召喚技能：只召喚，不另外強化或回血
+        if (isSkill && supportFor(i, action)) {
+          // 純輔助技能：不打對手、不會被閃避。一半機率下一擊 +50%，一半機率回復 20% 體力
+          if (rng() < 0.5) { a.buff = true; pushEvent({ k, target: i, attacker: i, dmg: 0, label: "下一擊 +50%", fx: "buff", noFx: true }); }
+          else { a.hp = Math.min(maxHp[i], a.hp + maxHp[i] * 0.2); pushEvent({ k, target: i, attacker: i, dmg: 0, label: "回復 20%", fx: "heal", noFx: true }); }
+          return;
+        }
+        const buffM = a.buff ? 1.5 : 1;
+        const o = raw ? { mul: buffM, sk: isSkill ? st[i].sk[action === "skill1" ? 0 : 1] : null } : { base: DMG[action] || 8, mul: comp[i] / (h.reps > 1 ? 1.6 : 1) * buffM };
+        const list = isSkill ? victimsOf(i, tgt, h.ar || 0, k) : [tgt];
+        let landed = false;
+        for (const t of list) if (strike(a, t, action, k, h.start, o)) landed = true;
+        if (landed || !raw) a.buff = false;
+        return;
+      }
+      // 召喚物／複製體
+      if (isSkill) {
+        doSpawns(i, skillSpawn(a.src, action), k, a.st.level, a.x); // 複製體放技能：用對手的技能資料（召喚、複製、傷害）
+        const sk = a.st.sk[action === "skill1" ? 0 : 1];
+        if (!sk || !sk.e || !sk.e.length) return; // 沒有傷害的技能
+        const o = raw ? { mul: a.atkR, sk } : { base: DMG[action] || 8, mul: a.atkR };
+        for (const t of victimsOf(i, tgt, h.ar || 0, k)) strike(a, t, action, k, h.start, o);
+        return;
+      }
+      strike(a, tgt, "attack", k, h.start, raw ? { mul: a.atkR } : { base: DMG.attack || 15, mul: a.atkR });
     };
 
     const maxK = limitK + 400;
     for (let k = 0; k < maxK; k++) {
       // 命中與持續傷害
-      for (let n = hits.length - 1; n >= 0; n--) if (hits[n].k === k) { const h = hits.splice(n, 1)[0]; if (D.ko < 0 || h.k === D.ko) applyHit(h, k); }
-      for (let n = sumHits.length - 1; n >= 0; n--) if (sumHits[n].k === k) { const h = sumHits.splice(n, 1)[0]; if (D.ko < 0 && h.s.k1 > k) applySummonHit(h, k); }
+      for (let n = hits.length - 1; n >= 0; n--) if (hits[n].k === k) { const h = hits.splice(n, 1)[0]; if ((D.ko < 0 || h.k === D.ko) && !F[h.i].dead) resolve(F[h.i], h, k); }
+      for (let n = sumHits.length - 1; n >= 0; n--) if (sumHits[n].k === k) { const h = sumHits.splice(n, 1)[0]; if (D.ko < 0 && alive(h.s, k)) resolve(h.s, h, k); }
       for (const j of [0, 1]) {
         const t = F[j];
         for (const d of t.dots) {
@@ -4099,6 +4132,10 @@ footer a { color: inherit; }
             pushEvent({ k, target: j, attacker: d.from, dmg: v, label: "-" + Math.round(v).toLocaleString(), dotTick: true, noFx: true, ko: t.hp <= 0 });
           }
         }
+      }
+      for (const so of D.summons) {
+        if (!so.dots.length || !alive(so, k) || D.ko >= 0) continue;
+        for (const d of so.dots) if (k >= d.next && k < d.until && so.hp > 0) { d.next += DFPS; hurt(so, Math.max(1, d.per), k, d.from, "-" + Math.round(Math.max(1, d.per)).toLocaleString(), false, undefined, { dotTick: true }); }
       }
       // 勝負判定
       if (D.ko < 0 && endK < 0) {
@@ -4140,7 +4177,9 @@ footer a { color: inherit; }
         }
         if (k < me.busy) continue;
         if (me.dead || over) { if (!me.dead) { const idle = f.clips.idle || f.clips.attack; if (!me.cur || me.cur.anim !== idle) startAnim(i, idle, k, true); } continue; }
-        const gap = Math.abs(op.x - me.x) - (D.f[0].w + D.f[1].w) / 2;
+        const tgt = nearestFoe(me, k);
+        if (!tgt) { const idle = f.clips.idle || f.clips.attack; if (!me.cur || me.cur.anim !== idle) startAnim(i, idle, k, true); continue; }
+        const gap = gapTo(me, tgt);
         const range = st[i].rg;
         if (gap > range + 0.5) {
           const step = Math.min(st[i].mv / DFPS * D.speed, gap - range);
@@ -4171,31 +4210,32 @@ footer a { color: inherit; }
           const finish = pickAnim(drp.part, ["finish", "hit", "end"]);
           const ready = f.part.animations[anim.replace(/_all$/, "_ready")];
           const spawn = k + Math.round(dur * (ready && anim.endsWith("_all") ? ready.frame_count / f.part.animations[anim].frame_count : 0.3));
-          const g = D.f[1 - i];
+          const g = tgt.isMain ? D.f[tgt.side] : tgt.f;
           if ((cfg.m === "LINEAR" || cfg.m === "CURVE") && cfg.v > 0 && cfg.e) {
             const stp = { x: me.x + dir * (f.ox + cfg.x * 0.5), y: f.oy - cfg.y * 0.5 };
-            const en = { x: op.x, y: -g.h * (cfg.m === "CURVE" ? 0.05 : 0.3) };
+            const en = { x: tgt.x, y: -g.h * (cfg.m === "CURVE" ? 0.05 : 0.3) };
             const dist = Math.hypot(en.x - stp.x, en.y - stp.y);
             const fl = Math.max(2, Math.round(dist / (cfg.v * 60) * DFPS / D.speed));
             hitAt = spawn + fl; rel = spawn;
             D.projs.push({ own: i, spawn, fl, st: stp, en, curve: cfg.m === "CURVE", face: dir, dr: drp, flight, finish, a0: cfg.a0, a1: cfg.a1, rot: !!cfg.r, loop: !!cfg.l, dist });
           } else {
-            D.projs.push({ own: i, direct: true, spawn: hitAt, en: { x: op.x, y: -g.h * 0.45 }, face: dir, dr: drp, flight, finish });
+            D.projs.push({ own: i, direct: true, spawn: hitAt, en: { x: tgt.x, y: -g.h * 0.45 }, face: dir, dr: drp, flight, finish });
           }
         }
-        hits.push({ k: Math.max(k + 1, hitAt), rel: Math.max(k + 1, rel), i, j: 1 - i, action, start: k, reps: me.reps || 1 });
+        hits.push({ k: Math.max(k + 1, hitAt), rel: Math.max(k + 1, rel), i, j: 1 - i, action, start: k, reps: me.reps || 1, tgt, ar: action === "attack" ? 0 : skillAr(f.r.id, raw ? st[i] : null, action, st[i].rg) });
         if (action === "attack") D.sfxEv.push({ k: Math.max(k + 1, hitAt), side: i, kind: "attack" });
         else {
           D.sfxEv.push({ k, side: i, kind: "skill" });
           if (!supportFor(i, action)) D.sfxEv.push({ k: Math.max(k + 1, hitAt), side: i, kind: "skillhit" }); // 輔助技能不打人，沒有命中聲
         }
       }
-      // 召喚物：走到自己的射程、照攻速普攻對手；對手不會打召喚物
+      // 召喚物、複製體：跟本人同一套規則（看最近的敵方單位）
       for (const so of D.summons) {
         if (k < so.k0 || k >= so.k1) continue;
-        const i = so.side, op = F[1 - i], dir = i === 0 ? 1 : -1, sf = so.f;
-        if (D.ko < 0 && !timeUp && k >= so.busy) {
-          const gap = Math.abs(op.x - so.x) - (sf.w + D.f[1 - i].w) / 2;
+        const i = so.side, dir = i === 0 ? 1 : -1, sf = so.f;
+        const tgt = D.ko < 0 && !timeUp && k >= so.busy ? nearestFoe(so, k) : null;
+        if (tgt) {
+          const gap = gapTo(so, tgt);
           if (gap > so.st.rg + 0.5) {
             so.x += dir * Math.min(so.st.mv / DFPS * D.speed, gap - so.st.rg);
             if (sf.clips.move && (!so.cur || so.cur.anim !== sf.clips.move)) sumAnim(so, sf.clips.move, k, true);
@@ -4211,7 +4251,7 @@ footer a { color: inherit; }
             so.busy = k + dur;
             const hk = k + Math.max(1, Math.round(dur * hitFrac(sf, clip)));
             if (hk < so.k1) {
-              sumHits.push({ k: hk, s: so, start: k, action });
+              sumHits.push({ k: hk, s: so, start: k, action, tgt, ar: action === "attack" ? 0 : skillAr(so.src, so.st, action, so.st && so.st.rg) });
               if (action === "attack") D.sfxEv.push({ k: hk, side: i, kind: "attack" });
               else D.sfxEv.push({ k, side: i, kind: "skill" }, { k: hk, side: i, kind: "skillhit" });
             }
@@ -4389,7 +4429,9 @@ footer a { color: inherit; }
       realChanged();
     };
   }
-  $("dSumCap").onchange = () => { D.sumCap = Math.max(1, Math.min(20, Math.round(+$("dSumCap").value || 5))); $("dSumCap").value = D.sumCap; compileDuel(); saveDuel(); D.pos = 0; };
+  $("dSumCap").onchange = () => { D.sumCap = Math.max(1, Math.min(20, Math.round(+$("dSumCap").value || 3))); D.sumCapSet = true; $("dSumCap").value = D.sumCap; compileDuel(); saveDuel(); D.pos = 0; };
+  const pctIn = (id, key, lo) => ($(id).onchange = () => { const v = $(id).value.trim(); D[key] = v === "" || !isFinite(+v) ? null : Math.max(lo, Math.min(1000, +v)); $(id).value = D[key] ?? ""; compileDuel(); saveDuel(); D.pos = 0; });
+  pctIn("dSumAtk", "sumAtk", 0); pctIn("dSumHp", "sumHp", 1);
   $("rRangeReset").onclick = () => { D.range = [null, null]; D.mvs = [null, null]; realChanged(); };
   // 一鍵回到資料庫預設：雙方等級、金手指（含技能）、攻擊距離、血量倍率、時間上限
   $("rResetAll").onclick = () => {
@@ -4473,7 +4515,9 @@ footer a { color: inherit; }
       }
       if (D.range[0] != null || D.range[1] != null) d.rg = D.range;
       if (D.kind === "real" && (D.mvs[0] != null || D.mvs[1] != null)) d.ms = D.mvs;
-      if ((D.sumCap || 5) !== 5) d.sc = D.sumCap;
+      if ((D.sumCap || 3) !== 3) d.sc = D.sumCap;
+      if (D.sumAtk != null) d.sa = D.sumAtk;
+      if (D.sumHp != null) d.sh = D.sumHp;
     } else if (S.unit) {
       p.set("app", "single"); p.set("u", S.unit.id);
       const ck = currentClipKey(); if (ck) p.set("clip", ck);
@@ -4498,7 +4542,7 @@ footer a { color: inherit; }
   // 專案檔：完整設定（含金手指、音效選擇），不含自己上傳的音效與背景
   function duelState() {
     return { a: D.f[0]?.r.id, b: D.f[1]?.r.id, moves: D.moves, dist: D.dist, speed: D.speed, shake: D.shake, invert: D.invert, numbers: D.numbers, bars: D.bars, seed: D.seed, projOn: D.projOn, mode: D.mode, finale: D.finale, ground: D.ground,
-      kind: D.kind, raw: D.raw, timeLimit: D.timeLimit, hpMul: D.hpMul, range: D.range, mvs: D.mvs, level: D.level, cheat: D.cheat, sumCap: D.sumCap };
+      kind: D.kind, raw: D.raw, timeLimit: D.timeLimit, hpMul: D.hpMul, range: D.range, mvs: D.mvs, level: D.level, cheat: D.cheat, sumCap: D.sumCap, sumCapSet: D.sumCapSet, sumAtk: D.sumAtk, sumHp: D.sumHp };
   }
   function projectData() {
     const base = { app: "ranger-kichiku", ver: 1, saved: new Date().toISOString() };
@@ -4651,7 +4695,10 @@ footer a { color: inherit; }
     single: () => ({ unit: S.unit && S.unit.id, anim: S.animName, mode: S.mode, segs: S.segs.length, timeline: S.timeline.length, histAt: H.at, histLen: H.list.length, playing: S.playing, ready: !!(S.part && S.atlas) && $("overlay").hidden }),
     duel: () => ({ inited: !!D.inited, a: D.f[0] && D.f[0].r.id, b: D.f[1] && D.f[1].r.id, kind: D.kind === "real" ? (D.raw ? "raw" : "real") : "classic", len: D.len, result: D.resultText, winner: D.winner,
       dealt: [0, 1].map((i) => Math.round((D.events || []).filter((e) => e.attacker === i && e.target !== i && e.dmg > 0).reduce((t, e) => t + e.dmg, 0))),
-      summons: (D.summons || []).map((x) => ({ side: x.side, id: x.copy ? "copy:" + x.src : x.f.r.id, k0: x.k0, k1: x.k1 })), sumCap: sumCap(),
+      summons: (D.summons || []).map((x) => ({ side: x.side, id: x.copy ? "copy:" + x.src : x.f.r.id, k0: x.k0, k1: x.k1 })), sumCap: sumCap(), sumAtk: D.sumAtk, sumHp: D.sumHp,
+      sumHit: (D.events || []).filter((e) => e.sumTarget && e.dmg > 0).length, sumKilled: (D.events || []).filter((e) => e.label === "擊倒召喚物").length,
+      // 本人在自己有召喚物在場時被打中的次數（技能範圍會波及召喚物後面的本人）
+      mainHitWithSum: (D.events || []).filter((e) => !e.sumTarget && e.dmg > 0 && (D.summons || []).some((x) => x.side === e.target && e.k >= x.k0 && e.k < x.k1)).length,
       ready: !!(D.f[0] && D.f[1]) && $("doverlay").hidden }),
     files: () => Object.keys(FILES.meta),
     offline: async (w, h, fps) => { const r = await offlineSupport(w, h, fps); return r ? `${r.vcfg.codec}+${r.acfg.codec}` : ""; },
