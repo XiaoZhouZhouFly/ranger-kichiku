@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.8.1-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.8.1"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.9-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.9"></a>
 </p>
 
 <p align="center">
@@ -40,13 +40,14 @@
 
 ### 📤 輸出
 
-- 單人與雙人畫面都能直接錄成影片，可選 16:9、1:1、9:16。
+- 單人與雙人畫面都能直接輸出成 MP4 影片，可選 16:9、1:1、9:16；支援的瀏覽器會逐格輸出，不用等即時播放、也不會掉格。
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v4.8.1）
+## 最近更新（v4.9）
 
-- 修正 iPhone／iPad 錄的影片在內建播放器結尾卡住的問題。
+- 錄影改成逐格輸出：比即時錄快好幾倍、不掉格，音效和畫面完全對齊（Chrome、Edge 等支援的瀏覽器）。
+- 修正 iPhone／iPad 錄的影片在內建播放器結尾卡住的問題（v4.8.1）。
 - 新增上一步／下一步：單人的惡搞片段和零件調整改錯了可以復原。
 - 自己上傳的音效、背景音樂、競技場背景會記在這台裝置，重新整理不用再上傳。
 - 開網頁更快、暫停時更省電，連續換角色也不會越來越吃記憶體（v4.7.1）。
