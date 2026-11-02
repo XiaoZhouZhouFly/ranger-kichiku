@@ -50,8 +50,41 @@ jobs:
         with:
           path: .
 
-  deploy:
+  # 自動健檢：測試「即將發布的那一份網站」，沒過就不發布（網站維持上一個正常版本）
+  healthcheck:
     needs: sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tests
+      - name: 取得即將發布的網站
+        uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+          path: _pages
+      - run: mkdir -p _site && tar -xf _pages/artifact.tar -C _site
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: 安裝測試用瀏覽器
+        working-directory: tests
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.49.1
+          npx playwright install --with-deps chromium
+      - name: 自動健檢
+        run: node tests/healthcheck.mjs _site
+      - name: 失敗時保存截圖
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: healthcheck-screenshots
+          path: tests/out
+          retention-days: 14
+
+  deploy:
+    needs: healthcheck
     runs-on: ubuntu-latest
     environment:
       name: github-pages
