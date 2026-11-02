@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.6.1-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.6.1"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.7-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.7"></a>
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 
 <img src=".github/single.gif" alt="單人惡搞示範：恐龍熊大的技能被重複、鏡像、變色、放大" width="300" align="right">
 
-- **找角色**：輸入名字搜尋，或從角色庫一隻隻瀏覽，資料每天自動更新。
+- **找角色**：輸入名字搜尋、從角色庫一隻隻瀏覽，或按 🎲 隨機挑一隻，資料每天自動更新。
 - **播放動作**：待機、移動、普攻、技能 1、技能 2、被擊退，技能會一起顯示圖標、說明與投射物。
 - **零件調整**：角色身上每個零件都能單獨隱藏、放大、旋轉、換顏色。
 - **惡搞剪輯**：用時間軸把片段重複、倒放、變速、鏡像、放大震動，也有現成的示範和隨機惡搞。
@@ -28,7 +28,7 @@
 
 ### ⚔️ 雙人對戰
 
-左右各挑一隻角色，三種對戰類型：
+左右各挑一隻角色（也可以 🎲 隨機），三種對戰類型：
 
 | 類型 | 適合 | 怎麼打 |
 | --- | --- | --- |
@@ -42,13 +42,14 @@
 
 - 單人與雙人畫面都能直接錄成影片，可選 16:9、1:1、9:16。
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂。
+- 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v4.6.1）
+## 最近更新（v4.7）
 
-- 載入時顯示轉圈動畫。
-- 修正第一次進網頁沒有音效、或音效延遲才冒出來的問題；音效時間更準。
-- 播放列加上靜音／音量按鈕；雙人對戰的錄影改成播放列上的下載圖示。
-- （v4.6）新增召喚物；原始數值對戰可一鍵恢復預設。
+- 新增分享：按播放列的分享鈕，可以複製連結或下載專案檔，朋友打開就看到同一個畫面、同一場對戰結果。
+- 新增開啟專案檔：分享鈕旁的按鈕，單人、雙人的檔案都能開，自動切到對應模式。
+- 新增隨機角色：單人、雙人都有 🎲 按鈕。
+- 網站連結貼到 LINE、Discord 時有預覽圖；手機可以加到主畫面。
 
 📜 [完整版本更新日誌](CHANGELOG.md)
 
@@ -70,6 +71,7 @@
 | `.github/workflows/sync.yml` | 每天自動執行同步並發布網站 |
 | `.github/*.gif` | README 用的示範動圖 |
 | `sfx/` | 預設音效檔（遊戲技能發動聲） |
+| `assets/` | 分享預覽圖、主畫面圖示與設定（manifest） |
 | `CHANGELOG.md` | 版本更新日誌 |
 | `data/` | 同步下來的角色資料（自動產生，不用手動改） |
 
