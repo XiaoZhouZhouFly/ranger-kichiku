@@ -204,6 +204,13 @@ header.top { display: flex; align-items: center; justify-content: space-between;
 .overlay.err .ld-box { display: none; }
 .overlay.err .ld-text { background: var(--hot); }
 /* 還沒啟動聲音時的提示 */
+.duel-start { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .5); }
+.duel-start[hidden] { display: none; }
+.duel-start button { width: clamp(64px, 16%, 120px); aspect-ratio: 1; border-radius: 50%; border: 3px solid var(--ink); background: var(--accent); color: var(--accent-ink); box-shadow: 4px 4px 0 var(--shadow); cursor: pointer; display: grid; place-items: center; padding: 0; }
+.duel-start button svg { width: 46%; height: 46%; margin-left: 8%; }
+.rec-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border: 2px solid var(--ink); border-radius: 12px; background: var(--panel, #fff); box-shadow: 2px 2px 0 var(--shadow); }
+.rec-ask[hidden] { display: none; }
+.rec-ask span { font-weight: 700; margin-right: 4px; }
 .sfx-unlock { position: absolute; left: 10px; bottom: 10px; z-index: 3; padding: 6px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 900; font-size: 13px; box-shadow: 2px 2px 0 var(--shadow); cursor: pointer; }
 .rec-badge { position: absolute; top: 10px; left: 10px; background: var(--hot); color: #fff; font-weight: 900; font-size: 12px; padding: 3px 8px; border-radius: 999px; border: 2px solid var(--ink); }
 .transport { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; }
@@ -598,6 +605,7 @@ footer a { color: inherit; }
       <div class="stage-col">
         <div class="stage">
           <canvas id="dcv" width="1280" height="720" aria-label="對打預覽"></canvas>
+          <div class="duel-start" id="dStart" hidden><button type="button" id="dStartBtn" aria-label="開始對戰" title="開始對戰"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5v17l14-8.5z" fill="currentColor"/></svg></button></div>
           <div class="overlay" id="doverlay"><div class="ld-box"><i class="ld-spin"></i></div><span class="ld-text">載入中…</span></div>
           <button class="sfx-unlock" type="button" hidden>🔇 點一下開啟音效</button>
           <div class="rec-badge" id="drecBadge" hidden>● 錄製中</div>
@@ -611,6 +619,7 @@ footer a { color: inherit; }
           <button class="btn icon share-btn" type="button" aria-label="分享這場對戰的連結" title="分享連結"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="18" cy="5.5" r="2.6" fill="currentColor"/><circle cx="6" cy="12" r="2.6" fill="currentColor"/><circle cx="18" cy="18.5" r="2.6" fill="currentColor"/><path d="M8.3 10.8 15.7 6.7M8.3 13.2l7.4 4.1" stroke="currentColor" stroke-width="2.2" fill="none"/></svg></button>
           <button class="btn icon hot dl-btn" id="dRec" type="button" aria-label="錄製並下載對打影片" title="錄製並下載對打影片"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3v11m0 0-4.5-4.5M12 14l4.5-4.5M4 17v3h16v-3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </div>
+        <div class="rec-ask" id="dRecAsk" hidden><span>錄影要包含開頭的 3、2、1 倒數嗎？</span><button class="btn small primary" type="button" id="dRecCd">包含倒數</button><button class="btn small" type="button" id="dRecNo">不包含</button><button class="btn small" type="button" id="dRecCancel">取消</button></div>
       </div>
 
       <div class="panel">
@@ -622,6 +631,8 @@ footer a { color: inherit; }
               <button class="chip" data-kind="real" aria-pressed="false">真距離對戰</button>
               <button class="chip" data-kind="raw" aria-pressed="false">原始數值對戰</button>
             </div>
+            <div class="row"><button class="btn small primary" id="rRerun">重新對戰（重抽機率）</button><button class="btn small" id="rResetAll">↺ 全部恢復預設</button></div>
+            <p class="hint" id="rRerunHint"></p>
             <p class="hint" id="classicHint">經典對戰：所有技能都當作攻擊，包含沒有傷害倍率的輔助技能（例如加攻、回血、無敵），出招就會打到對手。想看輔助技能改成強化下一擊或回血的效果，請用真距離對戰或原始數值對戰。</p>
           </div>
           <div class="group" id="realBox" hidden>
@@ -655,7 +666,6 @@ footer a { color: inherit; }
                 </div>
                 <p class="hint">雙方最大體力一起乘上倍率（金手指改過的體力也會再乘），戰鬥會拉長，普攻、防禦、爆擊、閃避更有影響。打到時間上限就比剩餘血量 %。</p>
               </div>
-              <div class="row"><button class="btn small primary" id="rRerun">重新對戰（重抽機率）</button><button class="btn small" id="rResetAll">↺ 全部恢復預設</button></div>
               <details class="more" id="cheatBox"><summary>金手指（直接改數值）</summary><div class="cheat-grid" id="cheatGrid"></div></details>
             </div>
           </div>
@@ -743,7 +753,7 @@ footer a { color: inherit; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v4.12";
+  const APP_VERSION = "v4.13";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -1773,6 +1783,7 @@ footer a { color: inherit; }
     ["none", "無聲"], ["game", "遊戲技能發動聲"], ["punch", "拳擊"], ["slash", "斬擊"], ["magic", "魔法彈"],
     ["laser", "雷射"], ["boom", "爆炸"], ["thunder", "雷電"], ["shine", "閃光"], ["charge", "蓄力"], ["custom", "自己上傳…"],
   ];
+  const SFX_SYS = ["cdBeep", "cdGo", "ko"]; // 系統音效：雙人倒數、K.O.（程式合成，跟著音量與靜音）
   const SFX_LOOK = 0.15; // 預約的提前量（秒）
   const SFX = {
     ctx: null, master: null, buffers: {}, custom: {}, voices: {}, pending: [], ready: null,
@@ -1871,7 +1882,7 @@ footer a { color: inherit; }
     filesUi();
   }
   async function sfxLoad() {
-    const ids = SFX_PRESETS.map((p) => p[0]).filter((id) => !["none", "game", "custom"].includes(id));
+    const ids = SFX_PRESETS.map((p) => p[0]).filter((id) => !["none", "game", "custom"].includes(id)).concat(SFX_SYS);
     await Promise.all(ids.map(async (id) => { try { SFX.buffers[id] = await sfxSynth(id); } catch {} }));
     try { const r = await fetch("sfx/skill-game.mp3"); if (r.ok) SFX.buffers.game = await sfxDecode(await r.arrayBuffer()); } catch {}
   }
@@ -1919,7 +1930,7 @@ footer a { color: inherit; }
   }
   async function sfxSynth(id) {
     const sr = 44100;
-    const dur = { punch: 0.24, slash: 0.32, magic: 0.48, laser: 0.26, boom: 1.1, thunder: 1.1, shine: 0.95, charge: 0.8 }[id] || 0.4;
+    const dur = { punch: 0.24, slash: 0.32, magic: 0.48, laser: 0.26, boom: 1.1, thunder: 1.1, shine: 0.95, charge: 0.8, cdBeep: 0.22, cdGo: 0.6, ko: 1.5 }[id] || 0.4;
     const oc = new OAC(1, Math.ceil(sr * dur), sr);
     const out = oc.createGain(); out.connect(oc.destination);
     let seed = 12345;
@@ -1950,6 +1961,10 @@ footer a { color: inherit; }
       case "boom": nz("lowpass", 1600, 110, 0, 1.0, 0.8, 1, 0.006, 1.05); osc("sine", 95, 28, 0, 0.6, 0.9, 0.004, 0.65); break;
       case "thunder": [0, 0.05, 0.13, 0.2].forEach((t, n) => nz("highpass", 2500, 900, t, t + 0.12, 0.8, 0.8 - n * 0.12, 0.002, 0.1)); nz("lowpass", 420, 120, 0.05, 1.0, 0.8, 0.9, 0.03, 1.0); break;
       case "shine": [1320, 1980, 2640, 3520].forEach((fq, n) => osc("sine", fq, fq, n * 0.045, n * 0.045, 0.32, 0.004, 0.75 - n * 0.1)); break;
+      // 系統音效（不在選單裡）：倒數嗶聲、開打、K.O.
+      case "cdBeep": osc("square", 880, 880, 0, 0, 0.5, 0.004, 0.17); break;
+      case "cdGo": osc("square", 1320, 1320, 0, 0, 0.5, 0.004, 0.5); osc("sine", 660, 660, 0, 0, 0.35, 0.004, 0.45); break;
+      case "ko": osc("sine", 140, 32, 0, 0.7, 1, 0.003, 0.8); nz("lowpass", 2400, 90, 0, 1.2, 0.8, 0.9, 0.004, 1.3); osc("sawtooth", 220, 110, 0.02, 0.5, 0.25, 0.01, 0.5); [523, 659, 784].forEach((fq) => osc("triangle", fq, fq, 0.12, 0.12, 0.22, 0.01, 1.2)); break;
       case "charge": {
         const f = oc.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 2600; f.connect(out);
         const o = oc.createOscillator(), g = oc.createGain(); o.type = "sawtooth";
@@ -1961,7 +1976,8 @@ footer a { color: inherit; }
     }
     const buf = await oc.startRendering();
     const d = buf.getChannelData(0); let pk = 0; for (let i = 0; i < d.length; i++) pk = Math.max(pk, Math.abs(d[i]));
-    if (pk > 0) for (let i = 0; i < d.length; i++) d[i] *= 0.9 / pk;
+    const top = { cdBeep: 0.55, cdGo: 0.65 }[id] || 0.9;
+    if (pk > 0) for (let i = 0; i < d.length; i++) d[i] *= top / pk;
     return buf;
   }
   // 播放（可指定精確時間 when）。聲音沒啟動就直接略過。
@@ -2148,11 +2164,18 @@ footer a { color: inherit; }
       if (cur <= prev) continue;
       const slow = D.replayFrom >= 0 && k >= D.replayFrom;
       for (const e of ev) if (e.k > prev && e.k <= cur) list.push({ k, side: e.side, which: e.kind === "skill" ? "skill" : e.kind === "skillhit" ? "hit" : "atk", rate: slow ? 0.7 : 1 });
+      if (!slow && D.ko >= 0 && D.ko > prev && D.ko <= cur) list.push({ k, sys: "ko", rate: 1 });
     }
     D.sfxOut = list; D.sfxOutFor = D.sfxEv; D.sfxOutMap = D.timeMap;
     return list;
   }
-  function duelSfxPlay(e, when) { const c = SFX.cfg.duel[e.side] || {}; sfxPlay(c[e.which], `duel${e.side}-${e.which}`, { rate: e.rate, when }); }
+  function duelSfxPlay(e, when) {
+    if (e.sys) { sfxPlay(e.sys, null, { rate: e.rate, when }); return; }
+    const c = SFX.cfg.duel[e.side] || {}; sfxPlay(c[e.which], `duel${e.side}-${e.which}`, { rate: e.rate, when });
+  }
+  // 開場倒數：3、2、1 各一聲，第 CD_SEC 秒（開打）一聲較高的
+  const CD_SEC = 3;
+  const cdSfx = (fps) => [{ k: 0, sys: "cdBeep" }, { k: fps, sys: "cdBeep" }, { k: 2 * fps, sys: "cdBeep" }, { k: CD_SEC * fps, sys: "cdGo" }];
   /* ---------- 錄影檔補上正確的總長度 ----------
      瀏覽器錄出的 MP4 是分段格式，檔頭總長度寫 0；WebM 則完全沒有總長度。
      播放器只好自己猜，才會出現「顯示 3 秒、實際播十幾秒」。這裡在錄完後把長度寫回檔頭。 */
@@ -2737,8 +2760,14 @@ footer a { color: inherit; }
     }
     return out.sort((a, b) => a.t - b.t);
   }
-  function duelOfflineEvents() {
-    return duelSfxList().map((e) => { const c = SFX.cfg.duel[e.side] || {}; return { t: e.k / DFPS, buf: sfxBufFor(c[e.which], `duel${e.side}-${e.which}`), rate: e.rate }; });
+  // shift = 影片開頭多出的倒數幀數（0 = 不含倒數）
+  function duelOfflineEvents(shift = 0) {
+    const fight = duelSfxList().map((e) => {
+      const buf = e.sys ? SFX.buffers[e.sys] : sfxBufFor((SFX.cfg.duel[e.side] || {})[e.which], `duel${e.side}-${e.which}`);
+      return { t: (e.k + shift) / DFPS, buf, rate: e.rate };
+    });
+    const cd = shift ? cdSfx(DFPS).map((e) => ({ t: e.k / DFPS, buf: SFX.buffers[e.sys], rate: 1 })) : [];
+    return cd.concat(fight);
   }
   function pickMime() {
     if (!window.MediaRecorder) return null;
@@ -3093,7 +3122,9 @@ footer a { color: inherit; }
     return { rate, dur: Math.max(1, Math.round(a.frame_count / rate * DFPS)) };
   }
   // 你來我往／隨機：先排一次找出致命一擊，再把那一擊改成慢動作重新排
-  function compileDuel() {
+  // 任何設定改變重新計算後，都回到「還沒開始」：停在第一格、蓋黑幕等按播放
+  function compileDuel() { compileDuelCore(); duelIdle(); }
+  function compileDuelCore() {
     D.finalKey = null; D.koInfo = null;
     if (D.kind === "real") { compileReal(); return; }
     D.timeMap = null; D.maxHp = [100, 100];
@@ -3513,18 +3544,56 @@ footer a { color: inherit; }
     c.strokeText("REPLAY", x + sz * 0.75, y); c.fillText("REPLAY", x + sz * 0.75, y);
     c.restore();
   }
+  /* 播放狀態：
+     - 還沒開始／已播完（D.idle）：畫面蓋 50% 黑幕＋播放鈕，不會自動播放、也不重複。
+     - 按播放：3、2、1 倒數（D.cd = 倒數經過的幀數），黑幕跟著變淡，倒數完才開打。
+     - 播到一半暫停再播放：直接接著播，不倒數。 */
+  function duelPlayBtn(on) { $("dPlay").textContent = on ? "❚❚" : "▶"; $("dPlay").setAttribute("aria-label", on ? "暫停" : "播放"); }
+  function duelIdle(atEnd) {
+    D.playing = false; D.cd = null; D.idle = true;
+    D.pos = atEnd ? Math.max(0, D.len - 1) : 0;
+    $("dStart").hidden = !!atEnd; // 播完停在最後一格（保留 K.O. 畫面），按播放列的播放鍵重新倒數
+    duelPlayBtn(false); markDirty();
+  }
+  function duelStart() {
+    if (!D.f[0] || !D.f[1] || D.recording) return;
+    sfxUnlock();
+    D.idle = false; D.playing = false; D.pos = 0; D.cd = 0; D.cdSt = {};
+    $("dStart").hidden = true; duelPlayBtn(true); markDirty();
+  }
+  function duelPause() { D.playing = false; D.cd = null; D.idle = false; $("dStart").hidden = true; duelPlayBtn(false); }
+  // 倒數畫面：黑幕從 50% 慢慢變透明，中間大大的 3、2、1（錄影含倒數時也用這個）
+  function drawCountdown(c, W, H, f) {
+    const t = Math.max(0, f) / DFPS; if (t >= 3) return;
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalCompositeOperation = "source-over";
+    c.globalAlpha = 1; c.fillStyle = `rgba(0,0,0,${(0.5 * (1 - t / 3)).toFixed(3)})`; c.fillRect(0, 0, W, H);
+    const n = 3 - Math.floor(t), ph = t % 1, pop = 1 - Math.pow(1 - Math.min(1, ph * 4), 3);
+    const sz = Math.round(Math.min(W, H) * 0.34 * (1.35 - 0.35 * pop));
+    c.globalAlpha = ph < 0.8 ? 1 : Math.max(0, (1 - ph) / 0.2);
+    c.font = `900 ${sz}px "Bungee", ${getComputedStyle(document.body).fontFamily}`;
+    c.textAlign = "center"; c.textBaseline = "middle";
+    c.lineWidth = Math.max(6, sz * 0.09); c.lineJoin = "round"; c.strokeStyle = "#1b2038"; c.fillStyle = "#ffffff";
+    c.strokeText(String(n), W / 2, H / 2); c.fillText(String(n), W / 2, H / 2);
+    c.restore();
+  }
   function duelTick(dt) {
     if (D.recording) return;
+    if (D.cd != null && D.f[0] && D.f[1]) {
+      D.cd += dt * DFPS;
+      sfxRun(D.cdSt, cdSfx(DFPS), D.cd, DFPS, 1e9, duelSfxPlay);
+      if (D.cd >= CD_SEC * DFPS) { D.cd = null; D.pos = 0; D.playing = true; D.sfxAbs = null; }
+    }
     if (D.playing && D.f[0] && D.f[1]) {
       if (D.sfxAbs != null && D.sfxPosRef !== D.pos) { D.sfxAbs = null; sfxStopPending(); } // 位置被跳轉過
       if (D.sfxAbs == null) { D.sfxAbs = D.pos; D.sfxSt = {}; }
       D.pos += dt * DFPS; D.sfxAbs += dt * DFPS;
-      if (D.pos >= D.len) D.pos = D.pos % Math.max(1, D.len);
-      sfxRun(D.sfxSt, duelSfxList(), D.sfxAbs, DFPS, D.len, duelSfxPlay);
-      D.sfxPosRef = D.pos;
-    } else if (D.sfxAbs != null) { D.sfxAbs = null; sfxStopPending(); }
-    if (!shouldDraw(D.playing && D.f[0] && D.f[1])) return;
+      if (D.pos >= D.len) duelIdle(true); // 播完停在最後一格，不重複
+      else { sfxRun(D.sfxSt, duelSfxList(), D.sfxAbs, DFPS, 1e9, duelSfxPlay); D.sfxPosRef = D.pos; }
+    } else if (D.sfxAbs != null) { D.sfxAbs = null; if (D.cd == null) sfxStopPending(); }
+    const active = (D.playing || D.cd != null) && D.f[0] && D.f[1];
+    if (!shouldDraw(active)) return;
     renderDuel(Math.floor(D.pos));
+    if (D.cd != null) drawCountdown(dctx, dcv.width, dcv.height, D.cd);
     $("dframeNo").textContent = `${Math.floor(D.pos)} / ${Math.max(0, D.len - 1)}`;
     if (!dscrubbing) $("dscrub").value = String(Math.floor(D.pos));
   }
@@ -3642,9 +3711,18 @@ footer a { color: inherit; }
     if (!list.length) { box.innerHTML = `<p class="hint">找不到「${escapeHtml(q)}」。</p>`; return; }
     for (const r of list) box.appendChild(unitCard(r, () => { setFighter(i, r, true); box.textContent = ""; $(`dq${i}`).value = ""; }, { select: false }));
   }
-  async function recordDuel() {
-    const status = $("dStatus");
+  // 按錄製：先問要不要包含開頭倒數
+  function askRecordDuel() {
     if (D.recording || !D.f[0] || !D.f[1]) return;
+    $("dRecAsk").hidden = !$("dRecAsk").hidden;
+  }
+  async function recordDuel(withCd) {
+    const status = $("dStatus");
+    $("dRecAsk").hidden = true;
+    if (D.recording || !D.f[0] || !D.f[1]) return;
+    duelPause();
+    const CD = withCd ? CD_SEC * DFPS : 0, total = D.len + CD;
+    const drawAt = (k) => { if (k < CD) { renderDuel(0); drawCountdown(dctx, dcv.width, dcv.height, k); } else renderDuel(k - CD); };
     if (S.bg === "transparent") setBg("white");
     const fileBase = `duel_${D.f[0].r.id}_vs_${D.f[1].r.id}`;
     // 先試離線逐格輸出；不支援或失敗才用即時錄影
@@ -3653,13 +3731,13 @@ footer a { color: inherit; }
     try {
       status.textContent = "準備輸出…";
       offBlob = await offlineExport({
-        canvas: dcv, len: D.len, fps: DFPS, draw: (k) => renderDuel(k),
-        events: duelOfflineEvents(), bgmUrl: S.audioUrl, bgmStart: +$("audioStart").value || 0,
-        progress: (f, k) => { const pc = Math.round(f * 100); status.textContent = `輸出中 ${pc}%（逐格輸出，不用等即時播放）`; $("drecBadge").textContent = `● 輸出中 ${pc}%`; $("dframeNo").textContent = `${k} / ${D.len - 1}`; },
+        canvas: dcv, len: total, fps: DFPS, draw: drawAt,
+        events: duelOfflineEvents(CD), bgmUrl: S.audioUrl, bgmStart: +$("audioStart").value || 0,
+        progress: (f, k) => { const pc = Math.round(f * 100); status.textContent = `輸出中 ${pc}%（逐格輸出，不用等即時播放）`; $("drecBadge").textContent = `● 輸出中 ${pc}%`; $("dframeNo").textContent = `${Math.max(0, k - CD)} / ${D.len - 1}`; },
       });
     } catch { offBlob = null; }
     D.recording = false; $("drecBadge").hidden = true; $("drecBadge").textContent = "● 錄製中"; $("dRec").disabled = false;
-    if (offBlob) { await offerFile(offBlob, fileBase + ".mp4", status); D.pos = 0; markDirty(); return; }
+    if (offBlob) { await offerFile(offBlob, fileBase + ".mp4", status); duelIdle(); return; }
     const mime = pickMime();
     if (mime === null || !dcv.captureStream) { status.textContent = "這個瀏覽器不支援錄製影片。請改用電腦版 Chrome。"; return; }
     const stream = dcv.captureStream(DFPS);
@@ -3672,17 +3750,17 @@ footer a { color: inherit; }
     const chunks = []; rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     const done = new Promise((r) => (rec.onstop = r));
     D.recording = true; $("drecBadge").hidden = false; $("dRec").disabled = true;
-    status.textContent = `錄製中…約 ${(D.len / DFPS).toFixed(1)} 秒`;
-    renderDuel(0); rec.start(250); const recT0 = performance.now();
+    status.textContent = `錄製中…約 ${(total / DFPS).toFixed(1)} 秒`;
+    drawAt(0); rec.start(250); const recT0 = performance.now();
     if (audioEl) { try { await audioEl.play(); } catch {} }
     const t0 = performance.now();
-    const rst = {}, dl = duelSfxList();
+    const rst = {}, dl = (CD ? cdSfx(DFPS) : []).concat(duelSfxList().map((e) => Object.assign({}, e, { k: e.k + CD })));
     await new Promise((resolve) => {
       const step = () => {
         const kf = (performance.now() - t0) / 1000 * DFPS, k = Math.floor(kf);
-        if (k >= D.len) return resolve();
-        renderDuel(k);
-        sfxRun(rst, dl, kf, DFPS, D.len, duelSfxPlay); $("dframeNo").textContent = `${k} / ${D.len - 1}`;
+        if (k >= total) return resolve();
+        drawAt(k);
+        sfxRun(rst, dl, kf, DFPS, 1e9, duelSfxPlay); $("dframeNo").textContent = `${Math.max(0, k - CD)} / ${D.len - 1}`;
         requestAnimationFrame(step);
       };
       requestAnimationFrame(step);
@@ -3695,7 +3773,7 @@ footer a { color: inherit; }
     const ext = type.includes("mp4") ? "mp4" : "webm";
     status.textContent = "整理影片中…";
     await offerFile(await fixVideoDuration(new Blob(chunks, { type }), type, recMs), `${fileBase}.${ext}`, status);
-    D.pos = 0;
+    duelIdle();
   }
   function setDuelSize(sz) {
     const [w, h] = sz.split("x").map(Number);
@@ -3773,8 +3851,14 @@ footer a { color: inherit; }
     $(`dq${i}`).addEventListener("keydown", (e) => { if (e.key === "Enter") renderDuelResults(i); });
   });
   $("dSwap").onclick = () => { D.f.reverse(); D.range.reverse(); D.mvs.reverse(); D.level.reverse(); D.cheat.reverse(); renderRealPanel(); fighterPanel(0); fighterPanel(1); D.moves.forEach((m) => (m.who = m.who === "A" ? "B" : "A")); movesChanged(true); };
-  $("dPlay").onclick = () => { D.playing = !D.playing; $("dPlay").textContent = D.playing ? "❚❚" : "▶"; $("dPlay").setAttribute("aria-label", D.playing ? "暫停" : "播放"); };
-  $("dscrub").addEventListener("input", () => { dscrubbing = true; D.pos = +$("dscrub").value; D.playing = false; $("dPlay").textContent = "▶"; });
+  $("dPlay").onclick = () => {
+    if (D.cd != null) duelIdle(); // 倒數中按暫停：回到還沒開始
+    else if (D.playing) duelPause();
+    else if (D.idle) duelStart();
+    else { D.playing = true; duelPlayBtn(true); }
+  };
+  $("dStartBtn").onclick = duelStart;
+  $("dscrub").addEventListener("input", () => { dscrubbing = true; duelPause(); D.pos = +$("dscrub").value; });
   $("dscrub").addEventListener("change", () => { dscrubbing = false; });
   $("dAddA").onclick = () => { D.moves.push({ who: "A", action: availActions(0).includes("skill1") ? "skill1" : "attack" }); movesChanged(true); };
   $("dAddB").onclick = () => { D.moves.push({ who: "B", action: availActions(1).includes("skill1") ? "skill1" : "attack" }); movesChanged(true); };
@@ -3791,8 +3875,6 @@ footer a { color: inherit; }
     $("dModeHint").textContent = MODE_HINT[mode] + (D.kind === "real" ? " 真距離：雙方同時行動，打不到會自動走過去，「移動接近」不再需要；只有體力跌破一半與倒下時才會被擊退。" : "");
     if (regenerate && mode === "trade") D.moves = presetTrade();
     if (regenerate && mode === "random") D.moves = presetRandomDuel();
-    D.pos = 0; D.playing = true;
-    $("dPlay").textContent = "❚❚"; $("dPlay").setAttribute("aria-label", "暫停");
     movesChanged(true);
   }
   $("dPresetTrade").onclick = () => setDuelMode("trade", true);
@@ -3838,7 +3920,10 @@ footer a { color: inherit; }
   }
   $("dGround").addEventListener("input", () => { D.ground = +$("dGround").value; $("dGroundOut").textContent = D.ground + "%"; saveDuel(); });
   document.querySelectorAll("#dsizes .chip").forEach((c) => (c.onclick = () => setDuelSize(c.dataset.size)));
-  $("dRec").onclick = recordDuel;
+  $("dRec").onclick = askRecordDuel;
+  $("dRecCd").onclick = () => recordDuel(true);
+  $("dRecNo").onclick = () => recordDuel(false);
+  $("dRecCancel").onclick = () => { $("dRecAsk").hidden = true; };
   $("dAudio").onchange = async (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
@@ -4306,6 +4391,7 @@ footer a { color: inherit; }
     $("realBox").hidden = !real;
     $("realLbl").textContent = wantRaw ? "原始數值設定" : "真距離設定";
     $("classicHint").hidden = real;
+    $("rRerunHint").textContent = RERUN_HINT[wantRaw ? "raw" : real ? "real" : "classic"];
     $("rRawMissing").hidden = !(wantRaw && !hasStats);
     const zero = [0, 1].filter((i) => D.f[i] && hasStats && real && D.raw && !(statAt((S.stats[D.f[i].r.id] || {}).hp, 1, 1) > 1)).map((i) => D.f[i].r.name);
     $("rZeroWarn").hidden = !zero.length;
@@ -4408,7 +4494,7 @@ footer a { color: inherit; }
     for (const k of STAT5) D.cheat[i][k] = Math.round(sv[k] * n);
     realChanged();
   }
-  function realChanged() { compileDuel(); saveDuel(); renderRealPanel(); D.pos = 0; }
+  function realChanged() { compileDuel(); saveDuel(); renderRealPanel(); }
   function setKind(kind) {
     D.kind = kind === "classic" ? "classic" : "real";
     D.raw = kind === "raw";
@@ -4433,14 +4519,30 @@ footer a { color: inherit; }
   const pctIn = (id, key, lo) => ($(id).onchange = () => { const v = $(id).value.trim(); D[key] = v === "" || !isFinite(+v) ? null : Math.max(lo, Math.min(1000, +v)); $(id).value = D[key] ?? ""; compileDuel(); saveDuel(); D.pos = 0; });
   pctIn("dSumAtk", "sumAtk", 0); pctIn("dSumHp", "sumHp", 1);
   $("rRangeReset").onclick = () => { D.range = [null, null]; D.mvs = [null, null]; realChanged(); };
-  // 一鍵回到資料庫預設：雙方等級、金手指（含技能）、攻擊距離、血量倍率、時間上限
-  $("rResetAll").onclick = () => {
-    D.level = [null, null]; D.cheat = [{}, {}]; D.range = [null, null]; D.mvs = [null, null];
-    D.hpMul = 1; D.timeLimit = 60;
-    realChanged();
-    $("dStatus").textContent = "已恢復資料庫預設數值。";
+  /* 對戰類型下方的兩顆按鈕：三種類型共用，依目前類型決定做什麼 */
+  const RERUN_HINT = {
+    classic: "重新對戰：招式編排類型不變，換一組傷害浮動；隨機對打會再抽一套招式順序。全部恢復預設：雙方距離 320、整體速度 1×。",
+    real: "重新對戰：招式編排類型不變，重抽發動率、爆擊、閃避等機率；隨機對打會再抽一套招式順序。全部恢復預設：攻擊距離、移動速度、時間上限、整體速度。",
+    raw: "重新對戰：重抽發動率、爆擊、閃避等機率。全部恢復預設：雙方等級、金手指、攻擊距離、移動速度、血量倍率、時間上限、整體速度。",
   };
-  $("rRerun").onclick = () => { D.seed = Math.floor(Math.random() * 100000); realChanged(); D.playing = true; };
+  const kindNow = () => (D.kind === "real" ? (D.raw ? "raw" : "real") : "classic");
+  $("rResetAll").onclick = () => {
+    const kind = kindNow();
+    D.speed = 1; $("dSpeed").value = 1; $("dSpeedOut").textContent = "1.00×";
+    if (kind === "classic") { D.dist = 320; $("dDist").value = 320; $("dDistOut").textContent = 320; }
+    else {
+      D.range = [null, null]; D.mvs = [null, null]; D.timeLimit = 60;
+      if (kind === "raw") { D.level = [null, null]; D.cheat = [{}, {}]; D.hpMul = 1; }
+    }
+    realChanged(); renderMoves();
+    $("dStatus").textContent = "已恢復預設：" + RERUN_HINT[kind].split("全部恢復預設：")[1];
+  };
+  $("rRerun").onclick = () => {
+    // 原始數值不看招式編排；經典、真距離保留編排類型，隨機對打再抽一套順序，自定義與你來我往的招式不動
+    if (kindNow() !== "raw" && D.mode === "random") D.moves = presetRandomDuel();
+    D.seed = Math.floor(Math.random() * 100000);
+    realChanged(); renderMoves();
+  };
 
   /* ---------- 分享：網址帶上目前的角色、動作、對戰設定；太長時改用專案檔 ---------- */
   const URLP = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
@@ -4693,7 +4795,10 @@ footer a { color: inherit; }
   window.__rk = Object.freeze({
     version: APP_VERSION,
     single: () => ({ unit: S.unit && S.unit.id, anim: S.animName, mode: S.mode, segs: S.segs.length, timeline: S.timeline.length, histAt: H.at, histLen: H.list.length, playing: S.playing, ready: !!(S.part && S.atlas) && $("overlay").hidden }),
-    duel: () => ({ inited: !!D.inited, a: D.f[0] && D.f[0].r.id, b: D.f[1] && D.f[1].r.id, kind: D.kind === "real" ? (D.raw ? "raw" : "real") : "classic", len: D.len, result: D.resultText, winner: D.winner,
+    duel: () => ({ inited: !!D.inited, a: D.f[0] && D.f[0].r.id, b: D.f[1] && D.f[1].r.id, kind: D.kind === "real" ? (D.raw ? "raw" : "real") : "classic", mode: D.mode, seed: D.seed,
+      state: D.cd != null ? "countdown" : D.playing ? "playing" : D.idle ? (D.pos > 0 ? "ended" : "idle") : "paused", pos: Math.floor(D.pos || 0),
+      sysSfx: duelSfxList().filter((e) => e.sys).map((e) => e.sys + "@" + e.k).join(","), ko: D.ko,
+      moves: (D.moves || []).map((m) => m.who + ":" + m.action + (m.repeat > 1 ? "x" + m.repeat : "")).join(","), len: D.len, result: D.resultText, winner: D.winner,
       dealt: [0, 1].map((i) => Math.round((D.events || []).filter((e) => e.attacker === i && e.target !== i && e.dmg > 0).reduce((t, e) => t + e.dmg, 0))),
       summons: (D.summons || []).map((x) => ({ side: x.side, id: x.copy ? "copy:" + x.src : x.f.r.id, k0: x.k0, k1: x.k1 })), sumCap: sumCap(), sumAtk: D.sumAtk, sumHp: D.sumHp,
       sumHit: (D.events || []).filter((e) => e.sumTarget && e.dmg > 0).length, sumKilled: (D.events || []).filter((e) => e.label === "擊倒召喚物").length,

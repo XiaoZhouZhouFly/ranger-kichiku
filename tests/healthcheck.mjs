@@ -272,6 +272,70 @@ await test("召喚物會被打倒（多打多規則）", async (open) => {
   return `種子 ${hit.s}：召喚物被打 ${hit.d.sumHit} 下、被打倒 ${hit.d.sumKilled} 隻；召喚物在場時本人被打中 ${behind} 下；血量 1000% 時被打倒 ${d2.sumKilled} 隻`;
 });
 
+await test("重新對戰與全部恢復預設（三種類型）", async (open) => {
+  const p = await open();
+  const get = () => p.evaluate(() => { const d = window.__rk.duel(); return { kind: d.kind, mode: d.mode, seed: d.seed, moves: d.moves, len: d.len, dealt: d.dealt.join(",") }; });
+  const out = [];
+  for (const [kind, mode] of [["classic", "trade"], ["classic", "random"], ["real", "custom"], ["real", "random"], ["raw", "trade"]]) {
+    await p.goto(BASE + `?app=duel&type=${kind}&l=x001-cube&r=x002-orb&s=5`); await waitDuel(p);
+    if (kind !== "raw") { await p.click({ trade: "#dPresetTrade", random: "#dPresetRandom", custom: "#dPresetCustom" }[mode]); await p.waitForTimeout(300); }
+    check(await p.isVisible("#rRerun") && await p.isVisible("#rResetAll"), `${kind}：對戰類型下面看不到重新對戰／全部恢復預設`);
+    const a = await get(), seen = new Set([a.len + "|" + a.dealt]);
+    for (let n = 0; n < 4; n++) {
+      await p.click("#rRerun"); await p.waitForTimeout(300);
+      const b = await get(); seen.add(b.len + "|" + b.dealt);
+      check(b.kind === a.kind && b.mode === a.mode, `${kind}／${mode}：重新對戰改到了對戰類型或招式編排類型`);
+      check(b.seed !== a.seed, `${kind}／${mode}：重新對戰沒有換種子`);
+      if (mode !== "random") check(b.moves === a.moves, `${kind}／${mode}：重新對戰改到了招式順序`);
+    }
+    check(seen.size > 1, `${kind}／${mode}：按了 4 次重新對戰，結果都一樣`);
+    out.push(`${kind}/${mode} ${seen.size} 種結果`);
+  }
+  // 全部恢復預設：原始數值還原血量倍率與攻擊距離；經典還原雙方距離
+  await p.click("[data-kind=raw]"); await p.waitForTimeout(300);
+  const before = await get();
+  await p.click("[data-hpmul='5']"); await p.waitForTimeout(300);
+  check((await get()).len !== before.len, "原始數值：血量倍率 ×5 沒有改變戰鬥長度");
+  await p.click("#rResetAll"); await p.waitForTimeout(300);
+  check((await get()).len === before.len, "原始數值：全部恢復預設沒有還原血量倍率");
+  await p.click("[data-kind=classic]"); await p.waitForTimeout(300);
+  await p.evaluate(() => { const s = document.getElementById("dDist"); s.value = 600; s.dispatchEvent(new Event("input")); });
+  await p.click("#rResetAll"); await p.waitForTimeout(300);
+  check((await p.inputValue("#dDist")) === "320", "經典：全部恢復預設沒有還原雙方距離");
+  return out.join("、");
+});
+
+await test("雙人播放：不自動播放、3 2 1 倒數、播完停住", async (open) => {
+  const p = await open(); await p.goto(BASE + "?app=duel&type=raw&l=x001-cube&r=x002-orb&s=3"); await waitDuel(p);
+  const st = () => p.evaluate(() => window.__rk.duel());
+  await p.waitForTimeout(1200);
+  let d = await st();
+  check(d.state === "idle" && d.pos === 0, `開啟後不該自動播放：${d.state} 第 ${d.pos} 格`);
+  check(await p.isVisible("#dStart"), "還沒開始時沒有黑幕與播放鈕");
+  check(/ko@\d+/.test(d.sysSfx) && d.ko >= 0, `K.O. 沒有排入音效：${d.sysSfx}`);
+  await p.click("#dStartBtn"); await p.waitForTimeout(1200);
+  d = await st();
+  check(d.state === "countdown" && d.pos === 0 && !(await p.isVisible("#dStart")), `按播放後應該先倒數：${d.state} 第 ${d.pos} 格`);
+  await p.waitForTimeout(2600);
+  d = await st();
+  check(d.state === "playing" && d.pos > 0, `倒數完沒有開打：${d.state} 第 ${d.pos} 格`);
+  await p.click("#dPlay"); const at = (await st()).pos; await p.waitForTimeout(500);
+  d = await st(); check(d.state === "paused" && d.pos === at, "暫停後畫面還在走");
+  await p.click("#dPlay"); await p.waitForTimeout(500);
+  d = await st(); check(d.state === "playing" && d.pos > at, `暫停後再播放應該直接接著播（不倒數）：${d.state}`);
+  // 改數值：回到還沒開始
+  await p.click("[data-hpmul='5']"); await p.waitForTimeout(800);
+  d = await st(); check(d.state === "idle" && d.pos === 0 && await p.isVisible("#dStart"), `改數值後應該停在開頭等按播放：${d.state} 第 ${d.pos} 格`);
+  await p.click("#rRerun"); await p.waitForTimeout(800);
+  d = await st(); check(d.state === "idle" && d.pos === 0, `重新對戰後應該停在開頭等按播放：${d.state}`);
+  // 播完：停在最後一格，不重複
+  await p.click("[data-hpmul='1']"); await p.waitForTimeout(300);
+  await p.evaluate(() => { const s = document.getElementById("dscrub"); s.value = String(+s.max - 10); s.dispatchEvent(new Event("input", { bubbles: true })); });
+  await p.click("#dPlay"); await p.waitForTimeout(2000);
+  d = await st(); check(d.state === "ended" && d.pos === d.len - 1, `播完應該停在最後一格：${d.state} 第 ${d.pos}／${d.len - 1} 格`);
+  return `K.O. 音效 ${d.sysSfx}`;
+});
+
 await test("官方角色對戰可執行", async (open) => {
   const p = await open(); await p.goto(BASE + "?app=duel&type=raw"); await waitDuel(p);
   const d = await p.evaluate(() => window.__rk.duel());
@@ -299,14 +363,23 @@ await test("錄影：逐格輸出（雙人）", async (open) => {
   const p = await open({ opus: true }); await p.goto(BASE + "?app=duel&type=raw&l=x001-cube&r=x002-orb&s=3"); await waitDuel(p);
   if (!(await p.evaluate(() => window.__rk.offline(document.getElementById("dcv").width, document.getElementById("dcv").height, 30)))) return "skip:" + (await codecWhy(p));
   const len = (await p.evaluate(() => window.__rk.duel())).len;
-  const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 300000 }), p.click("#dRec")]);
-  const f = path.join(OUT, "rec_duel.mp4"); await dl.saveAs(f);
-  const info = mp4Info(fs.readFileSync(f));
-  check(info.top.join(",") === "ftyp,moov,mdat", `檔案結構不是一般 MP4：${info.top.join(",")}`);
-  const v = info.tracks.find((t) => t.kind === "vide");
-  check(v && v.samples === len, `影片格數應為 ${len}，實際 ${v && v.samples}`);
-  check(Math.abs(v.seconds - len / 30) < 0.05, `影片長度應為 ${(len / 30).toFixed(2)} 秒，實際 ${v.seconds}`);
-  return `${v.samples} 格，${v.seconds.toFixed(2)} 秒`;
+  const out = [];
+  // 按錄製後會問要不要包含開頭倒數：不含＝對戰長度，含＝多 3 秒（90 格）
+  for (const [btn, extra, name] of [["#dRecNo", 0, "不含倒數"], ["#dRecCd", 90, "含倒數"]]) {
+    await p.click("#dRec");
+    check(await p.isVisible("#dRecAsk"), "按錄製後沒有詢問要不要包含倒數");
+    const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 300000 }), p.click(btn)]);
+    const f = path.join(OUT, `rec_duel_${extra}.mp4`); await dl.saveAs(f);
+    const info = mp4Info(fs.readFileSync(f));
+    check(info.top.join(",") === "ftyp,moov,mdat", `${name}：檔案結構不是一般 MP4：${info.top.join(",")}`);
+    const v = info.tracks.find((t) => t.kind === "vide"), a = info.tracks.find((t) => t.kind === "soun");
+    check(v && v.samples === len + extra, `${name}：影片格數應為 ${len + extra}，實際 ${v && v.samples}`);
+    check(Math.abs(v.seconds - (len + extra) / 30) < 0.05, `${name}：影片長度應為 ${((len + extra) / 30).toFixed(2)} 秒，實際 ${v.seconds}`);
+    check(a && a.samples > 0, `${name}：沒有聲音軌`);
+    out.push(`${name} ${v.samples} 格`);
+    await p.waitForTimeout(500);
+  }
+  return out.join("、");
 });
 
 await test("錄影：退回即時錄影", async (open) => {

@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.12-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.12"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v4.13-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v4.13"></a>
 </p>
 
 <p align="center">
@@ -44,8 +44,10 @@
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v4.12）
+## 最近更新（v4.13）
 
+- 三種對戰都能「重新對戰（重抽機率）」與「全部恢復預設」，按鈕放在對戰類型正下方。
+- 雙人對戰改成按播放才開始：先 3、2、1 倒數（有音效），播完停在 K.O. 畫面；K.O. 也有音效。錄影時可選要不要包含倒數。
 - 召喚物平衡：召喚物會被打倒，可調攻擊、血量比例，每方上限預設改為 3；複製體只會複製對手本人。
 - 召喚補齊：進化型改用同系列的召喚動畫、亡者歸來一次 2 個棺木、新增對手複製體，並可設定每方召喚物上限。
 - 真距離、原始數值對戰可以分別設定雙方的移動速度。
