@@ -861,9 +861,9 @@
   },
   "MOVE_ENEMY2": {
    "b": "new",
-   "dmax": null,
-   "dmin": null,
-   "idea": "把敵人拉到自己面前",
+   "dmax": 1,
+   "dmin": 1,
+   "idea": "把敵人往後擊飛到牆邊、撞牆暈眩 1 秒，自己同時跟上去（v5.4）",
    "k": null,
    "lv": null,
    "memo": "",

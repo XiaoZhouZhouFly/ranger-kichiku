@@ -476,6 +476,10 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   check(dash.log.hits >= 1 && dash.x[0] > -38, `突進應該衝過去並打中：x ${dash.x[0]}、命中 ${dash.log.hits}`);
   const pull = await R({ c0: "u1013e-brown", c1: "x001-cube", steps: 250, script: [...W, sk(0, 50)] });
   check(pull.x[1] < 150, `拉動敵人應該把對手拉近：對手 x ${pull.x[1]}`);
+  // v5.4：擊飛撞牆（對手滑到牆邊暈眩，自己跟上去）
+  const wall = await R({ c0: "u1021e-pink", c1: "x001-cube", steps: 150, trace: true, script: [{ side: 0, mx: 1, from: 0, to: 50 }, { side: 0, sk: [0, 60, 80, 0] }] });
+  const wEnd = wall.trace[wall.trace.length - 1];
+  check(wEnd[1][0] > 300 && wall.trace.some((s) => s[1][3] === "stunfx") && wEnd[0][0] > 100, `擊飛撞牆：對手 x ${wEnd[1][0]}、自己 x ${wEnd[0][0]}`);
   const swap = await R({ c0: "u003u-bella", c1: "x001-cube", steps: 200, script: [...W, sk(1, 50)] });
   check(swap.x[0] > swap.x[1], `交換位置後左右應該對調：${swap.x}`);
   const bub = await R({ c0: "u1418e-moon", c1: "x001-cube", steps: 300, script: [...W, sk(0, 50)] });

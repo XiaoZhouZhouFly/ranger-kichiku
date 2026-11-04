@@ -102,6 +102,8 @@
       const x = (N.f[k] = Object.assign(normField(st, k, def), { label }));
       if (st && (x.st === "missing" || x.st === "bad")) issue("guess", label, `${FIELD_ST_LABEL[x.st]}${x.guess ? `，用預設值 ${def}` : ""}`);
     }
+    // 攻擊力（數值平衡用；沒有就當 0，不列問題）
+    N.f.pa = Object.assign(normField(st, "pa", 0), { label: "物攻" }); N.f.ma = Object.assign(normField(st, "ma", 0), { label: "魔攻" });
     if (st && N.f.hp.st !== "missing" && N.f.hp.v <= 1) issue("unfit", "體力", "佔位資料（體力 ≤ 1）");
     if (!N.clips.idle && !N.clips.attack) issue("unfit", "動作", "沒有待機也沒有攻擊動作");
     const rg = N.f.rg.v;

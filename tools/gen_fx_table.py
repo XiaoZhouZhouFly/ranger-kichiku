@@ -39,7 +39,8 @@ NEW_MAP = {
     "BUFF-VAMPIRE": "vamp", "MIRROR_PHY": "mirror", "MIRROR_MAG": "mirror",
     # v5.3 第 2 部分：位移、控制、外觀、詛咒、複製體
     "MOVE_ATTACK": "dash", "THROW_ALLY": "dash",          # 突進（按住拖曳選位置，到了再判定）
-    "MOVE_ENEMY1": "pull", "MOVE_ENEMY2": "pull",          # 把對手拉到自己面前
+    "MOVE_ENEMY1": "pull",                                 # 把對手拉到自己面前
+    "MOVE_ENEMY2": "wall",                                 # v5.4：擊飛到牆邊撞牆暈眩，自己跟上去
     "CHANGE_ENEMY": "swap",                                # 打中就交換位置
     "TEMPT": "charm", "FEAR": "fear", "POLYMORPH": "poly", "BUBBLE": "bubble", "SCALE": "scale",
     "CURSE_DEBUFF": "curse",                               # 隨機一個負面效果（含暈眩）
@@ -53,7 +54,7 @@ DEFAULT_PARAMS = {
     "blockBuff": (1, 5, None, None, None), "blockRegen": (1, 5, None, None, None), "blockDebuff": (1, 5, None, None, None), "blockDot": (1, 5, None, None, None),
     "vamp": (1, 5, None, 25, 25), "mirror": (1, 3, None, 20, 30),
     "charm": (3, 3, None, None, None), "fear": (0.5, 1.5, None, None, None), "poly": (0.5, 1.5, None, None, None), "bubble": (0.5, 1.5, None, None, None),
-    "scale": (1, 5, None, 30, 30), "noCopy": (1, 5, None, None, None), "curse": (0.5, 5, None, None, None), "summon": (4, 8, None, None, None),
+    "scale": (1, 5, None, 30, 30), "noCopy": (1, 5, None, None, None), "curse": (0.5, 5, None, None, None), "summon": (4, 8, None, None, None), "wall": (1, 1, None, None, None),
     "atk": (1, 5, 0.5, 10, 30), "spd": (1, 5, 0.5, 10, 30), "heal": (None, None, None, 10, 15), "regen": (1, 4, None, 20, 20),
     "shield": (1, 3, None, 15, 15), "dot": (1, 4, None, None, None), "stun": (0.5, 1.5, None, None, None), "silence": (1, 3, None, None, None),
 }

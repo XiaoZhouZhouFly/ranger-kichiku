@@ -69,7 +69,7 @@
     "MIRROR_PHY": {"b": "mirror", "to": "self", "name": "反射物理傷害", "dur": [1, 3], "val": [20, 30], "lv": "auto", "idea": "一段時間內把受到的部分傷害反彈\n備註：數值像倍率（常見 0.7）"},
     "MOVE_ATTACK": {"b": "dash", "to": "self", "name": "突進攻擊", "lv": "auto", "idea": "自己決定要突進到哪裡，用類似拋物線攻擊的方式使用"},
     "MOVE_ENEMY1": {"b": "pull", "to": "enemy", "name": "拉動敵人", "lv": "auto", "idea": "把對手拉向自己"},
-    "MOVE_ENEMY2": {"b": "pull", "to": "enemy", "name": "拉動敵人（遠）", "lv": "auto", "idea": "把敵人拉到自己面前"},
+    "MOVE_ENEMY2": {"b": "wall", "to": "enemy", "name": "拉動敵人（遠）", "dur": [1, 1], "lv": "auto", "idea": "把敵人往後擊飛到牆邊、撞牆暈眩 1 秒，自己同時跟上去（v5.4）"},
     "POLYMORPH": {"b": "poly", "to": "enemy", "name": "變形", "dur": [0.5, 1.5], "lv": "auto", "idea": "讓對手變形，只能移動（變成的不同樣子資料庫應該有）"},
     "SCALE": {"b": "scale", "to": "enemy", "name": "縮放", "dur": [1, 5], "val": [30, 30], "lv": "auto", "idea": "把對手尺寸變大+判定框暫時變大"},
     "SILENCE": {"b": "silence", "to": "enemy", "name": "沉默", "dur": [1, 3], "lv": "auto"},

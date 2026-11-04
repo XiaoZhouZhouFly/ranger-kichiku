@@ -9,9 +9,9 @@
      角色身上的狀態 p.st：{ 狀態名: { t: 剩幾秒, v: 數值, … } }
      重複中招：同一種狀態重新計時、數值取比較大的（不疊加），見 fxSet。增益與減益的分類見 FX_POS／FX_NEG（清除效果用）。 */
 
-  const FX_NUM = { DOT_FIRST: 0.4, DOT_TOTAL: 1.3, TICK: 0.5, HEAL_DATA: [50, 150] };
+  const FX_NUM = { DOT_FIRST: 0.4, DOT_TOTAL: 1.3, TICK: 0.5, HEAL_DATA: [50, 150], WALL_T: 0.3 };
   /* DOT_FIRST：持續傷害命中先扣這招傷害的 40%；DOT_TOTAL：持續傷害的總傷害＝單擊的 1.3 倍（要等它扣完的補償）
-     TICK：持續傷害、持續回血每 0.5 秒一次；HEAL_DATA：回血的原作數值在這個範圍內依比例對到決定表的上下限 */
+     WALL_T：擊飛撞牆的滑行秒數（施放者跟上去也是這個時間）；TICK：持續傷害、持續回血每 0.5 秒一次；HEAL_DATA：回血的原作數值在這個範圍內依比例對到決定表的上下限 */
 
   // 持續秒數：資料寫「每級幾秒」時乘上這隻角色的最大等級（決定表選「不乘」就不乘），再套上下限
   function fxDur(e, P) {
@@ -122,6 +122,17 @@
       const to = src.x + src.face * ((fightFs(g, src).bw + g.cfg.fs[t.side].bw) / 2 + 10);
       fightSlide(t, to, 0.2); fxText(g, t, "拉近", "#ff8a3d");
     } },
+    // 擊飛撞牆（v5.4）：對手往後滑到牆邊、撞牆暈眩；施放者同時衝到對手面前（霸體，不會被打斷）
+    wall: { apply(g, src, t, e, P) {
+      if (t.ko) return;
+      const dir = Math.sign(t.x - src.x) || src.face, wx = dir * (FT.AW / 2 - 30), T = FX_NUM.WALL_T, stun = (P.dur && P.dur[0]) || 1;
+      if (t.stunKind !== "down") { t.stun = Math.max(t.stun, T + stun); t.stunKind = "stunfx"; t.act = null; t.aim = [null, null, null]; }
+      fightSlide(t, wx, T, () => fxText(g, t, "撞牆暈眩", "#ffd84a"));
+      fxText(g, t, "擊飛", "#ff8a3d");
+      if (!g.p.includes(src) || src.ko) return; // 複製體、召喚物不跟上
+      src.armor = true;
+      fightSlide(src, wx - dir * ((fightFs(g, src).bw + g.cfg.fs[t.side].bw) / 2 + 10), T, () => { src.armor = false; });
+    } },
     // 打中就交換位置
     swap: { apply(g, src, t) { if (t.ko || src.clone) return; const x = src.x; fightSlide(src, t.x, 0.25); fightSlide(t, x, 0.25); fxText(g, t, "換位", "#ff8a3d"); } },
     // 魅惑：左右操作反轉
@@ -159,7 +170,7 @@
     summon: { apply(g, src, t, e, P, hit) { fightSummonSpawn(g, src, hit.s, fxDur(e, P)); } },
   });
   // 會打斷動作的控制類（突進途中不生效）
-  const FX_CONTROL = new Set(["stun", "down", "bubble", "fear", "poly", "pull", "swap"]);
+  const FX_CONTROL = new Set(["stun", "down", "bubble", "fear", "poly", "pull", "swap", "wall"]);
   FX_POS.add("noCopy"); ["charm", "fear", "poly", "big"].forEach((n) => FX_NEG.add(n));
 
   // 決定表 × 處理方式 → 已支援的效果（none、new、還沒實作的處理方式都不算）
@@ -191,6 +202,7 @@
   function fxTick(g, p) {
     for (const name of Object.keys(p.st)) {
       const s = p.st[name];
+      if (!s) continue; // 前面的持續傷害可能已經把這個狀態打掉（例：泡泡被打破）
       s.t -= FT.STEP;
       if (s.tick) {
         s.acc = (s.acc || 0) + FT.STEP;

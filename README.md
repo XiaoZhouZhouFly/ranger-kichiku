@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v5.3.1-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v5.3.1"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v5.4-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v5.4"></a>
 </p>
 
 <p align="center">
@@ -49,8 +49,9 @@
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v5.3.1）
+## 最近更新（v5.4）
 
+- 格鬥場：官方角色的數值重新平衡。每隻角色的攻擊、耐久、機動、射程、控制分同一份預算（最多差平均 ±50%），傷害依出招快慢、冷卻、攻擊形式計算；電腦兩兩對打 5610 場，勝率都在 45%～59%；「拉動敵人（遠）」改成擊飛撞牆＋暈眩，自己跟上去。計算方式見 [FIGHT_BALANCE.md](FIGHT_BALANCE.md)。
 - 格鬥場：召喚技能會叫出召喚物一起打（會被打倒、能擋投射物）；變形會把對手變成原作的變形外觀（例如造物神兔兔的棉花糖兔兔）。
 - 格鬥場：幾乎所有技能效果都有作用了（77 種裡 62 種），新增突進、拉近、交換位置、魅惑、恐懼、變形、泡泡、變大、詛咒、對手複製體、吸血、反射、冷卻增減等；按鍵改成左手移動、右手攻擊＋跳＋防，跳得過對手。
 - 格鬥場：技能效果開始有作用了——暈眩、擊退（倒地）、沉默、持續傷害、攻擊與移速增減、回血、護盾（原作的無敵）、穿透護盾，角色頭上會顯示狀態。只作用在自己身上的技能變成「自身」技能，按下就生效。

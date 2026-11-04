@@ -40,6 +40,15 @@
     // 格鬥場：一隻角色的標準化結果（相容性）、全部角色的相容性報告
     fightNorm: async (id) => { await Promise.all([ensureStats(), ensureSkillFx()]); const f = await fightLoad(id), fs = fightStats(f); return { N: fs.N, atk: fs.atk.kind, sk: fs.sk.map((k) => k && k.kind), summary: fightSummary(fs) }; },
     fightCompat: () => normAll(),
+    // 數值平衡檢查：兩隻 AI 對打一場（倒下或時間到就停）→ 勝方（-1＝平手）、秒數、雙方剩餘體力比例
+    fightBout: async (c0, c1, seed, secs) => {
+      const r = await window.__rk.fightRun({ c0, c1, ai: ["normal", "normal"], seed, secs: secs || 60, steps: (secs || 60) * 60, stopKo: true });
+      const left = r.hp.map((h, i) => h / r.maxHp[i]);
+      return { win: r.log.ko ? (r.hp[0] > 0 ? 0 : 1) : left[0] === left[1] ? -1 : left[0] > left[1] ? 0 : 1, t: r.log.koT || r.t, left: left.map((x) => +x.toFixed(2)), hits: r.log.hits };
+    },
+    // 數值平衡：一隻角色換算後的數值（hp、減傷、移速、普攻／技能傷害、五種能力）
+    fightStatsOf: async (id) => { await Promise.all([ensureStats(), ensureSkillFx()]); const fs = fightStats(await fightLoad(id));
+      return { id, hp: fs.hp, dr: fs.dr, walk: Math.round(fs.walk), atk: [fs.atk.kind, fs.atk.dmg, +fs.atk.cd.toFixed(2)], sk: fs.sk.map((k) => k && [k.kind, k.dmg, +k.cd.toFixed(1)]), B: fs.B && { off: +fs.B.off.toFixed(2), dur: +fs.B.dur.toFixed(2), ctl: fs.B.ctl, sum: +fs.B.sum.toFixed(2) } }; },
     fightPolyForm: (id) => fightPolyFormId(id), // 變形外觀的角色 id
     // 標準化的小零件（健檢用；都不改任何狀態）
     fightNormUnit: (r, anims) => normUnit(r, new Set(anims)), fightDelivery: (cfg, rg, isAtk) => normDelivery(cfg, rg, isAtk), fightField: (obj, key, def) => normField(obj, key, def),
@@ -68,6 +77,7 @@
         for (const e of g.events) { if (e.type === "hit") log.hits++; if (e.type === "guard") log.guards++; if (e.type === "break") log.breaks++; if (e.type === "ko") log.ko++; if (e.type === "down") log.downs++; if (e.type === "unsupported") log.unsupported = (log.unsupported || 0) + 1; if (e.type === "fxhit") log.fxhits = (log.fxhits || 0) + 1; if (e.type === "hit") { log.dmg.push(e.dmg); log.scale.push(e.scale); } }
         g.p.forEach((p, i) => { if (p.inv > 0 && !invBefore[i]) log.inv++; });
         log.summons = Math.max(log.summons || 0, g.summons.length); // 場上召喚物最多幾隻
+        if (spec.stopKo && log.ko) { log.koT = +g.t.toFixed(2); break; } // 數值平衡檢查：倒下就停
         if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face, Object.keys(p.st).sort().join(","), p.st.shield ? Math.round(p.st.shield.v) : 0]).concat([g.summons.map((m) => [m.side, Math.round(m.x), Math.max(0, Math.round(m.hp)), m.act ? 1 : 0])]));
       }
       return { log, trace, cd: g.p.map((p) => p.cd.map((c) => +c.toFixed(2))), atkCd: g.p.map((p) => +p.atkCd.toFixed(2)), maxHp: g.p.map((p) => p.maxHp), dr: g.p.map((p) => p.dr), gauge: g.p.map((p) => +p.gauge.toFixed(1)), sv: g.p.map((p) => +p.sv.toFixed(1)), state: g.p.map((p) => p.state), face: g.p.map((p) => p.face), hp: g.p.map((p) => Math.round(p.hp)), x: g.p.map((p) => Math.round(p.x)), phase: g.phase, wins: g.wins.slice(), stats: Object.assign({}, g.stats), t: +g.t.toFixed(2) };

@@ -103,6 +103,7 @@
     ["u376u-cony", "效果：變形成棉花糖兔兔（v5.3.1）"],
     ["u003u-bella", "效果：交換位置"],
     ["u1013e-brown", "效果：拉近對手"],
+    ["u1021e-pink", "效果：擊飛撞牆＋暈眩，自己跟上去（v5.4）"],
     ["u1116h-claris", "效果：魅惑（左右反轉）、沉默"],
     ["u1617h-ka", "效果：恐懼"],
     ["u099u-alice", "效果：變形"],
@@ -141,8 +142,49 @@
     const e = k.fx.find((x) => FIGHT_FX[x.c] && FIGHT_FX[x.c].form === "dash");
     return Math.min(FT.DASH_MAX, (e && e.val > 0 ? e.val : FT.DASH_DEF) * FT.DASH_K);
   }
+  /* ---------- 階段 3（數值平衡）：總預算制＋傷害公式（v5.4） ----------
+     參考值是 v5.4 時全部 2268 隻官方角色的中位數，寫死（新角色不會讓舊角色數值跑掉）；要重算改這裡並升版本。 */
+  const BAL = {
+    REF: { off: 7682, tank: 12.14, defHp: 0.042, mv: 92, rg: 220 },   // 攻擊力／攻擊間隔、體力÷攻擊力、防禦÷體力（第 90 百分位）、移速、射程
+    W: { off: 0.30, dur: 0.25, mob: 0.15, rng: 0.15, ctl: 0.15 },     // 五種能力的權重
+    CAP: [0.5, 1.5],          // 每種能力最多差平均 ±50%（保留「刀尖舔血」型）
+    TILT: 0.4,                // 體力÷攻擊力 偏離中位數多少，轉成攻／守的傾斜程度
+    CTL_PER: 0.15,            // 每個控制效果（暈眩、擊倒、泡泡…）佔的預算
+    EHP: 900,                 // 平均角色的有效體力（體力 ÷ (1 − 減傷)）
+    WALK: 230,                // 平均移動速度
+    ATK_BASE: 47,             // 平均普攻傷害（攻擊週期 0.55 秒）→ 一般角色約 20～25 下倒
+    SK_BASE: [155, 155],      // 平均技能傷害（冷卻 7 秒、出招 0.8 秒；技能 1、2 同一個基數，差別來自冷卻、形式與官方倍率比例）→ 約體力 10～20%
+    SK_CLAMP: [60, 320],
+    FORM: { melee: 0.85, dline: 0.9, line: 1.0, shot: 1.0, dash: 1.1, lob: 1.1, target: 1.15, rect: 1.15 },
+    CTL_DMG: 0.8,             // 帶控制效果的技能傷害打八折
+    DR_TAX: 0.5,              // 減傷的「稅」：每 1% 減傷再扣 0.5% 有效體力（減傷 20% → 有效體力少 10%）
+    NO_SK: 0.25,              // 少一個技能，普攻傷害 +25%
+  };
+  const bclamp = (x) => fclamp(x, BAL.CAP[0], BAL.CAP[1]);
+  // 角色的五種能力（平均＝1）→ { off 攻擊倍率, dur 耐久倍率, walk, dr, ctl }
+  function fightBudget(F, sk) {
+    const R = BAL.REF, off = (F.pa.v + F.ma.v) / Math.max(0.5, F.ai.v || 1.2);
+    const t = off > 0 && F.hp.st === "ok" ? fclamp(Math.log(F.hp.v / off / R.tank), -1.2, 1.2) : 0;
+    const ctl = sk.reduce((n, k) => n + (k ? k.enemyFx.filter((e) => FX_CONTROL.has(FIGHT_FX[e.c].b)).length : 0), 0);
+    const q = { off: Math.exp(-BAL.TILT * t), dur: Math.exp(BAL.TILT * t), mob: bclamp(Math.pow((F.mv.v || R.mv) / R.mv, 0.7)),
+      rng: bclamp(Math.pow((F.rg.v || R.rg) / R.rg, 0.5)), ctl: 1 + BAL.CTL_PER * ctl };
+    const sum = Object.keys(BAL.W).reduce((a, k) => a + BAL.W[k] * q[k], 0);   // 能力總和超過 1 → 攻、守一起打折
+    const hp = F.hp.st === "ok" ? F.hp.v : 0;
+    return { off: bclamp(q.off / sum), dur: bclamp(q.dur / sum), walk: BAL.WALK * q.mob, ctl, q, sum,
+      dr: hp > 0 ? +(FT.DR_MAX * fclamp((F.pd.v + F.md.v) / hp / R.defHp, 0, 1)).toFixed(3) : 0 };
+  }
+  function fightAtkDmg(atk, B, nSk) {
+    return Math.round(BAL.ATK_BASE * Math.pow(atk.cd / 0.55, 0.6) * (BAL.FORM[atk.kind] || 1) * B.off * (1 + BAL.NO_SK * (2 - nSk)));
+  }
+  // 技能傷害；ratio＝官方倍率算出的「技能 1／2 比例」（壓縮過）
+  function fightSkDmg(o, B, ratio) {
+    const wF = o.kind === "rect" ? fclamp(Math.pow(160 / o.width, 0.25), 0.8, 1.2) : 1;
+    const cF = o.enemyFx.some((e) => FX_CONTROL.has(FIGHT_FX[e.c].b)) ? BAL.CTL_DMG : 1;
+    const x = BAL.SK_BASE[o.s] * Math.pow(o.cd / 7, 0.4) * Math.pow(o.dur / 0.8, 0.3) * (BAL.FORM[o.kind] || 1) * wF * cF * ratio * B.off;
+    return Math.round(fclamp(x, BAL.SK_CLAMP[0], BAL.SK_CLAMP[1]));
+  }
   function fightStats(f) {
-    const N = normUnit(f.r, animNames(f.part)), pre = FIGHT_PRESET[f.r.id] || {}, rk = fightRanks(), F = N.f;
+    const N = normUnit(f.r, animNames(f.part)), pre = FIGHT_PRESET[f.r.id] || {}, F = N.f;
     const rg = F.rg.v, ai = F.ai.v || 1.2;
     const dur = (clip, lo, hi) => fclamp(clip && f.part.animations[clip] ? f.part.animations[clip].frame_count / (f.part.anim_rate || 24) : lo, lo, hi);
     // 普攻
@@ -152,7 +194,6 @@
       reach: fclamp(rg * FT.RG_REACH, FT.REACH_MIN, FT.REACH_MAX), range: a.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : fclamp(rg * FT.RG_REACH, FT.DLINE_MIN, FT.DLINE_MAX),
       speed: fSpeed(a.cfg), lobT: fLobT(a.cfg) }, pre.atk || {});
     if (pre.atk) atk.kind = pre.atk.kind;
-    if (atk.dmg == null) atk.dmg = Math.round(fclamp(70 * atk.cd / 0.55, 40, 80));
     atk.cd = Math.max(atk.cd, atk.dur);
     // 技能
     const sk = N.sk.map((k, s) => {
@@ -167,16 +208,22 @@
       // 效果（只放效果模組支援的；同一種代碼只留一筆）：打對手的跟著投射物／預告走，自己的在出招時套用
       const seen = new Set(), sup = k.fx.filter((e) => FIGHT_FX[e.c] && e.c !== "DMG" && !seen.has(e.c) && seen.add(e.c)).map((e) => ({ c: e.c, dur: e.dur, val: e.val, durLv: e.durLv || 0, lvMax: N.lvMax || 0 }));
       o.enemyFx = sup.filter((e) => FIGHT_FX[e.c].to === "enemy"); o.selfFx = sup.filter((e) => FIGHT_FX[e.c].to === "self");
-      if (!k.damaging && !p) o.dmg = 0; // 沒有傷害的技能（只有減益、暈眩等）不扣血
+      o.damaging = k.damaging; o.mul = (k.fx.find((e) => e.c === "DMG" && e.val > 0) || {}).val || 0;
       if (p) Object.assign(o, { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
       return o;
     });
-    // 體力、減傷（暫時沿用排名換算；階段 3（數值平衡）改總預算制）。沒有體力資料時用中位數（N 已標成推測）
-    const hpPct = F.hp.st === "ok" ? rk.hp(F.hp.v) : 0.5;
+    // 總預算制：攻、守、機動、射程、控制五種能力分一份預算
+    const B = fightBudget(F, sk), nSk = sk.filter(Boolean).length;
+    if (atk.dmg == null) atk.dmg = fightAtkDmg(atk, B, nSk);
+    const m = sk.map((o) => (o && o.mul) || 0), r = m[0] && m[1] ? fclamp(Math.pow(m[1] / m[0], 0.3), 0.5, 2) : 1;
+    sk.forEach((o, s) => {
+      if (!o || (pre.sk && pre.sk[s] && pre.sk[s].dmg != null)) return;
+      o.dmg = o.damaging === false ? 0 : fightSkDmg(o, B, s ? Math.sqrt(r) : 1 / Math.sqrt(r));
+    });
+    const dr = pre.dr != null ? pre.dr : B.dr;
     return {
-      hp: pre.hp || Math.round(FT.HP_MIN + (FT.HP_MAX - FT.HP_MIN) * hpPct),
-      dr: pre.dr != null ? pre.dr : +(FT.DR_MAX * rk.def(F.pd.v, F.md.v)).toFixed(3),
-      bw: fclamp(f.w / f.h * FT.CH, 56, 120), walk: pre.walk || fclamp(110 + F.mv.v * 1.5, 170, 340), atk, sk, N,
+      hp: pre.hp || Math.round(BAL.EHP * B.dur * (1 - dr) * (1 - BAL.DR_TAX * dr)), dr,
+      bw: fclamp(f.w / f.h * FT.CH, 56, 120), walk: pre.walk || fclamp(B.walk, 150, 345), atk, sk, N, B: FIGHT_PRESET[f.r.id] ? null : B, // 自製角色是手寫數值，不顯示預算
     };
   }
   // 招式的「前搖／有效／後搖」（格）。有效：近戰＝持續判定、投射物＝射出那一格、矩形＝預告結束那一格
@@ -187,7 +234,8 @@
   // 選角畫面用的說明
   function fightSummary(fs) {
     const a = fs.atk, fr = (k, m) => { const x = fightFrames(k, m); return `${x.startup}／${x.active}／${x.recovery} 格`; };
-    const parts = [`體力 ${fs.hp}、減傷 ${Math.round(fs.dr * 100)}%、移動 ${Math.round(fs.walk)}`,
+    const B = fs.B, pc = (x) => `${x >= 1 ? "+" : ""}${Math.round((x - 1) * 100)}%`;
+    const parts = [`體力 ${fs.hp}、減傷 ${Math.round(fs.dr * 100)}%、移動 ${Math.round(fs.walk)}${B ? `（攻擊 ${pc(B.off)}、耐久 ${pc(B.dur)}${B.ctl ? `、控制 ${B.ctl} 個` : ""}）` : ""}`,
       `普攻 ${ATK_KIND_LABEL[a.kind]}${a.kind === "melee" ? " " + Math.round(a.reach) + " 遠" : a.kind === "dline" || a.kind === "lob" ? " " + Math.round(a.range) + " 遠" : ""}・${a.dmg}（${fr(a, a.kind === "melee")}）`];
     fs.sk.forEach((k, s) => {
       if (!k) { parts.push(`技能${s + 1} 沒有`); return; }
