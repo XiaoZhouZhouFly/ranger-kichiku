@@ -158,8 +158,9 @@
       fxText(g, t, "詛咒", "#b46bff");
       fxRun(g, src, t, { c, dur: e.dur, durLv: e.durLv, lvMax: e.lvMax, val: null }, hit);
     } },
-    // 複製體：在自己前面叫出對手的複製體（見 fightCloneSpawn）；對手有「防複製」就失敗
-    copy: { apply(g, src) { fightCloneSpawn(g, src); } },
+    // 複製體：技能打中對手時（v6.4 起；沒打中、被擋下就沒有），在自己前面叫出對手的複製體（見 fightCloneSpawn）；
+    // 對手有「防複製」就失敗；複製體、召喚物打中不會再叫（避免越叫越多）
+    copy: { apply(g, src) { if (g.p.includes(src)) fightCloneSpawn(g, src); } },
     // 清除召喚物：打掉對手場上的召喚物，持續期間對手叫不出召喚物、也叫不出我的複製體
     noCopy: { apply(g, src, t, e, P) {
       let n = 0; for (const m of g.summons) if (m.side !== t.side && m.hp > 0) { m.hp = 0; n++; }
@@ -167,7 +168,8 @@
       if (fxSet(t, "noCopy", fxDur(e, P), 1)) fxText(g, t, "防召喚", "#7dff9a");
     } },
     // 召喚（v5.3.1）：叫出這個技能的召喚物（見 fightSummonSpawn）
-    summon: { apply(g, src, t, e, P, hit) { fightSummonSpawn(g, src, hit.s, fxDur(e, P)); } },
+    // 召喚（v6.4）：技能打中對手才召喚（onHit：跟著命中走，被防禦擋下就沒有）；自身型的技能沒有目標，維持出招時召喚
+    summon: { onHit: true, apply(g, src, t, e, P, hit) { if (!src.clone) fightSummonSpawn(g, src, hit.s ?? e.s, fxDur(e, P)); } },
   });
   // 會打斷動作的控制類（突進途中不生效）
   const FX_CONTROL = new Set(["stun", "down", "bubble", "fear", "poly", "pull", "swap", "wall"]);
@@ -178,7 +180,7 @@
   for (const [code, row] of Object.entries(FX_TABLE)) {
     const B = FX_BEHAVIOR[row.b];
     if (!B) continue;
-    FIGHT_FX[code] = { to: row.to, b: row.b, P: row, knockdown: !!B.knockdown, pierce: !!B.pierce, form: B.form || null, apply: B.apply };
+    FIGHT_FX[code] = { to: row.to, b: row.b, P: row, knockdown: !!B.knockdown, pierce: !!B.pierce, form: B.form || null, onHit: !!B.onHit, apply: B.apply };
   }
 
   // 狀態在畫面上的名稱（頭上的小標籤）

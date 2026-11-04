@@ -76,7 +76,7 @@
     "SKILL_RESET": {"b": "cdReset", "to": "self", "name": "技能冷卻重置", "lv": "auto", "idea": "另一個技能的冷卻立刻歸零"},
     "STUN": {"b": "stun", "to": "enemy", "name": "暈眩", "dur": [0.5, 1.5], "lv": "auto"},
     "SUMMON": {"b": "summon", "to": "self", "name": "召喚", "dur": [4, 8], "lv": "auto", "idea": "先暫時不動，等後續其他技能處理完再來看這個部分"},
-    "SUMMON_ENEMY": {"b": "copy", "to": "self", "name": "召喚對手複製體", "lv": "auto", "idea": "在我方叫出對手的複製體，複製體會在原地普攻以及把兩個技能放完之後消失"},
+    "SUMMON_ENEMY": {"b": "copy", "to": "enemy", "name": "召喚對手複製體", "lv": "auto", "idea": "在我方叫出對手的複製體，複製體會在原地普攻以及把兩個技能放完之後消失（v6.4：技能打中對手才叫出來，沒打中或被擋下就沒有）"},
     "TEMPT": {"b": "charm", "to": "enemy", "name": "魅惑", "dur": [3, 3], "lv": "auto", "idea": "對手的左右操作反轉"},
     "THROW_ALLY": {"b": "dash", "to": "self", "name": "投擲隊友", "lv": "auto", "idea": "同突進攻擊（2026-11-04 確認：做成突進）"},
     "UNBEAT": {"b": "shield", "to": "self", "name": "無敵 → 護盾", "dur": [1, 3], "val": [15, 15], "lv": "auto"},

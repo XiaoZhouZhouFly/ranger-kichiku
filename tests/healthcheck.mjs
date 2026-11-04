@@ -580,6 +580,11 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   const reset = await R({ c0: "u1084h-alice", c1: "x001-cube", steps: 200, script: [sk(1, 5), sk(0, 118)] });
   check(reset.cd[0][1] === 0, `技能冷卻重置應該讓另一個技能冷卻歸零：${reset.cd[0]}`);
   // v5.3 第 2 部分：突進、拉近、交換位置、泡泡、複製體
+  // v6.4：將敵人召喚為隊友（對手複製體）要技能打中才出現；沒打中、被擋下都沒有
+  const cpHit = await R({ c0: "u1004e-sally", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 40, 0] }] });
+  const cpMiss = await R({ c0: "u1004e-sally", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 40, -400] }] });
+  const cpGuard = await R({ c0: "u1004e-sally", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 40, 0] }, { side: 1, from: 0, to: 200, guard: true }] });
+  check(cpHit.log.clones === 1 && !cpMiss.log.clones && !cpGuard.log.clones, `複製體：打中 ${cpHit.log.clones}、沒打中 ${cpMiss.log.clones}、被擋 ${cpGuard.log.clones}（應該是 1、0、0）`);
   const dash = await R({ c0: "u1216e-towa", c1: "x001-cube", steps: 250, script: [...W, sk(0, 50)] });
   check(dash.log.hits >= 1 && dash.x[0] > -38, `突進應該衝過去並打中：x ${dash.x[0]}、命中 ${dash.log.hits}`);
   const pull = await R({ c0: "u1013e-brown", c1: "x001-cube", steps: 250, script: [...W, sk(0, 50)] });
@@ -597,6 +602,10 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   // v5.3.1：召喚物（會攻擊、會被打倒、擋投射物、被「清除召喚物」封鎖）、變形外觀
   const sum = await R({ c0: "u1009e-sally", c1: "x001-cube", steps: 500, script: [sk(0, 5), { side: 1, from: 60, to: 500, atk: 30 }] });
   check(sum.log.summons >= 1 && sum.trace.some((t) => t[2].length) && !sum.trace[499][2].length, `召喚物應該出現、會被打倒：最多 ${sum.log.summons} 隻`);
+  // v6.4：召喚技能要打中才召喚（瞄準旁邊打空、被防禦擋下都不會叫出來）
+  const sumMiss = await R({ c0: "u1009e-sally", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 20, -400] }] });
+  const sumGuard = await R({ c0: "u1009e-sally", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 20, 0] }, { side: 1, from: 0, to: 200, guard: true }] });
+  check(!sumMiss.log.summons && !sumGuard.log.summons, `召喚技能打空／被擋應該叫不出召喚物：打空 ${sumMiss.log.summons}、被擋 ${sumGuard.log.summons}`);
   const atkBy = await R({ c0: "u1009e-sally", c1: "x001-cube", steps: 400, script: [sk(0, 5)] });
   check(atkBy.log.hits >= 3, `召喚物應該會攻擊：命中 ${atkBy.log.hits}`);
   const block = await R({ c0: "u1009e-sally", c1: "x002-orb", steps: 300, script: [sk(0, 5), sk(2, 90, 1), sk(2, 140, 1)] });

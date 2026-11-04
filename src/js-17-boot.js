@@ -94,6 +94,7 @@
         for (const e of g.events) { if (e.type === "hit") log.hits++; if (e.type === "guard") log.guards++; if (e.type === "break") log.breaks++; if (e.type === "ko") log.ko++; if (e.type === "down") log.downs++; if (e.type === "unsupported") log.unsupported = (log.unsupported || 0) + 1; if (e.type === "fxhit") log.fxhits = (log.fxhits || 0) + 1; if (e.type === "hit") { log.dmg.push(e.dmg); log.scale.push(e.scale); } }
         g.p.forEach((p, i) => { if (p.inv > 0 && !invBefore[i]) log.inv++; });
         log.summons = Math.max(log.summons || 0, g.summons.length); // 場上召喚物最多幾隻
+        log.clones = Math.max(log.clones || 0, g.clones.length); // 場上複製體最多幾隻
         if (spec.stopKo && log.ko) { log.koT = +g.t.toFixed(2); break; } // 數值平衡檢查：倒下就停
         if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face, Object.keys(p.st).sort().join(","), p.st.shield ? Math.round(p.st.shield.v) : 0]).concat([g.summons.map((m) => [m.side, Math.round(m.x), Math.max(0, Math.round(m.hp)), m.act ? 1 : 0])]));
       }
