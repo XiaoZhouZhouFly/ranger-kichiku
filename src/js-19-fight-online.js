@@ -5,7 +5,8 @@
        host、guest：雙方的匿名帳號 id；cfg：{ rounds, secs, seed, v 網頁版本 }；go：開打（房主寫）
        p0、p1：雙方的選角 { id 角色, h 雙方角色數值的雜湊, ready }（0＝房主＝左方、1＝加入者＝右方）
        sig：{ offer, answer, c0、c1（連線候選，ICE） }；r0、r1：轉送模式的訊息
-     測試：網址加 ?fakefb=1 改用假的資料庫（同一個瀏覽器的分頁之間互通，不連網）；加 ?relay=1 不試直連、直接轉送。 */
+     測試：網址加 ?fakefb=1 改用假的資料庫（同一個瀏覽器的分頁之間互通，不連網）；加 ?relay=1 不試直連、直接轉送；
+     ?fakelag=毫秒：假資料庫看到其他分頁的變化要晚這麼久（模擬網路慢、一方比較晚開打）。 */
   const FIREBASE_CONFIG = {
     apiKey: "AIzaSyBOOQFpDRNq9VVmA-icCiZzrT4NoP4Huv0",
     authDomain: "ranger-kichiku.firebaseapp.com",
@@ -72,7 +73,8 @@
     const drop = (p) => { p = norm(p); for (const k of keys()) if (k === p || k.startsWith(p + "/")) localStorage.removeItem(PRE + k); };
     const put = (p, v) => localStorage.setItem(PRE + norm(p), JSON.stringify(v));
     const fire = () => { const t = load(); for (const s of subs) s(t); };
-    window.addEventListener("storage", (e) => { if (e.key && e.key.startsWith(PRE)) fire(); });
+    const lag = +(qs.get("fakelag") || 0); // 測試：其他分頁的變化晚這麼多毫秒才看到（模擬手機網路慢）
+    window.addEventListener("storage", (e) => { if (e.key && e.key.startsWith(PRE)) { if (lag) setTimeout(fire, lag); else fire(); } });
     let n = 0;
     return {
       uid,
@@ -90,7 +92,10 @@
   /* ---------- 房間 ---------- */
   const OL = { pend: {}, db: null, code: null, side: 0, room: null, unsub: [], link: null, pc: null, status: "", onChange: null, started: false };
   const olRoot = () => `rooms/${OL.code}`;
-  function olSet(status) { OL.status = status; if (OL.onChange) OL.onChange(); }
+  // 連線紀錄（「複製連線紀錄」用；最多留 200 行）
+  const OL_LOG = [], olT0 = Date.now();
+  function olLog(msg) { OL_LOG.push(`${((Date.now() - olT0) / 1000).toFixed(1)}s ${msg}`); if (OL_LOG.length > 200) OL_LOG.shift(); }
+  function olSet(status) { olLog("狀態：" + status); OL.status = status; if (OL.onChange) OL.onChange(); }
   function olCode() { let s = ""; for (let i = 0; i < 4; i++) s += ONLINE.CODE_CHARS[Math.floor(Math.random() * ONLINE.CODE_CHARS.length)]; return s; }
   // 建立房間（自己＝房主＝左方）
   async function olCreate(cfg) {
@@ -101,7 +106,7 @@
     OL.side = 0;
     await OL.db.set(olRoot(), { host: OL.db.uid, created: Date.now(), cfg: Object.assign({ seed: newSeed(1e9), v: APP_VERSION }, cfg) });
     OL.db.dropOnLeave(olRoot()); // 房主離開＝房間消失
-    olWatch(); olSet("等待對手加入…");
+    olLog(`建立房間 ${OL.code}`); olWatch(); olSet("等待對手加入…");
   }
   // 加入房間（自己＝右方）
   async function olJoin(code) {
@@ -115,7 +120,7 @@
     OL.code = code; OL.side = 1;
     await OL.db.set(`${olRoot()}/guest`, OL.db.uid);
     OL.db.dropOnLeave(`${olRoot()}/guest`); OL.db.dropOnLeave(`${olRoot()}/p1`);
-    olWatch(); olSet("已加入，建立連線中…");
+    olLog(`加入房間 ${OL.code}`); olWatch(); olSet("已加入，建立連線中…");
     olConnect();
   }
   function olWatch() {
@@ -147,6 +152,8 @@
   function olLinkReady(link) {
     if (OL.link && OL.link !== link) return;
     OL.link = link; link.ready = true;
+    link.onmsg = olOnMsg; // 一連上就開始收（對方可能比自己早開打，先到的按鍵存進 OL.pend）
+    link.onclose = () => { olLog("直連關閉"); FG.olGone = true; };
     olSet(link.kind === "relay" ? "已連線（轉送模式：直連失敗，延遲會比較高）" : "已連線（直連）");
   }
   function olConnect() {
@@ -179,6 +186,7 @@
       }));
     }
     // 直連沒通：雙方都改走轉送（房主寫 mode=relay，加入者看到也跟著改）
+    pc.onconnectionstatechange = () => olLog("直連狀態：" + pc.connectionState);
     const t = setTimeout(() => { if (!link.ready && OL.pc === pc && me === 0) OL.db.set(`${olRoot()}/mode`, "relay"); }, ONLINE.P2P_TIMEOUT);
     OL.unsub.push(() => clearTimeout(t));
     OL.unsub.push(OL.db.watch(`${olRoot()}/mode`, (m) => { if (m === "relay" && (!OL.link || OL.link.kind !== "relay")) olRelay(); }));
@@ -239,9 +247,9 @@
       const mine = olMine(); if (mine && mine.h !== h && JSON.stringify(olIds()) === JSON.stringify(ids)) olPick({ h });
     } catch {}
   }
-  function olReady(on) { const mine = olMine(); if (mine && mine.id) olPick({ ready: on == null ? !mine.ready : on }); }
+  function olReady(on) { const mine = olMine(); if (mine && mine.id) { const v = on == null ? !mine.ready : on; olLog(v ? "按了準備" : "取消準備"); olPick({ ready: v }); } }
   // 房間有變化：更新畫面；房主看到雙方都準備好（雜湊一樣）就喊開打；兩邊看到新的 go 就開打
-  let olLastGo = 0, olLastIds = "";
+  let olLastGo = "", olLastIds = ""; // olLastGo＝「房號:第幾場」，避免同一場開兩次（換房間會從第 1 場重算）
   function olOnRoom() {
     if (FG.set.mode !== "online") return;
     olUi();
@@ -251,8 +259,10 @@
     if (OL.side === 0 && a && b && a.ready && b.ready && a.h && a.h === b.h && OL.link && OL.link.ready && (!room.go || room.go.done)) {
       OL.db.remove(`${olRoot()}/r0`); OL.db.remove(`${olRoot()}/r1`);
       OL.db.set(`${olRoot()}/go`, { n: ((room.go && room.go.n) || 0) + 1, done: false });
+      olLog(`房主喊開打（第 ${((room.go && room.go.n) || 0) + 1} 場）`);
     }
-    if (room.go && !room.go.done && room.go.n !== olLastGo) { olLastGo = room.go.n; olStartGame(room); }
+    const goKey = room.go ? `${OL.code}:${room.go.n}` : "";
+    if (room.go && !room.go.done && goKey !== olLastGo) { olLastGo = goKey; olStartGame(room); }
   }
   async function olStartGame(room) {
     const ids = olIds(); if (!ids || !OL.link) return;
@@ -267,8 +277,8 @@
       const link = OL.link, gn = room.go.n;
       const tagged = { kind: link.kind, ready: true, send: (m) => link.send(Object.assign(m, { g: gn })) };
       FG.net = netNew(link.kind === "relay" ? ONLINE.RELAY_DELAY : ONLINE.DELAY, 0, 0, tagged, OL.side); FG.net.game = gn;
-      link.onmsg = olOnMsg; link.onclose = () => { FG.olGone = true; };
       for (const m of OL.pend[gn] || []) netRecv(FG.net, m);
+      olLog(`開打：第 ${gn} 場，${link.kind}，延遲 ${FG.net.delay} 格，先到的訊息 ${(OL.pend[gn] || []).length} 則，我是${OL.side ? "右方" : "左方"}`);
       OL.pend = {};
       $("fStage").hidden = false; $("fOver").hidden = true; $("fStage").classList.remove("pvp");
       $("fExit").textContent = "✕ 離開"; document.body.classList.add("fight-on");
@@ -284,7 +294,8 @@
   function olTick(g) {
     if (g !== FG.g) return; // 這一幀開頭拿到的是上一場（剛好開新的一場）
     const n = FG.net, bad = FG.olGone || !OL.room || !OL.room.guest ? "對手已斷線" : n && n.desync ? `同步錯誤（第 ${n.desync.f} 格雙方畫面不一樣），這場只好中止` : "";
-    if (bad && $("fOver").hidden) { g.phase = "over"; g.winner = -2; $("fOver").hidden = false; $("fOverText").textContent = bad; }
+    if (n && n.waiting && n.stallFrames % 120 === 119) olLog(`等待對手的按鍵中：第 ${n.frame} 格，自己的佇列 ${n.q[n.me].size}、對手的佇列 ${n.q[1 - n.me].size}`);
+    if (bad && $("fOver").hidden) { olLog("停止：" + bad); g.phase = "over"; g.winner = -2; $("fOver").hidden = false; $("fOverText").textContent = bad; }
     if (g.phase === "over" && OL.started) olAfterGame(); // 打完：雙方都取消準備，下一場要各自再按「再一場」
   }
   // 打完或離開：取消準備；房主把 go 標成結束（下一場要雙方再按準備）
@@ -292,6 +303,14 @@
     if (!OL.code || !OL.started) return;
     OL.started = false; olPick({ ready: false });
     if (OL.side === 0 && OL.room && OL.room.go) OL.db.update(`${olRoot()}/go`, { done: true });
+  }
+  // 連線紀錄：網頁版本、裝置、房間狀態（不含連線細節）、連線層統計、最近的事件
+  function olReport() {
+    const r = OL.room ? Object.assign({}, OL.room) : null, n = FG.net;
+    if (r) { delete r.sig; delete r.r0; delete r.r1; for (const k of ["host", "guest"]) if (r[k]) r[k] = String(r[k]).slice(0, 4) + "…"; }
+    return [`ranger-kichiku ${APP_VERSION} 線上對戰紀錄`, navigator.userAgent, `房號 ${OL.code || "－"}、我是${OL.side ? "右方（加入者）" : "左方（房主）"}、連線 ${OL.link ? OL.link.kind + (OL.link.ready ? "（已連上）" : "") : "沒有"}`,
+      n ? `對戰：第 ${n.frame} 格、延遲 ${n.delay} 格、卡頓 ${n.stalls} 次（共 ${n.stallFrames} 格）、佇列 ${n.q[0].size}／${n.q[1].size}、不同步 ${JSON.stringify(n.desync)}、狀態 ${FG.g && FG.g.phase}` : "對戰：還沒開始",
+      `房間：${JSON.stringify(r)}`, "—— 事件 ——", ...OL_LOG].join("\n");
   }
   OL.onChange = () => olOnRoom();
   $("fOnCreate").onclick = async () => {
@@ -306,6 +325,7 @@
   };
   $("fOnLeave").onclick = () => { olLeave(); FG.olOpp = null; olUi(); fightSetupUi(); };
   $("fOnReady").onclick = () => olReady();
+  $("fOnLog").onclick = async () => { const t = olReport(); try { await navigator.clipboard.writeText(t); $("fOnLogMsg").textContent = "已複製，貼給開發者即可"; } catch { $("fOnLogMsg").textContent = t; } };
   // 房主開房後改回合數／秒數：寫進房間設定
   for (const id of ["fRounds", "fSecs"]) $(id).addEventListener("change", () => { if (OL.code && OL.side === 0) OL.db.update(`${olRoot()}/cfg`, { rounds: FG.set.rounds, secs: FG.set.secs }); });
   $("fOnCopy").onclick = async () => { try { await navigator.clipboard.writeText(olShareUrl()); $("fOnCopied").textContent = "已複製"; } catch { $("fOnCopied").textContent = olShareUrl(); } };

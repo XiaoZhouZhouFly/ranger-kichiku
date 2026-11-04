@@ -50,7 +50,7 @@
       return { seq: out.join(""), slow: w.join(","), aim: q.skAim };
     },                                   // v6：同步檢查（回傳代碼與每場的雜湊）
     fightNet: () => FG.net && { delay: FG.net.delay, lat: FG.net.lat, jit: FG.net.jit, frame: FG.net.frame, stalls: FG.net.stalls, waiting: FG.net.waiting,
-      link: FG.net.link ? FG.net.link.kind : null, desync: FG.net.desync, me: FG.me, hp: FG.g ? FG.g.p.map((p) => Math.round(p.hp)) : null, phase: FG.g && FG.g.phase, q: FG.net.q.map((m) => [...m.keys()].slice(0, 6)) },
+      link: FG.net.link ? FG.net.link.kind : null, desync: FG.net.desync, me: FG.me, hp: FG.g ? FG.g.p.map((p) => Math.round(p.hp)) : null, phase: FG.g && FG.g.phase, x: FG.g ? FG.g.p.map((p) => Math.round(p.x)) : null, q: FG.net.q.map((m) => [...m.keys()].slice(0, 6)) },
     fightOnline: () => ({ code: OL.code, side: OL.side, status: OL.status, link: OL.link ? OL.link.kind + (OL.link.ready ? ":ready" : "") : null, room: OL.room }),
     // 對戰中技能按鈕畫的是什麼：img＝原作技能圖標、text＝文字（沒有圖標）、none＝沒有這招
     fightIcons: () => (FG.fs || []).map((x) => x ? x.sk.map((k) => (!k ? "none" : fightSkillIcon(k) ? "img" : "text")) : null),

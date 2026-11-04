@@ -294,7 +294,7 @@
     ev.preventDefault(); sfxUnlock();
     try { fcv.setPointerCapture(ev.pointerId); } catch {}
     const { who, x, y } = fightLocal(ev), L = fightLayout(), B = fightButtons(L), c = FG.ctl[who];
-    if (!c || (FG.set.mode !== "pvp" && who !== 0)) return;
+    if (!c || (FG.set.mode !== "pvp" && who !== (FG.set.mode === "online" ? FG.me : 0))) return; // 單人：只有自己那一方（線上對戰的加入者是右方）
     if (y < L.ctrl.y - 60) return;
     if (x < MOVE_SPLIT) {
       c.pads.set(ev.pointerId, padAt(B, x));
