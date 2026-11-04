@@ -554,6 +554,11 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   const heal = await R({ c0: "x001-cube", c1: "u017e-james", steps: 260, script: [{ side: 0, from: 0, to: 60, mx: 1 }, { side: 0, from: 70, to: 71, atk: 1 }, sk(0, 150, 1)] });
   // v6.0.2：給自己的效果在前搖結束時才生效（這隻前搖 50 格），所以看出招後 110 格內有沒有回血
   check(Math.max(...heal.trace.slice(150, 260).map((t) => t[1][2])) > heal.trace[149][1][2], "回血技能應該回血（前搖結束時）");
+  // v6.3：空中防禦（擋得下、扣兩倍防禦條、不被推、照樣往前飄）
+  const gd = (air) => R({ c0: "x001-cube", c1: "u1028e-sally", steps: 90, script: [{ side: 1, from: 0, to: 300, atk: 30 }, { side: 0, from: 22, to: 90, guard: true }, ...(air ? [{ side: 0, from: 20, to: 21, jump: true }, { side: 0, from: 20, to: 90, mx: 1 }] : [])] });
+  const [gG, gA] = [await gd(false), await gd(true)];
+  check(gA.log.guards >= 1 && gA.hp[0] === gA.maxHp[0], `空中防禦應該擋得下：擋 ${gA.log.guards}、體力 ${gA.hp[0]}`);
+  check(gA.gauge[0] < gG.gauge[0] && gA.x[0] > gG.x[0], `空中防禦應該扣比較多防禦條、不被推回去：防禦條 ${gA.gauge[0]}／${gG.gauge[0]}、位置 ${gA.x[0]}／${gG.x[0]}`);
   // v6.0.2：技能前搖被普攻打中不中斷（預告照樣打下來）；被暈眩打中會中斷（預告消失）
   const armor = await R({ c0: "x001-cube", c1: "x001-cube", steps: 160, script: [{ side: 0, from: 0, to: 40, mx: 1 }, { side: 1, from: 0, to: 40, mx: -1 }, sk(0, 60, 1), { side: 0, from: 62, to: 63, atk: 1 }] });
   check(armor.hp[1] < armor.maxHp[1] && armor.hp[0] < armor.maxHp[0], `前搖被普攻打中，技能應該照樣打中對手：${armor.hp}`);

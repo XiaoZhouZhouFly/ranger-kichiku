@@ -39,7 +39,7 @@
     SV_DECAY_WAIT: 0.5, SV_DECAY: 30,                 // 多久沒挨打開始下降、每秒降多少
     DOWN_TIME: 0.6, WAKE_INV: 1.0,                    // 倒地躺多久、起身無敵多久
     // 防禦
-    GAUGE_MAX: 100, GAUGE_HOLD: 20, GAUGE_HIT: 0.35,  // 防禦條：滿格、按住每秒扣、擋下扣原本傷害的幾成
+    GAUGE_MAX: 100, GAUGE_HOLD: 20, GAUGE_HIT: 0.35, AIR_GUARD_MUL: 2,  // 防禦條：滿格、按住每秒扣、擋下扣原本傷害的幾成
     GAUGE_WAIT: 0.5, GAUGE_REGEN: 25,                 // 放開後多久開始回、每秒回多少
     GAUGE_REARM: 30,                                  // 破防後防禦條要回到這麼多才能再防（不然一直按著會連續破防）
     BLOCK_STUN: 0.15, GUARD_PUSH: 140, BREAK_STUN: 1.0, // 擋下時的防禦硬直、滑行初速、破防硬直

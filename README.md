@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v6.2-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v6.2"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v6.3-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v6.3"></a>
 </p>
 
 <p align="center">
@@ -49,8 +49,9 @@
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v6.2）
+## 最近更新（v6.3）
 
+- 格鬥場：跳起來也能防禦，近戰比較容易靠近遠程角色。
 - 格鬥場：設定頁整理（選角加大、VS、大大的開始按鈕、進階設定收起來、操作說明分段）；線上對戰有步驟提示，並會自動清掉過期的房間。
 - 格鬥場線上對戰：加入房間的一方畫面改成鏡像，雙方都看到自己在左邊。
 - 格鬥場：放技能時的霸體不再那麼硬，前搖期間被打硬直值累積加倍，一直硬吃會被打倒。

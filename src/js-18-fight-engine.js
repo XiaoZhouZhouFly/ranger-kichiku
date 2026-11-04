@@ -177,11 +177,14 @@
     if (p.stunKind !== "bubble") fightPhysics(g, p);
   }
 
-  // 防禦：按住下、在地上、沒在出招、防禦條還有。按住本身會消耗防禦條，扣完就破防；破防後要回到 GAUGE_REARM 才能再防
+  /* 防禦：按住、沒在出招、防禦條還有。v6.3 起空中也能防（解決被遠程風箏）：
+     空中防禦扣防禦條 ×AIR_GUARD_MUL、被打不會被推、不會有防禦硬直（照樣往前飄）；空中防禦過，這一跳落地前都不能出招（airGuarded）。 */
+  // 按住本身會消耗防禦條，扣完就破防；破防後要回到 GAUGE_REARM 才能再防
   function fightGuard(g, p, inp, ground) {
     const dt = FT.STEP;
     if (p.guardLock && p.gauge >= FT.GAUGE_REARM) p.guardLock = false;
-    p.guard = !!inp.guard && ground && !p.act && p.gauge > 0 && !p.guardLock && !fxCantAct(p); // 恐懼、變形時不能防
+    p.guard = !!inp.guard && !p.act && p.gauge > 0 && !p.guardLock && !fxCantAct(p); // 恐懼、變形時不能防
+    if (ground) p.airGuarded = false; else if (p.guard) p.airGuarded = true;
     if (p.guard) {
       p.guardIdle = 0;
       p.gauge -= FT.GAUGE_HOLD * dt;
@@ -251,14 +254,14 @@
     const aiming = p.aim.some(Boolean);
     // 按住招式時：預設左右鍵只轉身不走路（設定 holdMove 時照常走路）
     // 魅惑：左右反轉；恐懼：被迫往遠離施放者的方向走
-    let mx = p.guard ? 0 : inp.mx * (p.st.charm ? -1 : 1);
+    let mx = p.guard && ground ? 0 : inp.mx * (p.st.charm ? -1 : 1); // 空中防禦時還是可以往前飄
     if (p.st.fear) mx = p.x >= p.st.fear.from ? 1 : -1;
-    if (mx) p.face = mx > 0 ? 1 : -1;
+    if (mx && !p.guard) p.face = mx > 0 ? 1 : -1;
     const walk = aiming && !g.cfg.holdMove ? 0 : mx;
     p.vx = walk * fs.walk * fxSpdMul(p) * (ground ? 1 : FT.AIR_CTRL);
     p.x += p.vx * dt;
     if (inp.jump && ground && !p.guard && !p.aim[0] && !p.aim[1] && !fxCantAct(p)) p.vy = FT.JUMP_V; // 瞄準技能時不能跳（技能只能在地上放）
-    if (p.guard || fxCantAct(p)) return; // 恐懼、變形：只能移動
+    if (p.guard || fxCantAct(p) || p.airGuarded) return; // 恐懼、變形：只能移動；空中防禦過：落地前不能出招
     // 開始新招：普攻（地上、空中都可以），技能（只能在地上；投射物技能每人場上最多一顆）
     for (const s of [2, 0, 1]) {
       const b = p.buf[s], k = fightSlot(fs, s);
@@ -428,11 +431,12 @@
     const dir = o.x >= a.x ? 1 : -1, full = dmg * (a.buff > 0 ? FT.BUFF_MUL : 1) * (heavy ? 1 : fxAtkMul(a)) * Math.max(0, fxTakenMul(o, heavy));
     o.quiet = 0;
     if (o.guard) {
-      o.gauge -= full * FT.GAUGE_HIT; o.guardIdle = 0;
-      g.fx.push({ kind: "num", text: full > 0 ? "-" + Math.round(full * FT.GAUGE_HIT) : "擋下", x: o.x, y: FT.CH * 1.05, t: 0, life: 0.7, guard: true });
+      const air = o.y > 0, cost = full * FT.GAUGE_HIT * (air ? FT.AIR_GUARD_MUL : 1); // 空中防禦扣兩倍
+      o.gauge -= cost; o.guardIdle = 0;
+      g.fx.push({ kind: "num", text: full > 0 ? "-" + Math.round(cost) : "擋下", x: o.x, y: FT.CH * 1.05 + o.y, t: 0, life: 0.7, guard: true });
       g.events.push({ type: "guard", side: a.side });
       if (o.gauge <= 0) fightBreak(g, o);
-      else { o.stun = FT.BLOCK_STUN; o.stunKind = "block"; o.kbv = dir * FT.GUARD_PUSH; }
+      else if (!air) { o.stun = FT.BLOCK_STUN; o.stunKind = "block"; o.kbv = dir * FT.GUARD_PUSH; } // 空中：不推、不硬直
       return;
     }
     // 突進途中（霸體）：照樣扣血，但不硬直、不被推、不倒地，控制類效果也不會生效
@@ -644,9 +648,12 @@
     const danger = (o.act && gap < (ofs.atk.reach || 100) + 60) ||
       g.teles.some((t) => t.own !== side && Math.abs(t.x - p.x) < t.w / 2 + FT.HURT_W / 2 + 20) ||
       g.projs.some((q) => q.own !== side && Math.abs(q.x - p.x) < 260 && Math.sign(p.x - q.x) === Math.sign(q.vx));
+    // v6.3：空中遇到危險 → 空中防禦，同時繼續往對手飄（近戰靠近遠程用）
+    if (danger && !fOnGround(p) && p.gauge > 40 && rnd() < P.guard) { inp.guard = mem.guard = true; inp.mx = mem.mx = fs.atk.kind === "melee" ? toward : 0; mem.think = 0.2; return inp; }
     if (danger && fOnGround(p)) {
       const r = rnd();
-      if (r < P.dodge) { inp.jump = true; inp.mx = rnd() < 0.5 ? -toward : 0; mem.mx = inp.mx; return inp; }
+      // 跳開：近戰往對手跳（配合空中防禦靠近），其他隨機往後或原地
+      if (r < P.dodge) { inp.jump = true; inp.mx = fs.atk.kind === "melee" ? toward : rnd() < 0.5 ? -toward : 0; mem.mx = inp.mx; return inp; }
       if (r < P.dodge + P.guard && p.gauge > 25) { inp.guard = mem.guard = true; mem.think = 0.35 + rnd() * 0.3; return inp; }
     }
     const press = (s) => { inp.skDown[s] = true; if (FT_AIMED[fightSlot(fs, s).kind]) { mem.aimS = s; mem.think = 0.12 + rnd() * 0.2; } return inp; };
