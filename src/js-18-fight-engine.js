@@ -112,8 +112,13 @@
   function fightAnim(p, clip) { if (p.anim.clip !== clip) p.anim = { clip, t: 0 }; }
 
   /* 一位選手的一步：計時器 → 倒下／硬直 → 防禦 → 出招中 → 按住中的招式 → 移動與出新招 → 物理 */
+  // 招式是不是在前搖中被打斷了（出招物件已經不是目前的招式，而且還沒到前搖結束）
+  const fightCutAct = (g, a, p) => !!(a && a.kind === "sk" && p && p.act !== a && a.t < a.hitAt - 1e-9);
   function fightUnit(g, p, o, inp) {
     const dt = FT.STEP, f = g.cfg.f[p.side];
+    // 技能在前搖被控制打斷：頭上跳「中斷」
+    if (p.lastAct && fightCutAct(g, p.lastAct, p)) g.fx.push({ kind: "text", text: "中斷", x: p.x, y: FT.CH * 1.3, t: 0, life: 0.7, color: "#9aa3c8" });
+    p.lastAct = p.act;
     fightTimers(p, inp);
     fxTick(g, p);
     fightSlideStep(g, p);
@@ -195,6 +200,8 @@
   // 出招中：到前搖結束才判定；近戰普攻的判定持續 ACTIVE 秒（打中一次就停）
   function fightActing(g, p, o) {
     const a = p.act; a.t += FT.STEP;
+    // 給自己的效果：前搖結束才生效（v6.0.2；被控制打斷就沒有）
+    if (a.kind === "sk" && !a.selfDone && a.t >= a.hitAt) { a.selfDone = true; fxCastSelf(g, p, fightSlot(fightFs(g, p), a.s)); }
     if (a.t >= a.hitAt && !a.done) {
       if (a.melee) { if (fightMeleeCheck(g, p, o, a) || a.t >= a.hitAt + FT.ACTIVE) a.done = true; }
       else { a.done = true; fightRelease(g, p, o, a); }
@@ -225,13 +232,13 @@
     if (k.kind === "rect") {
       const delay = fightTeleDelay(g, k, d);
       const box = fxBoxMul(p, true); // 技能判定框大小（範圍增減效果）
-      g.teles.push({ own: p.side, x: p.x + p.face * (g.cfg.fs[p.side].bw / 2 + d), w: k.width * box, air: FT.AIR_SAFE * box, t: 0, delay, dmg: k.dmg, sv: k.sv, s, bul: k.bul, id: act.id, fx: k.enemyFx });
-      act.done = true; // 傷害由預告結算
+      g.teles.push({ own: p.side, x: p.x + p.face * (g.cfg.fs[p.side].bw / 2 + d), w: k.width * box, air: FT.AIR_SAFE * box, t: 0, delay, dmg: k.dmg, sv: k.sv, s, bul: k.bul, id: act.id, fx: k.enemyFx, act });
+      act.done = true; // 傷害由預告結算（施放者在前搖被控制打斷時，預告會消失：見 fightTeles）
     }
     p.act = act;
     if (s === 2) p.atkCd = Math.max(0.15, k.cd * fxAtkCdMul(p)); else p.cd[s] = k.cd; // 攻速增減只影響普攻冷卻
     fightAnim(p, k.clip || idleClip(f));
-    if (s < 2) { g.events.push({ type: "cast", side: p.side }); fxCastSelf(g, p, k); }
+    if (s < 2) g.events.push({ type: "cast", side: p.side }); // 給自己的效果在前搖結束時才套用（fightActing）
     if (k.kind === "dash") p.armor = true; // 突進：從出招到衝完都不會被打斷
     if (k.kind === "dline") { const bw = g.cfg.fs[p.side].bw; g.fx.push({ kind: "dlineTele", own: p.side, x0: p.x + p.face * bw / 2, x1: p.x + p.face * (bw / 2 + k.range), y: p.y + FT.CH * 0.4, t: 0, life: k.hitAt }); }
     if (act.melee) { const bw = g.cfg.fs[p.side].bw; g.fx.push({ kind: "reach", own: p.side, x0: p.x + p.face * bw / 2, x1: p.x + p.face * (bw / 2 + k.reach), y: p.y, t: 0, life: FT.ACTIVE + k.hitAt + 0.1 }); }
@@ -355,7 +362,7 @@
     },
   };
   FIGHT_RELEASE.shot = FIGHT_RELEASE.line;
-  FIGHT_RELEASE.self = () => {}; // 自身：效果在出招時就套用了（fightCast → fxCastSelf）
+  FIGHT_RELEASE.self = () => {}; // 自身：效果在前搖結束時套用（fightActing → fxCastSelf）
   const fightProjBase = (g, p, a, k) => { const x = p.x + p.face * fightFs(g, p).bw / 2; return { own: p.side, x, px: x, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id, fx: k.enemyFx, box: fxBoxMul(p, a.s < 2) }; };
   // 突進衝完停在對手身上：只把突進的人往前進方向推出去（撞牆就改退到另一邊），不推對手
   function fightDashExit(g, p, o) {
@@ -400,6 +407,7 @@
       t.t += FT.STEP;
       if (t.t < t.delay) continue;
       t.dead = true;
+      if (fightCutAct(g, t.act, g.p[t.own])) { g.fx.push({ kind: "text", text: "中斷", x: t.x, y: FT.CH * 0.8, t: 0, life: 0.6, color: "#9aa3c8" }); continue; }
       const o = g.p[1 - t.own], h = fHurt(o);
       g.fx.push({ kind: "impact", x: t.x, w: t.w, t: 0, life: 0.45, bul: t.bul, own: t.own });
       fightHitSummons(g, t.own, t.x - t.w / 2, t.x + t.w / 2, 0, t.air || FT.AIR_SAFE, t.dmg);
@@ -432,6 +440,21 @@
       const v = full > 0 ? fightDamage(g, a, o, full * (1 - o.dr), { heavy }) : 0;
       if (v) g.events.push({ type: "hit", side: a.side, heavy, dmg: v, scale: 1 });
       fxOnHit(g, a, o, (fx || []).filter((e) => !FX_CONTROL.has(FIGHT_FX[e.c].b)), { dmg: v, full, dir, bul });
+      return;
+    }
+    /* 技能前搖的輕霸體（v6.0.2）：被普通攻擊打中照樣扣血、累積硬直值，但不中斷、不被推；
+       帶控制效果（暈眩、擊倒…）或硬直值累積滿了才會打斷（走下面一般的命中） */
+    const ctl = fx.some((e) => FX_CONTROL.has(FIGHT_FX[e.c].b) || FIGHT_FX[e.c].knockdown);
+    if (o.act && o.act.kind === "sk" && o.act.t < o.act.hitAt && !ctl && !(full > 0 && (id == null || o.lastSvId !== id) && o.sv + sv >= FT.SV_MAX)) {
+      let v = 0;
+      if (full > 0) {
+        if (id == null || o.lastSvId !== id) { o.sv += sv; o.lastSvId = id; }
+        const raw = fx.some((e) => e.c === "DOT") ? full * FX_NUM.DOT_FIRST : full;
+        v = fightDamage(g, a, o, raw * (1 - o.dr), { pierce: fx.some((e) => FIGHT_FX[e.c].pierce), heavy });
+        g.events.push({ type: "hit", side: a.side, heavy, dmg: v, scale: 1 });
+        g.fx.push({ kind: "text", text: "霸體", x: o.x, y: FT.CH * 1.3, t: 0, life: 0.5, color: "#ffd84a" });
+      } else g.events.push({ type: "fxhit", side: a.side });
+      fxOnHit(g, a, o, fx, { dmg: v, full, dir, bul });
       return;
     }
     let v = 0;

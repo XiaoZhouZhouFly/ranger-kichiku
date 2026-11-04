@@ -541,8 +541,14 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   check(sh.hp[1] === sh.maxHp[1] && sh.trace.some((t) => t[1][8] > 0), "護盾應該先吸收傷害");
   const pierce = await R({ c0: "u1008h-brown", c1: "u003e-bella", steps: 200, script: [sk(0, 2, 1), { side: 0, from: 0, to: 40, mx: 1 }, sk(1, 62)] });
   check(pierce.hp[1] < pierce.maxHp[1], "解除無敵的技能傷害應該穿透護盾");
-  const heal = await R({ c0: "x001-cube", c1: "u017e-james", steps: 200, script: [{ side: 0, from: 0, to: 60, mx: 1 }, { side: 0, from: 70, to: 71, atk: 1 }, sk(0, 150, 1)] });
-  check(heal.trace[160][1][2] > heal.trace[149][1][2], "回血技能應該回血");
+  const heal = await R({ c0: "x001-cube", c1: "u017e-james", steps: 260, script: [{ side: 0, from: 0, to: 60, mx: 1 }, { side: 0, from: 70, to: 71, atk: 1 }, sk(0, 150, 1)] });
+  // v6.0.2：給自己的效果在前搖結束時才生效（這隻前搖 50 格），所以看出招後 110 格內有沒有回血
+  check(Math.max(...heal.trace.slice(150, 260).map((t) => t[1][2])) > heal.trace[149][1][2], "回血技能應該回血（前搖結束時）");
+  // v6.0.2：技能前搖被普攻打中不中斷（預告照樣打下來）；被暈眩打中會中斷（預告消失）
+  const armor = await R({ c0: "x001-cube", c1: "x001-cube", steps: 160, script: [{ side: 0, from: 0, to: 40, mx: 1 }, { side: 1, from: 0, to: 40, mx: -1 }, sk(0, 60, 1), { side: 0, from: 62, to: 63, atk: 1 }] });
+  check(armor.hp[1] < armor.maxHp[1] && armor.hp[0] < armor.maxHp[0], `前搖被普攻打中，技能應該照樣打中對手：${armor.hp}`);
+  const cut = await R({ c0: "u006e-clark", c1: "x001-cube", steps: 220, script: [{ side: 0, from: 0, to: 40, mx: 1 }, { side: 1, from: 0, to: 40, mx: -1 }, sk(0, 60, 0), sk(0, 70, 1)] });
+  check(cut.hp[0] === cut.maxHp[0], `前搖被暈眩打中，技能應該被打斷（預告消失）：${cut.hp}`);
   const buff = await R({ c0: "u023u-sindy", c1: "x001-cube", steps: 60, script: [sk(1, 5)] });
   check(has(buff, 0, "atkUp") && has(buff, 0, "spdUp"), "增益技能應該加上攻擊、移速增加");
   // v5.3：受傷增減、清除增益、反射、吸血、冷卻重置
@@ -553,7 +559,8 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   check(has(clean, 1, "atkUp") && !clean.trace[150][1][7].includes("atkUp"), "清除敵方增益應該清掉對手的攻擊增加");
   const mir = await R({ c0: "x001-cube", c1: "u1001h-brown", steps: 200, script: [sk(1, 2, 1), { side: 0, from: 0, to: 60, mx: 1 }, { side: 0, from: 80, to: 200, atk: 30 }] });
   check(mir.hp[0] < mir.maxHp[0], "反射應該讓出手的人也受傷");
-  const reset = await R({ c0: "u1084h-alice", c1: "x001-cube", steps: 125, script: [sk(1, 5), sk(0, 118)] });
+  // v6.0.2：重置是給自己的效果，前搖結束才生效
+  const reset = await R({ c0: "u1084h-alice", c1: "x001-cube", steps: 200, script: [sk(1, 5), sk(0, 118)] });
   check(reset.cd[0][1] === 0, `技能冷卻重置應該讓另一個技能冷卻歸零：${reset.cd[0]}`);
   // v5.3 第 2 部分：突進、拉近、交換位置、泡泡、複製體
   const dash = await R({ c0: "u1216e-towa", c1: "x001-cube", steps: 250, script: [...W, sk(0, 50)] });

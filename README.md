@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v6.0.1-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v6.0.1"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v6.0.2-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v6.0.2"></a>
 </p>
 
 <p align="center">
@@ -49,8 +49,9 @@
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v6.0.1）
+## 最近更新（v6.0.2）
 
+- 格鬥場：技能前搖有「輕霸體」。被普攻打中不會中斷，只有暈眩、擊倒等控制效果能打斷；被打斷的定點技能預告會消失。
 - 格鬥場線上對戰修正：加入的一方可以用觸控操作了、修好開打後卡住與準備了不開打；新增「複製連線紀錄」方便回報問題。
 - 格鬥場：新增「線上對戰」（測試中）。建立房間、把網址或 QR Code 傳給朋友，就能用兩支手機連線對打；不需要帳號。
 - 格鬥場：開放全部角色（約 2270 隻）。選角改成跟雙人對打一樣（搜尋、角色庫、隨機、交換），並標示每隻角色的相容性；不適合的角色顯示灰色。對戰按鈕改成圖案：盾牌、劍、箭頭，技能用原作的技能圖標。

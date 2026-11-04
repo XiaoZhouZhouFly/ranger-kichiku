@@ -294,7 +294,7 @@
   function olTick(g) {
     if (g !== FG.g) return; // 這一幀開頭拿到的是上一場（剛好開新的一場）
     const n = FG.net, bad = FG.olGone || !OL.room || !OL.room.guest ? "對手已斷線" : n && n.desync ? `同步錯誤（第 ${n.desync.f} 格雙方畫面不一樣），這場只好中止` : "";
-    if (n && n.waiting && n.stallFrames % 120 === 119) olLog(`等待對手的按鍵中：第 ${n.frame} 格，自己的佇列 ${n.q[n.me].size}、對手的佇列 ${n.q[1 - n.me].size}`);
+    if (n && n.waiting && g.phase !== "over" && n.stallFrames % 120 === 119) olLog(`等待對手的按鍵中：第 ${n.frame} 格，自己的佇列 ${n.q[n.me].size}、對手的佇列 ${n.q[1 - n.me].size}`);
     if (bad && $("fOver").hidden) { olLog("停止：" + bad); g.phase = "over"; g.winner = -2; $("fOver").hidden = false; $("fOverText").textContent = bad; }
     if (g.phase === "over" && OL.started) olAfterGame(); // 打完：雙方都取消準備，下一場要各自再按「再一場」
   }
