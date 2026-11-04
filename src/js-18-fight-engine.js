@@ -24,7 +24,7 @@
   }
   function fightNew(cfg) {
     const g = { cfg, rng: mulberry32((cfg.seed || 1) * 7919 + 7), round: 1, wins: [0, 0], phase: "intro", phaseT: 0, timeLeft: cfg.secs,
-      projs: [], teles: [], clones: [], fx: [], events: [], t: 0, winner: -1, roundWinner: -1, nextId: 1,
+      projs: [], teles: [], clones: [], summons: [], fx: [], events: [], t: 0, winner: -1, roundWinner: -1, nextId: 1,
       stats: { lastCombo: 0, lastDmg: 0, total: 0, hits: 0 } };
     g.p = [fightFighter(g, 0), fightFighter(g, 1)];
     g.events.push({ type: "round" });
@@ -70,6 +70,7 @@
     fightProjectiles(g);
     fightTeles(g);
     fightClones(g);
+    fightSummons(g);
     for (const p of g.p) p.state = fightStateOf(p);
     for (const e of g.fx) e.t += dt;
     g.fx = g.fx.filter((e) => e.t < (e.life || 0.6));
@@ -93,7 +94,7 @@
         g.phase = "over"; g.winner = g.wins[0] === g.wins[1] ? -1 : g.wins[0] > g.wins[1] ? 0 : 1;
       } else {
         g.round++; g.phase = "intro"; g.phaseT = 0; g.timeLeft = g.cfg.secs;
-        g.p = [fightFighter(g, 0), fightFighter(g, 1)]; g.projs = []; g.teles = []; g.clones = []; g.events.push({ type: "round" });
+        g.p = [fightFighter(g, 0), fightFighter(g, 1)]; g.projs = []; g.teles = []; g.clones = []; g.summons = []; g.events.push({ type: "round" });
       }
     }
   }
@@ -305,6 +306,7 @@
   function fightMeleeCheck(g, p, o, a) {
     const fs = g.cfg.fs[p.side], k = fs.atk, h = fHurt(o), m = fxBoxMul(p, false); // 普攻判定框大小
     const x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.reach * m;
+    if (fightHitSummons(g, p.side, x0, x1, p.y, p.y + FT.CH * 0.8 * m, k.dmg)) return true; // 召喚物擋在前面就打到召喚物
     if (o.ko || !fOverlapX(x0, x1, h.x0, h.x1) || h.y0 > p.y + FT.CH * 0.8 * m || h.y1 < p.y - FT.CH * 0.1 * (m - 1)) return false;
     fightHit(g, p, o, k.dmg, k.sv, false, a.id, null);
     g.events.push({ type: "swing", side: p.side });
@@ -332,6 +334,7 @@
     dline(g, p, o, a, k) {
       const fs = fightFs(g, p), m = fxBoxMul(p, a.s < 2), x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.range * m, h = fHurt(o);
       g.fx.push({ kind: "dline", own: p.side, x0, x1, y: p.y + FT.CH * 0.4, t: 0, life: 0.25 });
+      fightHitSummons(g, p.side, x0, x1, p.y, p.y + FT.CH * 0.8 * m, k.dmg);
       if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && h.y0 <= p.y + FT.CH * 0.8 * m && h.y1 >= p.y) fightHit(g, p, o, k.dmg, k.sv, a.s < 2, a.id, k.enemyFx);
     },
     // 突進：衝到拖曳的位置（0.25 秒），到了再判定落點附近（寬 k.width）有沒有對手
@@ -345,6 +348,7 @@
         p.armor = false;
         const h = fHurt(o), w = k.width * fxBoxMul(p, true) / 2, cx = p.x + p.face * fs.bw / 2;
         g.fx.push({ kind: "impact", x: cx, w: w * 2, t: 0, life: 0.35, own: p.side });
+        fightHitSummons(g, p.side, cx - w, cx + w, 0, FT.CH, k.dmg);
         if (!o.ko && fOverlapX(cx - w, cx + w, h.x0, h.x1) && o.y < FT.AIR_SAFE * 2) fightHit(g, p, o, k.dmg, k.sv, true, a.id, k.enemyFx, k.bul);
         fightDashExit(g, p, o);
       });
@@ -375,6 +379,8 @@
       if (q.kind === "lob") { q.y += q.vy * dt; q.vy -= FT.GRAV * dt; }
       const o = g.p[1 - q.own], h = fHurt(o), r = (q.kind === "lob" ? 26 : 14) * (q.box || 1);
       const yLo = Math.min(q.y, q.py) - r, yHi = Math.max(q.y, q.py) + r;
+      // 對方的召喚物會擋下投射物（先打到召喚物）
+      if (fightHitSummons(g, q.own, Math.min(q.px, q.x) - r, Math.max(q.px, q.x) + r, yLo, yHi, q.dmg, true)) { q.dead = true; g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 }); continue; }
       if (!o.ko && fOverlapX(q.px, q.x, h.x0 - r, h.x1 + r) && yHi > h.y0 && yLo < h.y1) {
         fightHit(g, q.src || g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx, q.bul); q.dead = true;
         g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 });
@@ -396,6 +402,7 @@
       t.dead = true;
       const o = g.p[1 - t.own], h = fHurt(o);
       g.fx.push({ kind: "impact", x: t.x, w: t.w, t: 0, life: 0.45, bul: t.bul, own: t.own });
+      fightHitSummons(g, t.own, t.x - t.w / 2, t.x + t.w / 2, 0, t.air || FT.AIR_SAFE, t.dmg);
       if (!o.ko && fOverlapX(t.x - t.w / 2, t.x + t.w / 2, h.x0, h.x1) && o.y < (t.air || FT.AIR_SAFE)) fightHit(g, t.src || g.p[t.own], o, t.dmg, t.sv, true, t.id, t.fx, t.bul);
     }
     g.teles = g.teles.filter((t) => !t.dead);
@@ -474,7 +481,7 @@
     return v;
   }
   function fightDamageAfter(g, a, o, v, opt) {
-    if (opt.reflect || !a || a === o || a.clone) return; // 複製體不吸血、不吃反射
+    if (opt.reflect || !a || a === o || a.clone || a.summon) return; // 複製體、召喚物不吸血、不吃反射
     if (o.st.mirror && !opt.dot && !a.ko) fightDamage(g, o, a, v * o.st.mirror.v, { reflect: true });
     if (a.st.vamp && !a.ko) { const h = Math.round(v * a.st.vamp.v); if (h > 0) { a.hp = Math.min(a.maxHp, a.hp + h); g.fx.push({ kind: "num", text: "+" + h, x: a.x, y: FT.CH * 1.05, t: 0, life: 0.6, heal: true }); } }
   }
@@ -501,23 +508,86 @@
         c.act = { s, k, t: 0, hitAt: k.hitAt, dur: k.dur, aimD: fclamp(gap, FT.AIM_MIN, k.range || gap), id: g.nextId++, done: false, clip: k.clip };
       }
       const a = c.act; a.t += FT.STEP;
-      if (!a.done && a.t >= a.hitAt) {
-        a.done = true;
-        const k = a.k;
-        if (k.kind === "melee") {
-          const h = fHurt(o), x0 = c.x + c.face * c.fs.bw / 2, x1 = x0 + c.face * k.reach;
-          if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && o.y < FT.CH * 0.8) fightHit(g, c, o, k.dmg, k.sv, false, a.id, null);
-        } else if (k.kind === "rect") {
-          g.teles.push({ own: c.side, src: c, x: o.x, w: k.width, t: 0, delay: fightTeleDelay(g, k, Math.min(a.aimD, k.range)), dmg: k.dmg, sv: k.sv, s: a.s, bul: k.bul, id: a.id, fx: k.enemyFx });
-        } else if (FIGHT_RELEASE[k.kind]) {
-          const before = g.projs.length;
-          FIGHT_RELEASE[k.kind](g, c, o, a, k);
-          for (const q of g.projs.slice(before)) q.src = c; // 投射物記住是複製體射的（命中時用它的數值）
-        }
-      }
+      if (!a.done && a.t >= a.hitAt) { a.done = true; fightAutoAttack(g, c, o, a); }
       if (a.t >= a.dur) c.act = null;
     }
     g.clones = g.clones.filter((c) => !c.dead);
+  }
+
+  /* 複製體、召喚物共用：前搖結束時放出一招（近戰、定點、其他依 FIGHT_RELEASE），算在 c.side 那一方 */
+  function fightAutoAttack(g, c, o, a) {
+    const k = a.k;
+    if (k.kind === "melee") {
+      const h = fHurt(o), x0 = c.x + c.face * c.fs.bw / 2, x1 = x0 + c.face * k.reach;
+      if (fightHitSummons(g, c.side, x0, x1, 0, FT.CH * 0.8, k.dmg)) return;
+      if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && o.y < FT.CH * 0.8) fightHit(g, c, o, k.dmg, k.sv, false, a.id, null);
+    } else if (k.kind === "rect") {
+      g.teles.push({ own: c.side, src: c, x: o.x, w: k.width, t: 0, delay: fightTeleDelay(g, k, Math.min(a.aimD, k.range)), dmg: k.dmg, sv: k.sv, s: a.s, bul: k.bul, id: a.id, fx: k.enemyFx });
+    } else if (FIGHT_RELEASE[k.kind]) {
+      const before = g.projs.length;
+      FIGHT_RELEASE[k.kind](g, c, o, a, k);
+      for (const q of g.projs.slice(before)) { q.src = c; q.drawF = c.f || g.cfg.f[c.from]; } // 投射物記住是誰射的（命中用它的數值、畫它的圖）
+    }
+  }
+
+  /* ---------- 召喚物（v5.3.1） ----------
+     用召喚物自己的動畫與普攻：自動走向對手，進到攻擊距離就普攻（不放技能）。
+     體力＝施放者最大體力 × SUM_HP、傷害＝施放者普攻 × SUM_DMG；會被對手的攻擊打到，也會擋下對手的投射物；
+     不跟角色推擠。持續時間到或被打倒就消失。每方場上最多 SUM_MAX 隻。 */
+  const fightSummonFs = new Map(); // 召喚物的格鬥數值（同一隻只算一次）
+  function fightSummonSpawn(g, src, s, T) {
+    const o = g.p[1 - src.side], ex = g.cfg.extra && g.cfg.extra[src.side];
+    if (src.clone) return;
+    if (o.st.noCopy) { g.fx.push({ kind: "text", text: "召喚被封鎖", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
+    const ids = fightSummonIds(g.cfg.f[src.side].r.id, s).filter((id) => ex && ex.sum[id]);
+    if (!ids.length) { g.fx.push({ kind: "text", text: "召喚物讀取失敗", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
+    const casterAtk = fightFs(g, src).atk.dmg;
+    ids.forEach((id, n) => {
+      if (g.summons.filter((m) => m.side === src.side).length >= FT.SUM_MAX) { g.fx.push({ kind: "text", text: "召喚物已滿", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
+      const f = ex.sum[id];
+      if (!fightSummonFs.has(id)) fightSummonFs.set(id, fightStats(f));
+      const base = fightSummonFs.get(id), fs = Object.assign({}, base, { atk: Object.assign({}, base.atk, { dmg: Math.round(casterAtk * FT.SUM_DMG), enemyFx: [] }) });
+      const hp = Math.round(src.maxHp * FT.SUM_HP), x = fclamp(src.x + src.face * (fightFs(g, src).bw / 2 + fs.bw / 2 + 10 + n * 40), -FT.AW / 2 + fs.bw / 2, FT.AW / 2 - fs.bw / 2);
+      g.summons.push({ summon: true, side: src.side, id, f, fs, x, y: 0, face: src.face, hp, maxHp: hp, life: 0, T, atkCd: 0, act: null, st: {}, buff: 0, dr: 0, anim: { clip: null, t: 0 }, moving: false });
+    });
+    g.fx.push({ kind: "text", text: "召喚！", x: src.x, y: FT.CH * 1.3, t: 0, life: 0.8, color: "#7dff9a" });
+  }
+  const fSumHurt = (m) => ({ x0: m.x - m.fs.bw / 2, x1: m.x + m.fs.bw / 2, y0: 0, y1: FT.CH * FT.SUM_H });
+  /* 打到 side 對面的召喚物：範圍 [x0,x1]×[y0,y1] 碰到的都扣 dmg（first＝只打第一隻，投射物用）。回傳打到幾隻 */
+  function fightHitSummons(g, side, x0, x1, y0, y1, dmg, first) {
+    let n = 0;
+    for (const m of g.summons) {
+      if (m.side === side || m.hp <= 0) continue;
+      const h = fSumHurt(m);
+      if (!fOverlapX(x0, x1, h.x0, h.x1) || y1 < h.y0 || y0 > h.y1) continue;
+      const v = Math.round(dmg); m.hp -= v; n++;
+      g.fx.push({ kind: "num", text: String(v), x: m.x, y: FT.CH * 0.9, t: 0, life: 0.7 });
+      if (m.hp <= 0) g.fx.push({ kind: "text", text: "擊倒召喚物", x: m.x, y: FT.CH * 1.1, t: 0, life: 0.9, color: "#ff8a3d" });
+      if (first) break;
+    }
+    return n;
+  }
+  function fightSummons(g) {
+    for (const m of g.summons) {
+      m.life += FT.STEP; m.anim.t += FT.STEP; m.atkCd = Math.max(0, m.atkCd - FT.STEP);
+      if (m.hp <= 0 || m.life >= m.T) { m.dead = true; continue; }
+      const o = g.p[1 - m.side];
+      if (o.ko || g.phase !== "fight") continue;
+      if (m.act) {
+        const a = m.act; a.t += FT.STEP;
+        if (!a.done && a.t >= a.hitAt) { a.done = true; fightAutoAttack(g, m, o, a); }
+        if (a.t >= a.dur) m.act = null;
+        continue;
+      }
+      m.face = o.x >= m.x ? 1 : -1;
+      // 距離用對手的受傷框（寬 HURT_W）算，跟命中判定一致（用身體寬會停在打不到的地方）
+      const k = m.fs.atk, gap = Math.max(0, Math.abs(o.x - m.x) - m.fs.bw / 2 - fHurt(o).x1 + o.x);
+      const reach = k.kind === "melee" ? k.reach : k.kind === "shot" ? 360 : k.range || 300;
+      if (gap > reach * 0.9) { m.x += m.face * m.fs.walk * FT.SUM_WALK * FT.STEP; m.moving = true; continue; }
+      m.moving = false;
+      if (m.atkCd <= 0) { m.act = { s: 2, k, t: 0, hitAt: k.hitAt, dur: k.dur, aimD: gap + FT.HURT_W / 2, id: g.nextId++, done: false, clip: k.clip }; m.atkCd = k.cd * FT.SUM_CD; }
+    }
+    g.summons = g.summons.filter((m) => !m.dead);
   }
 
   /* ---------- 電腦對手 ----------

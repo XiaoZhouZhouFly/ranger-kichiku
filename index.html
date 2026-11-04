@@ -853,7 +853,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v5.3";
+  const APP_VERSION = "v5.3.1";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -5022,12 +5022,13 @@ body.fight-on { overflow: hidden; }
     // 格鬥場：一隻角色的標準化結果（相容性）、全部角色的相容性報告
     fightNorm: async (id) => { await Promise.all([ensureStats(), ensureSkillFx()]); const f = await fightLoad(id), fs = fightStats(f); return { N: fs.N, atk: fs.atk.kind, sk: fs.sk.map((k) => k && k.kind), summary: fightSummary(fs) }; },
     fightCompat: () => normAll(),
+    fightPolyForm: (id) => fightPolyFormId(id), // 變形外觀的角色 id
     // 標準化的小零件（健檢用；都不改任何狀態）
     fightNormUnit: (r, anims) => normUnit(r, new Set(anims)), fightDelivery: (cfg, rg, isAtk) => normDelivery(cfg, rg, isAtk), fightField: (obj, key, def) => normField(obj, key, def),
     fightRun: async (spec) => {
       await ensureSkillFx();
-      const f = await Promise.all([fightLoad(spec.c0), fightLoad(spec.c1)]), fs = f.map(fightStats);
-      const g = fightNew({ f, fs, rounds: spec.rounds || 1, secs: spec.secs ?? 0, mode: spec.mode || "dummy", seed: spec.seed || 1,
+      const f = await Promise.all([fightLoad(spec.c0), fightLoad(spec.c1)]), fs = f.map(fightStats), extra = await fightPrepareExtra(f);
+      const g = fightNew({ f, fs, extra, rounds: spec.rounds || 1, secs: spec.secs ?? 0, mode: spec.mode || "dummy", seed: spec.seed || 1,
         holdMove: !!spec.holdMove, teleMode: spec.teleMode || "dist" });
       g.phase = "fight"; g.phaseT = 1;
       const log = { hits: 0, guards: 0, breaks: 0, downs: 0, inv: 0, ko: 0, dmg: [], scale: [] }, mem = [{}, {}], trace = [];
@@ -5048,7 +5049,8 @@ body.fight-on { overflow: hidden; }
         fightStep(g, inputs);
         for (const e of g.events) { if (e.type === "hit") log.hits++; if (e.type === "guard") log.guards++; if (e.type === "break") log.breaks++; if (e.type === "ko") log.ko++; if (e.type === "down") log.downs++; if (e.type === "unsupported") log.unsupported = (log.unsupported || 0) + 1; if (e.type === "fxhit") log.fxhits = (log.fxhits || 0) + 1; if (e.type === "hit") { log.dmg.push(e.dmg); log.scale.push(e.scale); } }
         g.p.forEach((p, i) => { if (p.inv > 0 && !invBefore[i]) log.inv++; });
-        if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face, Object.keys(p.st).sort().join(","), p.st.shield ? Math.round(p.st.shield.v) : 0]));
+        log.summons = Math.max(log.summons || 0, g.summons.length); // 場上召喚物最多幾隻
+        if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face, Object.keys(p.st).sort().join(","), p.st.shield ? Math.round(p.st.shield.v) : 0]).concat([g.summons.map((m) => [m.side, Math.round(m.x), Math.max(0, Math.round(m.hp)), m.act ? 1 : 0])]));
       }
       return { log, trace, cd: g.p.map((p) => p.cd.map((c) => +c.toFixed(2))), atkCd: g.p.map((p) => +p.atkCd.toFixed(2)), maxHp: g.p.map((p) => p.maxHp), dr: g.p.map((p) => p.dr), gauge: g.p.map((p) => +p.gauge.toFixed(1)), sv: g.p.map((p) => +p.sv.toFixed(1)), state: g.p.map((p) => p.state), face: g.p.map((p) => p.face), hp: g.p.map((p) => Math.round(p.hp)), x: g.p.map((p) => Math.round(p.x)), phase: g.phase, wins: g.wins.slice(), stats: Object.assign({}, g.stats), t: +g.t.toFixed(2) };
     },
@@ -5230,7 +5232,7 @@ body.fight-on { overflow: hidden; }
     "SILENCE": {"b": "silence", "to": "enemy", "name": "沉默", "dur": [1, 3], "lv": "auto"},
     "SKILL_RESET": {"b": "cdReset", "to": "self", "name": "技能冷卻重置", "lv": "auto", "idea": "另一個技能的冷卻立刻歸零"},
     "STUN": {"b": "stun", "to": "enemy", "name": "暈眩", "dur": [0.5, 1.5], "lv": "auto"},
-    "SUMMON": {"b": "new", "to": "self", "name": "召喚", "lv": "auto", "idea": "先暫時不動，等後續其他技能處理完再來看這個部分"},
+    "SUMMON": {"b": "summon", "to": "self", "name": "召喚", "dur": [4, 8], "lv": "auto", "idea": "先暫時不動，等後續其他技能處理完再來看這個部分"},
     "SUMMON_ENEMY": {"b": "copy", "to": "self", "name": "召喚對手複製體", "lv": "auto", "idea": "在我方叫出對手的複製體，複製體會在原地普攻以及把兩個技能放完之後消失"},
     "TEMPT": {"b": "charm", "to": "enemy", "name": "魅惑", "dur": [3, 3], "lv": "auto", "idea": "對手的左右操作反轉"},
     "THROW_ALLY": {"b": "dash", "to": "self", "name": "投擲隊友", "lv": "auto", "idea": "同突進攻擊（2026-11-04 確認：做成突進）"},
@@ -5250,6 +5252,8 @@ body.fight-on { overflow: hidden; }
     GRAV: 1700, JUMP_V: 800, AIR_CTRL: 0.85,          // 重力、起跳速度（約 188 高、滯空約 0.94 秒）、空中左右移動的比例
     DASH_T: 0.25, BUBBLE_H: 90,                       // 突進花的時間、泡泡浮起的高度
     DASH_K: 2, DASH_DEF: 300, DASH_MAX: 700,          // 突進距離＝效果自帶的數值（points）× 2；沒有數值用 300；最遠 700
+    SUM_HP: 0.15, SUM_DMG: 0.4, SUM_MAX: 2,           // 召喚物：體力＝施放者最大體力 × 0.15、傷害＝施放者普攻 × 0.4、每方場上最多 2 隻
+    SUM_WALK: 0.8, SUM_CD: 1.5, SUM_H: 0.8,           // 召喚物：移動速度 × 0.8、普攻冷卻 × 1.5、受傷框高度＝身高 × 0.8
     PUSH_H: 0.5,                                      // 推擠：只有一方在空中時完全不推（跳得過對手）；兩人都在空中時，高度差超過身高 × 0.5 就不推
     // 出招
     ACTIVE: 4 / 60,                                   // 近戰普攻的有效判定持續時間（4 格）
@@ -5300,6 +5304,18 @@ body.fight-on { overflow: hidden; }
     "x002-orb": { hp: 880, dr: 0.02, walk: 200, atk: { kind: "shot", dmg: 50, cd: 0.55 },
       sk: [{ kind: "line", speed: 600, cd: 6 }, { kind: "lob", range: 480, cd: 10 }] },
   };
+  /* 變形後的外觀＝同編號、名字中間多 sk 的角色（跟召喚物同一套命名，例如 u376u-cony → u376sk-cony）。
+     命名對不上、但同系列旁邊編號有的，在這裡補（跟 sync_overrides.json 的召喚物系列對應同一個道理） */
+  const POLY_FORM_OVERRIDE = { "u1285e-sally": "u1286sk-sally", "u1285h-sally": "u1286sk-sally", "u1380h-mk": "u1381sk-mk", "u1380u-mk": "u1381sk-mk" };
+  function fightPolyFormId(id) {
+    if (POLY_FORM_OVERRIDE[id]) return POLY_FORM_OVERRIDE[id];
+    const m = /^u(\d+)([a-z]?)-(.+)$/.exec(id); if (!m) return null;
+    const [, num, evo, name] = m, has = (x) => S.index.some((r) => r.id === x);
+    return [`u${num}${evo === "" || evo === "e" ? "" : evo}sk-${name}`, `u${num}sk-${name}`].find(has) || null;
+  }
+  // 召喚技能叫出來的召喚物 id（stats.json 的 sum／sums，跟雙人對戰同一份資料）
+  const fightSummonIds = (id, s) => { const sk = S.stats[id] && S.stats[id].sk && S.stats[id].sk[s]; return sk ? (sk.sums || (sk.sum ? [sk.sum] : [])).map((x) => x.id) : []; };
+
   // 測試用角色：涵蓋長短手、各種投射物與輔助技能
   const FIGHT_ROSTER = [
     ["x001-cube", "自製・近戰＋兩招矩形（近、遠）"],
@@ -5324,6 +5340,8 @@ body.fight-on { overflow: hidden; }
     ["u1084h-alice", "效果：技能冷卻縮短、冷卻重置"],
     ["u1216e-towa", "效果：突進＋暈眩"],
     ["u1278e-er", "效果：長距離突進（600）"],
+    ["u1009e-sally", "效果：召喚（v5.3.1）"],
+    ["u376u-cony", "效果：變形成棉花糖兔兔（v5.3.1）"],
     ["u003u-bella", "效果：交換位置"],
     ["u1013e-brown", "效果：拉近對手"],
     ["u1116h-claris", "效果：魅惑（左右反轉）、沉默"],
@@ -5570,7 +5588,14 @@ body.fight-on { overflow: hidden; }
     } },
     // 複製體：在自己前面叫出對手的複製體（見 fightCloneSpawn）；對手有「防複製」就失敗
     copy: { apply(g, src) { fightCloneSpawn(g, src); } },
-    noCopy: { apply(g, src, t, e, P) { if (fxSet(t, "noCopy", fxDur(e, P), 1)) fxText(g, t, "防複製", "#7dff9a"); } },
+    // 清除召喚物：打掉對手場上的召喚物，持續期間對手叫不出召喚物、也叫不出我的複製體
+    noCopy: { apply(g, src, t, e, P) {
+      let n = 0; for (const m of g.summons) if (m.side !== t.side && m.hp > 0) { m.hp = 0; n++; }
+      if (n) fxText(g, t, "清除召喚物", "#7dff9a");
+      if (fxSet(t, "noCopy", fxDur(e, P), 1)) fxText(g, t, "防召喚", "#7dff9a");
+    } },
+    // 召喚（v5.3.1）：叫出這個技能的召喚物（見 fightSummonSpawn）
+    summon: { apply(g, src, t, e, P, hit) { fightSummonSpawn(g, src, hit.s, fxDur(e, P)); } },
   });
   // 會打斷動作的控制類（突進途中不生效）
   const FX_CONTROL = new Set(["stun", "down", "bubble", "fear", "poly", "pull", "swap"]);
@@ -5590,7 +5615,7 @@ body.fight-on { overflow: hidden; }
     atkDef: ["普防", "#7dd3ff"], atkVul: ["普弱", "#ff8a3d"], atkBoxUp: ["普框↑", "#ffd84a"], atkBoxDown: ["普框↓", "#9fd0ff"], skBoxUp: ["技框↑", "#ffd84a"],
     skBoxDown: ["技框↓", "#9fd0ff"], cdFast: ["冷卻快", "#7dd3ff"], cdSlow: ["冷卻慢", "#ff8a3d"], atkSpdUp: ["攻速↑", "#ffb14a"], atkSpdDown: ["攻速↓", "#9fd0ff"],
     vamp: ["吸血", "#ff6b8a"], mirror: ["反射", "#7dd3ff"], noBuff: ["封增", "#ff8a3d"], noRegen: ["封回", "#ff8a3d"], noDebuff: ["淨", "#7dff9a"], noDot: ["抗毒", "#7dff9a"],
-    charm: ["魅惑", "#ff6bd5"], fear: ["恐懼", "#b46bff"], poly: ["變形", "#ffd84a"], big: ["變大", "#ffd84a"], noCopy: ["防複製", "#7dff9a"] };
+    charm: ["魅惑", "#ff6bd5"], fear: ["恐懼", "#b46bff"], poly: ["變形", "#ffd84a"], big: ["變大", "#ffd84a"], noCopy: ["防召喚", "#7dff9a"] };
 
   // 狀態換算成倍率（加總：增益 + 、減益 −）
   const fxV = (p, name) => (p.st[name] ? p.st[name].v : 0);
@@ -5648,7 +5673,7 @@ body.fight-on { overflow: hidden; }
   }
   function fightNew(cfg) {
     const g = { cfg, rng: mulberry32((cfg.seed || 1) * 7919 + 7), round: 1, wins: [0, 0], phase: "intro", phaseT: 0, timeLeft: cfg.secs,
-      projs: [], teles: [], clones: [], fx: [], events: [], t: 0, winner: -1, roundWinner: -1, nextId: 1,
+      projs: [], teles: [], clones: [], summons: [], fx: [], events: [], t: 0, winner: -1, roundWinner: -1, nextId: 1,
       stats: { lastCombo: 0, lastDmg: 0, total: 0, hits: 0 } };
     g.p = [fightFighter(g, 0), fightFighter(g, 1)];
     g.events.push({ type: "round" });
@@ -5694,6 +5719,7 @@ body.fight-on { overflow: hidden; }
     fightProjectiles(g);
     fightTeles(g);
     fightClones(g);
+    fightSummons(g);
     for (const p of g.p) p.state = fightStateOf(p);
     for (const e of g.fx) e.t += dt;
     g.fx = g.fx.filter((e) => e.t < (e.life || 0.6));
@@ -5717,7 +5743,7 @@ body.fight-on { overflow: hidden; }
         g.phase = "over"; g.winner = g.wins[0] === g.wins[1] ? -1 : g.wins[0] > g.wins[1] ? 0 : 1;
       } else {
         g.round++; g.phase = "intro"; g.phaseT = 0; g.timeLeft = g.cfg.secs;
-        g.p = [fightFighter(g, 0), fightFighter(g, 1)]; g.projs = []; g.teles = []; g.clones = []; g.events.push({ type: "round" });
+        g.p = [fightFighter(g, 0), fightFighter(g, 1)]; g.projs = []; g.teles = []; g.clones = []; g.summons = []; g.events.push({ type: "round" });
       }
     }
   }
@@ -5929,6 +5955,7 @@ body.fight-on { overflow: hidden; }
   function fightMeleeCheck(g, p, o, a) {
     const fs = g.cfg.fs[p.side], k = fs.atk, h = fHurt(o), m = fxBoxMul(p, false); // 普攻判定框大小
     const x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.reach * m;
+    if (fightHitSummons(g, p.side, x0, x1, p.y, p.y + FT.CH * 0.8 * m, k.dmg)) return true; // 召喚物擋在前面就打到召喚物
     if (o.ko || !fOverlapX(x0, x1, h.x0, h.x1) || h.y0 > p.y + FT.CH * 0.8 * m || h.y1 < p.y - FT.CH * 0.1 * (m - 1)) return false;
     fightHit(g, p, o, k.dmg, k.sv, false, a.id, null);
     g.events.push({ type: "swing", side: p.side });
@@ -5956,6 +5983,7 @@ body.fight-on { overflow: hidden; }
     dline(g, p, o, a, k) {
       const fs = fightFs(g, p), m = fxBoxMul(p, a.s < 2), x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.range * m, h = fHurt(o);
       g.fx.push({ kind: "dline", own: p.side, x0, x1, y: p.y + FT.CH * 0.4, t: 0, life: 0.25 });
+      fightHitSummons(g, p.side, x0, x1, p.y, p.y + FT.CH * 0.8 * m, k.dmg);
       if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && h.y0 <= p.y + FT.CH * 0.8 * m && h.y1 >= p.y) fightHit(g, p, o, k.dmg, k.sv, a.s < 2, a.id, k.enemyFx);
     },
     // 突進：衝到拖曳的位置（0.25 秒），到了再判定落點附近（寬 k.width）有沒有對手
@@ -5969,6 +5997,7 @@ body.fight-on { overflow: hidden; }
         p.armor = false;
         const h = fHurt(o), w = k.width * fxBoxMul(p, true) / 2, cx = p.x + p.face * fs.bw / 2;
         g.fx.push({ kind: "impact", x: cx, w: w * 2, t: 0, life: 0.35, own: p.side });
+        fightHitSummons(g, p.side, cx - w, cx + w, 0, FT.CH, k.dmg);
         if (!o.ko && fOverlapX(cx - w, cx + w, h.x0, h.x1) && o.y < FT.AIR_SAFE * 2) fightHit(g, p, o, k.dmg, k.sv, true, a.id, k.enemyFx, k.bul);
         fightDashExit(g, p, o);
       });
@@ -5999,6 +6028,8 @@ body.fight-on { overflow: hidden; }
       if (q.kind === "lob") { q.y += q.vy * dt; q.vy -= FT.GRAV * dt; }
       const o = g.p[1 - q.own], h = fHurt(o), r = (q.kind === "lob" ? 26 : 14) * (q.box || 1);
       const yLo = Math.min(q.y, q.py) - r, yHi = Math.max(q.y, q.py) + r;
+      // 對方的召喚物會擋下投射物（先打到召喚物）
+      if (fightHitSummons(g, q.own, Math.min(q.px, q.x) - r, Math.max(q.px, q.x) + r, yLo, yHi, q.dmg, true)) { q.dead = true; g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 }); continue; }
       if (!o.ko && fOverlapX(q.px, q.x, h.x0 - r, h.x1 + r) && yHi > h.y0 && yLo < h.y1) {
         fightHit(g, q.src || g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx, q.bul); q.dead = true;
         g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 });
@@ -6020,6 +6051,7 @@ body.fight-on { overflow: hidden; }
       t.dead = true;
       const o = g.p[1 - t.own], h = fHurt(o);
       g.fx.push({ kind: "impact", x: t.x, w: t.w, t: 0, life: 0.45, bul: t.bul, own: t.own });
+      fightHitSummons(g, t.own, t.x - t.w / 2, t.x + t.w / 2, 0, t.air || FT.AIR_SAFE, t.dmg);
       if (!o.ko && fOverlapX(t.x - t.w / 2, t.x + t.w / 2, h.x0, h.x1) && o.y < (t.air || FT.AIR_SAFE)) fightHit(g, t.src || g.p[t.own], o, t.dmg, t.sv, true, t.id, t.fx, t.bul);
     }
     g.teles = g.teles.filter((t) => !t.dead);
@@ -6098,7 +6130,7 @@ body.fight-on { overflow: hidden; }
     return v;
   }
   function fightDamageAfter(g, a, o, v, opt) {
-    if (opt.reflect || !a || a === o || a.clone) return; // 複製體不吸血、不吃反射
+    if (opt.reflect || !a || a === o || a.clone || a.summon) return; // 複製體、召喚物不吸血、不吃反射
     if (o.st.mirror && !opt.dot && !a.ko) fightDamage(g, o, a, v * o.st.mirror.v, { reflect: true });
     if (a.st.vamp && !a.ko) { const h = Math.round(v * a.st.vamp.v); if (h > 0) { a.hp = Math.min(a.maxHp, a.hp + h); g.fx.push({ kind: "num", text: "+" + h, x: a.x, y: FT.CH * 1.05, t: 0, life: 0.6, heal: true }); } }
   }
@@ -6125,23 +6157,86 @@ body.fight-on { overflow: hidden; }
         c.act = { s, k, t: 0, hitAt: k.hitAt, dur: k.dur, aimD: fclamp(gap, FT.AIM_MIN, k.range || gap), id: g.nextId++, done: false, clip: k.clip };
       }
       const a = c.act; a.t += FT.STEP;
-      if (!a.done && a.t >= a.hitAt) {
-        a.done = true;
-        const k = a.k;
-        if (k.kind === "melee") {
-          const h = fHurt(o), x0 = c.x + c.face * c.fs.bw / 2, x1 = x0 + c.face * k.reach;
-          if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && o.y < FT.CH * 0.8) fightHit(g, c, o, k.dmg, k.sv, false, a.id, null);
-        } else if (k.kind === "rect") {
-          g.teles.push({ own: c.side, src: c, x: o.x, w: k.width, t: 0, delay: fightTeleDelay(g, k, Math.min(a.aimD, k.range)), dmg: k.dmg, sv: k.sv, s: a.s, bul: k.bul, id: a.id, fx: k.enemyFx });
-        } else if (FIGHT_RELEASE[k.kind]) {
-          const before = g.projs.length;
-          FIGHT_RELEASE[k.kind](g, c, o, a, k);
-          for (const q of g.projs.slice(before)) q.src = c; // 投射物記住是複製體射的（命中時用它的數值）
-        }
-      }
+      if (!a.done && a.t >= a.hitAt) { a.done = true; fightAutoAttack(g, c, o, a); }
       if (a.t >= a.dur) c.act = null;
     }
     g.clones = g.clones.filter((c) => !c.dead);
+  }
+
+  /* 複製體、召喚物共用：前搖結束時放出一招（近戰、定點、其他依 FIGHT_RELEASE），算在 c.side 那一方 */
+  function fightAutoAttack(g, c, o, a) {
+    const k = a.k;
+    if (k.kind === "melee") {
+      const h = fHurt(o), x0 = c.x + c.face * c.fs.bw / 2, x1 = x0 + c.face * k.reach;
+      if (fightHitSummons(g, c.side, x0, x1, 0, FT.CH * 0.8, k.dmg)) return;
+      if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && o.y < FT.CH * 0.8) fightHit(g, c, o, k.dmg, k.sv, false, a.id, null);
+    } else if (k.kind === "rect") {
+      g.teles.push({ own: c.side, src: c, x: o.x, w: k.width, t: 0, delay: fightTeleDelay(g, k, Math.min(a.aimD, k.range)), dmg: k.dmg, sv: k.sv, s: a.s, bul: k.bul, id: a.id, fx: k.enemyFx });
+    } else if (FIGHT_RELEASE[k.kind]) {
+      const before = g.projs.length;
+      FIGHT_RELEASE[k.kind](g, c, o, a, k);
+      for (const q of g.projs.slice(before)) { q.src = c; q.drawF = c.f || g.cfg.f[c.from]; } // 投射物記住是誰射的（命中用它的數值、畫它的圖）
+    }
+  }
+
+  /* ---------- 召喚物（v5.3.1） ----------
+     用召喚物自己的動畫與普攻：自動走向對手，進到攻擊距離就普攻（不放技能）。
+     體力＝施放者最大體力 × SUM_HP、傷害＝施放者普攻 × SUM_DMG；會被對手的攻擊打到，也會擋下對手的投射物；
+     不跟角色推擠。持續時間到或被打倒就消失。每方場上最多 SUM_MAX 隻。 */
+  const fightSummonFs = new Map(); // 召喚物的格鬥數值（同一隻只算一次）
+  function fightSummonSpawn(g, src, s, T) {
+    const o = g.p[1 - src.side], ex = g.cfg.extra && g.cfg.extra[src.side];
+    if (src.clone) return;
+    if (o.st.noCopy) { g.fx.push({ kind: "text", text: "召喚被封鎖", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
+    const ids = fightSummonIds(g.cfg.f[src.side].r.id, s).filter((id) => ex && ex.sum[id]);
+    if (!ids.length) { g.fx.push({ kind: "text", text: "召喚物讀取失敗", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
+    const casterAtk = fightFs(g, src).atk.dmg;
+    ids.forEach((id, n) => {
+      if (g.summons.filter((m) => m.side === src.side).length >= FT.SUM_MAX) { g.fx.push({ kind: "text", text: "召喚物已滿", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
+      const f = ex.sum[id];
+      if (!fightSummonFs.has(id)) fightSummonFs.set(id, fightStats(f));
+      const base = fightSummonFs.get(id), fs = Object.assign({}, base, { atk: Object.assign({}, base.atk, { dmg: Math.round(casterAtk * FT.SUM_DMG), enemyFx: [] }) });
+      const hp = Math.round(src.maxHp * FT.SUM_HP), x = fclamp(src.x + src.face * (fightFs(g, src).bw / 2 + fs.bw / 2 + 10 + n * 40), -FT.AW / 2 + fs.bw / 2, FT.AW / 2 - fs.bw / 2);
+      g.summons.push({ summon: true, side: src.side, id, f, fs, x, y: 0, face: src.face, hp, maxHp: hp, life: 0, T, atkCd: 0, act: null, st: {}, buff: 0, dr: 0, anim: { clip: null, t: 0 }, moving: false });
+    });
+    g.fx.push({ kind: "text", text: "召喚！", x: src.x, y: FT.CH * 1.3, t: 0, life: 0.8, color: "#7dff9a" });
+  }
+  const fSumHurt = (m) => ({ x0: m.x - m.fs.bw / 2, x1: m.x + m.fs.bw / 2, y0: 0, y1: FT.CH * FT.SUM_H });
+  /* 打到 side 對面的召喚物：範圍 [x0,x1]×[y0,y1] 碰到的都扣 dmg（first＝只打第一隻，投射物用）。回傳打到幾隻 */
+  function fightHitSummons(g, side, x0, x1, y0, y1, dmg, first) {
+    let n = 0;
+    for (const m of g.summons) {
+      if (m.side === side || m.hp <= 0) continue;
+      const h = fSumHurt(m);
+      if (!fOverlapX(x0, x1, h.x0, h.x1) || y1 < h.y0 || y0 > h.y1) continue;
+      const v = Math.round(dmg); m.hp -= v; n++;
+      g.fx.push({ kind: "num", text: String(v), x: m.x, y: FT.CH * 0.9, t: 0, life: 0.7 });
+      if (m.hp <= 0) g.fx.push({ kind: "text", text: "擊倒召喚物", x: m.x, y: FT.CH * 1.1, t: 0, life: 0.9, color: "#ff8a3d" });
+      if (first) break;
+    }
+    return n;
+  }
+  function fightSummons(g) {
+    for (const m of g.summons) {
+      m.life += FT.STEP; m.anim.t += FT.STEP; m.atkCd = Math.max(0, m.atkCd - FT.STEP);
+      if (m.hp <= 0 || m.life >= m.T) { m.dead = true; continue; }
+      const o = g.p[1 - m.side];
+      if (o.ko || g.phase !== "fight") continue;
+      if (m.act) {
+        const a = m.act; a.t += FT.STEP;
+        if (!a.done && a.t >= a.hitAt) { a.done = true; fightAutoAttack(g, m, o, a); }
+        if (a.t >= a.dur) m.act = null;
+        continue;
+      }
+      m.face = o.x >= m.x ? 1 : -1;
+      // 距離用對手的受傷框（寬 HURT_W）算，跟命中判定一致（用身體寬會停在打不到的地方）
+      const k = m.fs.atk, gap = Math.max(0, Math.abs(o.x - m.x) - m.fs.bw / 2 - fHurt(o).x1 + o.x);
+      const reach = k.kind === "melee" ? k.reach : k.kind === "shot" ? 360 : k.range || 300;
+      if (gap > reach * 0.9) { m.x += m.face * m.fs.walk * FT.SUM_WALK * FT.STEP; m.moving = true; continue; }
+      m.moving = false;
+      if (m.atkCd <= 0) { m.act = { s: 2, k, t: 0, hitAt: k.hitAt, dur: k.dur, aimD: gap + FT.HURT_W / 2, id: g.nextId++, done: false, clip: k.clip }; m.atkCd = k.cd * FT.SUM_CD; }
+    }
+    g.summons = g.summons.filter((m) => !m.dead);
   }
 
   /* ---------- 電腦對手 ----------
@@ -6348,10 +6443,10 @@ body.fight-on { overflow: hidden; }
       else if (k.damaging || toEnemy) {
         const dd = normDelivery(k.cfg, rg, false); k.form = dd.form; k.src = dd.src;
         if (dd.note) issue(dd.unsupported ? "unsupported" : "guess", where, dd.note);
-      } else if (summon) k.form = "target";
+      } else if (summon && !FIGHT_FX.SUMMON) k.form = "target"; // 召喚還沒支援時的代替
       else if (toSelf) k.form = "self";
       else { k.form = "buff"; issue("unsupported", where, "效果全都還沒支援（待做），暫時用「加攻＋回血」代替"); }
-      if (summon && !p) issue("unsupported", where, k.damaging ? "召喚未支援（待做），目前只有傷害部分" : "召喚未支援（待做），以指定位置打擊代替");
+      if (summon && !p && !FIGHT_FX.SUMMON) issue("unsupported", where, k.damaging ? "召喚未支援（待做），目前只有傷害部分" : "召喚未支援（待做），以指定位置打擊代替");
       if (!p && k.form === "target" && k.effectRange.st === "missing") issue("guess", where, "沒有作用範圍，用預設寬度");
       // 還沒支援的效果（傷害、召喚以外；召喚上面已經標過）
       const todo = k.fx.filter((e) => e.sup !== "ok" && e.sup !== "none" && !FX_SUMMON.has(e.c)); // 「格鬥場不用」的效果不算問題
@@ -6470,6 +6565,17 @@ body.fight-on { overflow: hidden; }
     FG.cache.set(id, f);
     return f;
   }
+  /* 開打前多載入的角色：召喚物、變形後的外觀（找不到就略過，到時候退回替代做法）
+     回傳 [{ sum: {id: 角色}, poly: 角色|null }, …]（兩邊各一個），放進 cfg.extra */
+  async function fightPrepareExtra(f) {
+    const one = async (id) => { try { return await fightLoad(id); } catch { return null; } };
+    return Promise.all(f.map(async (x) => {
+      const ids = [...new Set([0, 1].flatMap((s) => fightSummonIds(x.r.id, s)))], sum = {};
+      for (const id of ids) { const u = await one(id); if (u) sum[id] = u; }
+      const pid = fightPolyFormId(x.r.id);
+      return { sum, poly: pid ? await one(pid) : null };
+    }));
+  }
   async function fightInfo(i) {
     const id = $(`fChar${i}`).value, box = $(`fInfo${i}`);
     box.textContent = "讀取中…";
@@ -6519,8 +6625,9 @@ body.fight-on { overflow: hidden; }
     try {
       const f = await Promise.all([fightLoad(FG.set.c0), fightLoad(FG.set.c1)]);
       FG.f = f; FG.fs = f.map(fightStats);
+      const extra = await fightPrepareExtra(f);
       const mode = FG.set.mode;
-      FG.g = fightNew({ f, fs: FG.fs, rounds: mode === "dummy" ? 1 : FG.set.rounds, secs: mode === "dummy" ? 0 : FG.set.secs, mode, seed: newSeed(100000),
+      FG.g = fightNew({ f, fs: FG.fs, extra, rounds: mode === "dummy" ? 1 : FG.set.rounds, secs: mode === "dummy" ? 0 : FG.set.secs, mode, seed: newSeed(100000),
         holdMove: !!FG.set.holdMove, teleMode: FG.set.teleMode === "sync" ? "sync" : "dist" });
       FG.ai = [{}, {}]; FG.acc = 0; FG.ctl = [fightCtl(), fightCtl()];
       $("fStage").hidden = false; $("fOver").hidden = true; $("fStage").classList.toggle("pvp", mode === "pvp");
@@ -6722,6 +6829,7 @@ body.fight-on { overflow: hidden; }
     for (const i of [0, 1]) if (i === who || FG.set.showRange) fightDrawAims(c, g, i, X, Y, gy);
     // 角色
     for (const cl of g.clones) fightDrawClone(c, g, cl, X, Y);
+    for (const m of g.summons) fightDrawSummon(c, g, m, X, Y);
     for (const i of [0, 1]) fightDrawFighter(c, g, i, X, Y);
     // 拋物線落點（飛行中；畫在角色前面才不會被擋住）
     for (const q of g.projs) if (q.kind === "lob") {
@@ -6743,7 +6851,7 @@ body.fight-on { overflow: hidden; }
     }
     // 投射物
     for (const q of g.projs) {
-      const f = g.cfg.f[q.own], dr = q.bul && f.bul[q.bul.p], k = fScale * FT.CH / f.h;
+      const f = q.drawF || g.cfg.f[q.own], dr = q.bul && f.bul[q.bul.p], k = fScale * FT.CH / f.h;
       if (dr) {
         const anim = pickAnim(dr.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
         if (anim) {
@@ -6807,9 +6915,16 @@ body.fight-on { overflow: hidden; }
     c.save(); c.font = canvasFont(900, size); c.textAlign = "center"; c.textBaseline = "middle"; c.setLineDash([]);
     c.lineWidth = 5; c.strokeStyle = "#1b2038"; c.strokeText(text, x, y); c.fillStyle = color; c.fillText(text, x, y); c.restore();
   }
-  /* 變形：畫成施放者那一招的投射物圖案（資料沒有「變成什麼」，用施放者的圖代替）；沒有圖就畫一團 */
+  /* 變形：畫成施放者的變形外觀（同編號 sk 角色，例如 u376u-cony → u376sk-cony）的待機動作；
+     找不到外觀時退回施放者那一招的投射物圖案，再沒有就畫一團 */
   function fightDrawPoly(c, g, p, X, Y) {
-    const ps = p.st.poly, f = g.cfg.f[ps.own], dr = ps.bul && f.bul[ps.bul.p], k = fScale * FT.CH / f.h;
+    const ps = p.st.poly, form = g.cfg.extra && g.cfg.extra[ps.own] && g.cfg.extra[ps.own].poly;
+    if (form) {
+      const clip = idleClip(form), n = form.part.animations[clip].frame_count, idx = Math.floor(g.t * (form.part.anim_rate || 24)) % Math.max(1, n);
+      c.save(); c.translate(X(p.x), Y(p.y)); const s = fScale * FT.CH * 0.75 / form.h; c.scale(s, s); drawFighterCtx(c, form, clip, idx, 0, p.face < 0, false, 1); c.restore();
+      return;
+    }
+    const f = g.cfg.f[ps.own], dr = ps.bul && f.bul[ps.bul.p], k = fScale * FT.CH / f.h;
     const anim = dr && pickAnim(dr.part, ["normal", "idle", "wait", "finish"]);
     if (anim) {
       const n = dr.part.animations[anim].frame_count, idx = Math.floor(g.t * (dr.part.anim_rate || 24)) % Math.max(1, n);
@@ -6818,6 +6933,19 @@ body.fight-on { overflow: hidden; }
       c.save(); c.fillStyle = "#ffd84a"; c.strokeStyle = "#1b2038"; c.lineWidth = 4;
       c.beginPath(); c.ellipse(X(p.x), Y(p.y + FT.CH * 0.25), FT.CH * 0.28 * fScale, FT.CH * 0.22 * fScale, 0, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore();
     }
+  }
+  // 召喚物：自己的動畫（走路／攻擊／待機），頭上小血條，剩最後 1.5 秒時閃爍
+  function fightDrawSummon(c, g, m, X, Y) {
+    const f = m.f, a = m.act;
+    let clip = a ? a.clip : m.moving ? f.clips.move : null; if (!clip || !f.part.animations[clip]) clip = idleClip(f);
+    if (!clip) return;
+    const n = f.part.animations[clip].frame_count, idx = a ? Math.min(n - 1, Math.floor(a.t / a.dur * n)) : Math.floor(m.anim.t * (f.part.anim_rate || 24)) % Math.max(1, n);
+    const k = fScale * FT.CH * FT.SUM_H / f.h, blink = m.T - m.life < 1.5 && Math.floor(m.life * 8) % 2;
+    c.save(); c.translate(X(m.x), Y(m.y)); c.scale(k, k);
+    drawFighterCtx(c, f, clip, idx, 0, m.face < 0, false, blink ? 0.4 : 1);
+    c.restore();
+    const w = 70, x0 = X(m.x) - w / 2, y0 = Y(FT.CH * FT.SUM_H) - 14, r = Math.max(0, m.hp / m.maxHp);
+    c.fillStyle = "#333a5c"; c.fillRect(x0, y0, w, 7); c.fillStyle = m.side ? "#59a7ff" : "#ff6b6b"; c.fillRect(x0, y0, w * r, 7);
   }
   // 複製體：用對手的樣子、半透明紫色調，播目前招式的動作
   function fightDrawClone(c, g, cl, X, Y) {

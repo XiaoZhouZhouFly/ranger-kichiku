@@ -11,6 +11,8 @@
     GRAV: 1700, JUMP_V: 800, AIR_CTRL: 0.85,          // 重力、起跳速度（約 188 高、滯空約 0.94 秒）、空中左右移動的比例
     DASH_T: 0.25, BUBBLE_H: 90,                       // 突進花的時間、泡泡浮起的高度
     DASH_K: 2, DASH_DEF: 300, DASH_MAX: 700,          // 突進距離＝效果自帶的數值（points）× 2；沒有數值用 300；最遠 700
+    SUM_HP: 0.15, SUM_DMG: 0.4, SUM_MAX: 2,           // 召喚物：體力＝施放者最大體力 × 0.15、傷害＝施放者普攻 × 0.4、每方場上最多 2 隻
+    SUM_WALK: 0.8, SUM_CD: 1.5, SUM_H: 0.8,           // 召喚物：移動速度 × 0.8、普攻冷卻 × 1.5、受傷框高度＝身高 × 0.8
     PUSH_H: 0.5,                                      // 推擠：只有一方在空中時完全不推（跳得過對手）；兩人都在空中時，高度差超過身高 × 0.5 就不推
     // 出招
     ACTIVE: 4 / 60,                                   // 近戰普攻的有效判定持續時間（4 格）
@@ -61,6 +63,18 @@
     "x002-orb": { hp: 880, dr: 0.02, walk: 200, atk: { kind: "shot", dmg: 50, cd: 0.55 },
       sk: [{ kind: "line", speed: 600, cd: 6 }, { kind: "lob", range: 480, cd: 10 }] },
   };
+  /* 變形後的外觀＝同編號、名字中間多 sk 的角色（跟召喚物同一套命名，例如 u376u-cony → u376sk-cony）。
+     命名對不上、但同系列旁邊編號有的，在這裡補（跟 sync_overrides.json 的召喚物系列對應同一個道理） */
+  const POLY_FORM_OVERRIDE = { "u1285e-sally": "u1286sk-sally", "u1285h-sally": "u1286sk-sally", "u1380h-mk": "u1381sk-mk", "u1380u-mk": "u1381sk-mk" };
+  function fightPolyFormId(id) {
+    if (POLY_FORM_OVERRIDE[id]) return POLY_FORM_OVERRIDE[id];
+    const m = /^u(\d+)([a-z]?)-(.+)$/.exec(id); if (!m) return null;
+    const [, num, evo, name] = m, has = (x) => S.index.some((r) => r.id === x);
+    return [`u${num}${evo === "" || evo === "e" ? "" : evo}sk-${name}`, `u${num}sk-${name}`].find(has) || null;
+  }
+  // 召喚技能叫出來的召喚物 id（stats.json 的 sum／sums，跟雙人對戰同一份資料）
+  const fightSummonIds = (id, s) => { const sk = S.stats[id] && S.stats[id].sk && S.stats[id].sk[s]; return sk ? (sk.sums || (sk.sum ? [sk.sum] : [])).map((x) => x.id) : []; };
+
   // 測試用角色：涵蓋長短手、各種投射物與輔助技能
   const FIGHT_ROSTER = [
     ["x001-cube", "自製・近戰＋兩招矩形（近、遠）"],
@@ -85,6 +99,8 @@
     ["u1084h-alice", "效果：技能冷卻縮短、冷卻重置"],
     ["u1216e-towa", "效果：突進＋暈眩"],
     ["u1278e-er", "效果：長距離突進（600）"],
+    ["u1009e-sally", "效果：召喚（v5.3.1）"],
+    ["u376u-cony", "效果：變形成棉花糖兔兔（v5.3.1）"],
     ["u003u-bella", "效果：交換位置"],
     ["u1013e-brown", "效果：拉近對手"],
     ["u1116h-claris", "效果：魅惑（左右反轉）、沉默"],

@@ -61,6 +61,17 @@
     FG.cache.set(id, f);
     return f;
   }
+  /* 開打前多載入的角色：召喚物、變形後的外觀（找不到就略過，到時候退回替代做法）
+     回傳 [{ sum: {id: 角色}, poly: 角色|null }, …]（兩邊各一個），放進 cfg.extra */
+  async function fightPrepareExtra(f) {
+    const one = async (id) => { try { return await fightLoad(id); } catch { return null; } };
+    return Promise.all(f.map(async (x) => {
+      const ids = [...new Set([0, 1].flatMap((s) => fightSummonIds(x.r.id, s)))], sum = {};
+      for (const id of ids) { const u = await one(id); if (u) sum[id] = u; }
+      const pid = fightPolyFormId(x.r.id);
+      return { sum, poly: pid ? await one(pid) : null };
+    }));
+  }
   async function fightInfo(i) {
     const id = $(`fChar${i}`).value, box = $(`fInfo${i}`);
     box.textContent = "讀取中…";
@@ -110,8 +121,9 @@
     try {
       const f = await Promise.all([fightLoad(FG.set.c0), fightLoad(FG.set.c1)]);
       FG.f = f; FG.fs = f.map(fightStats);
+      const extra = await fightPrepareExtra(f);
       const mode = FG.set.mode;
-      FG.g = fightNew({ f, fs: FG.fs, rounds: mode === "dummy" ? 1 : FG.set.rounds, secs: mode === "dummy" ? 0 : FG.set.secs, mode, seed: newSeed(100000),
+      FG.g = fightNew({ f, fs: FG.fs, extra, rounds: mode === "dummy" ? 1 : FG.set.rounds, secs: mode === "dummy" ? 0 : FG.set.secs, mode, seed: newSeed(100000),
         holdMove: !!FG.set.holdMove, teleMode: FG.set.teleMode === "sync" ? "sync" : "dist" });
       FG.ai = [{}, {}]; FG.acc = 0; FG.ctl = [fightCtl(), fightCtl()];
       $("fStage").hidden = false; $("fOver").hidden = true; $("fStage").classList.toggle("pvp", mode === "pvp");
@@ -313,6 +325,7 @@
     for (const i of [0, 1]) if (i === who || FG.set.showRange) fightDrawAims(c, g, i, X, Y, gy);
     // 角色
     for (const cl of g.clones) fightDrawClone(c, g, cl, X, Y);
+    for (const m of g.summons) fightDrawSummon(c, g, m, X, Y);
     for (const i of [0, 1]) fightDrawFighter(c, g, i, X, Y);
     // 拋物線落點（飛行中；畫在角色前面才不會被擋住）
     for (const q of g.projs) if (q.kind === "lob") {
@@ -334,7 +347,7 @@
     }
     // 投射物
     for (const q of g.projs) {
-      const f = g.cfg.f[q.own], dr = q.bul && f.bul[q.bul.p], k = fScale * FT.CH / f.h;
+      const f = q.drawF || g.cfg.f[q.own], dr = q.bul && f.bul[q.bul.p], k = fScale * FT.CH / f.h;
       if (dr) {
         const anim = pickAnim(dr.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
         if (anim) {
@@ -398,9 +411,16 @@
     c.save(); c.font = canvasFont(900, size); c.textAlign = "center"; c.textBaseline = "middle"; c.setLineDash([]);
     c.lineWidth = 5; c.strokeStyle = "#1b2038"; c.strokeText(text, x, y); c.fillStyle = color; c.fillText(text, x, y); c.restore();
   }
-  /* 變形：畫成施放者那一招的投射物圖案（資料沒有「變成什麼」，用施放者的圖代替）；沒有圖就畫一團 */
+  /* 變形：畫成施放者的變形外觀（同編號 sk 角色，例如 u376u-cony → u376sk-cony）的待機動作；
+     找不到外觀時退回施放者那一招的投射物圖案，再沒有就畫一團 */
   function fightDrawPoly(c, g, p, X, Y) {
-    const ps = p.st.poly, f = g.cfg.f[ps.own], dr = ps.bul && f.bul[ps.bul.p], k = fScale * FT.CH / f.h;
+    const ps = p.st.poly, form = g.cfg.extra && g.cfg.extra[ps.own] && g.cfg.extra[ps.own].poly;
+    if (form) {
+      const clip = idleClip(form), n = form.part.animations[clip].frame_count, idx = Math.floor(g.t * (form.part.anim_rate || 24)) % Math.max(1, n);
+      c.save(); c.translate(X(p.x), Y(p.y)); const s = fScale * FT.CH * 0.75 / form.h; c.scale(s, s); drawFighterCtx(c, form, clip, idx, 0, p.face < 0, false, 1); c.restore();
+      return;
+    }
+    const f = g.cfg.f[ps.own], dr = ps.bul && f.bul[ps.bul.p], k = fScale * FT.CH / f.h;
     const anim = dr && pickAnim(dr.part, ["normal", "idle", "wait", "finish"]);
     if (anim) {
       const n = dr.part.animations[anim].frame_count, idx = Math.floor(g.t * (dr.part.anim_rate || 24)) % Math.max(1, n);
@@ -409,6 +429,19 @@
       c.save(); c.fillStyle = "#ffd84a"; c.strokeStyle = "#1b2038"; c.lineWidth = 4;
       c.beginPath(); c.ellipse(X(p.x), Y(p.y + FT.CH * 0.25), FT.CH * 0.28 * fScale, FT.CH * 0.22 * fScale, 0, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore();
     }
+  }
+  // 召喚物：自己的動畫（走路／攻擊／待機），頭上小血條，剩最後 1.5 秒時閃爍
+  function fightDrawSummon(c, g, m, X, Y) {
+    const f = m.f, a = m.act;
+    let clip = a ? a.clip : m.moving ? f.clips.move : null; if (!clip || !f.part.animations[clip]) clip = idleClip(f);
+    if (!clip) return;
+    const n = f.part.animations[clip].frame_count, idx = a ? Math.min(n - 1, Math.floor(a.t / a.dur * n)) : Math.floor(m.anim.t * (f.part.anim_rate || 24)) % Math.max(1, n);
+    const k = fScale * FT.CH * FT.SUM_H / f.h, blink = m.T - m.life < 1.5 && Math.floor(m.life * 8) % 2;
+    c.save(); c.translate(X(m.x), Y(m.y)); c.scale(k, k);
+    drawFighterCtx(c, f, clip, idx, 0, m.face < 0, false, blink ? 0.4 : 1);
+    c.restore();
+    const w = 70, x0 = X(m.x) - w / 2, y0 = Y(FT.CH * FT.SUM_H) - 14, r = Math.max(0, m.hp / m.maxHp);
+    c.fillStyle = "#333a5c"; c.fillRect(x0, y0, w, 7); c.fillStyle = m.side ? "#59a7ff" : "#ff6b6b"; c.fillRect(x0, y0, w * r, 7);
   }
   // 複製體：用對手的樣子、半透明紫色調，播目前招式的動作
   function fightDrawClone(c, g, cl, X, Y) {

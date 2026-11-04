@@ -40,12 +40,13 @@
     // 格鬥場：一隻角色的標準化結果（相容性）、全部角色的相容性報告
     fightNorm: async (id) => { await Promise.all([ensureStats(), ensureSkillFx()]); const f = await fightLoad(id), fs = fightStats(f); return { N: fs.N, atk: fs.atk.kind, sk: fs.sk.map((k) => k && k.kind), summary: fightSummary(fs) }; },
     fightCompat: () => normAll(),
+    fightPolyForm: (id) => fightPolyFormId(id), // 變形外觀的角色 id
     // 標準化的小零件（健檢用；都不改任何狀態）
     fightNormUnit: (r, anims) => normUnit(r, new Set(anims)), fightDelivery: (cfg, rg, isAtk) => normDelivery(cfg, rg, isAtk), fightField: (obj, key, def) => normField(obj, key, def),
     fightRun: async (spec) => {
       await ensureSkillFx();
-      const f = await Promise.all([fightLoad(spec.c0), fightLoad(spec.c1)]), fs = f.map(fightStats);
-      const g = fightNew({ f, fs, rounds: spec.rounds || 1, secs: spec.secs ?? 0, mode: spec.mode || "dummy", seed: spec.seed || 1,
+      const f = await Promise.all([fightLoad(spec.c0), fightLoad(spec.c1)]), fs = f.map(fightStats), extra = await fightPrepareExtra(f);
+      const g = fightNew({ f, fs, extra, rounds: spec.rounds || 1, secs: spec.secs ?? 0, mode: spec.mode || "dummy", seed: spec.seed || 1,
         holdMove: !!spec.holdMove, teleMode: spec.teleMode || "dist" });
       g.phase = "fight"; g.phaseT = 1;
       const log = { hits: 0, guards: 0, breaks: 0, downs: 0, inv: 0, ko: 0, dmg: [], scale: [] }, mem = [{}, {}], trace = [];
@@ -66,7 +67,8 @@
         fightStep(g, inputs);
         for (const e of g.events) { if (e.type === "hit") log.hits++; if (e.type === "guard") log.guards++; if (e.type === "break") log.breaks++; if (e.type === "ko") log.ko++; if (e.type === "down") log.downs++; if (e.type === "unsupported") log.unsupported = (log.unsupported || 0) + 1; if (e.type === "fxhit") log.fxhits = (log.fxhits || 0) + 1; if (e.type === "hit") { log.dmg.push(e.dmg); log.scale.push(e.scale); } }
         g.p.forEach((p, i) => { if (p.inv > 0 && !invBefore[i]) log.inv++; });
-        if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face, Object.keys(p.st).sort().join(","), p.st.shield ? Math.round(p.st.shield.v) : 0]));
+        log.summons = Math.max(log.summons || 0, g.summons.length); // 場上召喚物最多幾隻
+        if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face, Object.keys(p.st).sort().join(","), p.st.shield ? Math.round(p.st.shield.v) : 0]).concat([g.summons.map((m) => [m.side, Math.round(m.x), Math.max(0, Math.round(m.hp)), m.act ? 1 : 0])]));
       }
       return { log, trace, cd: g.p.map((p) => p.cd.map((c) => +c.toFixed(2))), atkCd: g.p.map((p) => +p.atkCd.toFixed(2)), maxHp: g.p.map((p) => p.maxHp), dr: g.p.map((p) => p.dr), gauge: g.p.map((p) => +p.gauge.toFixed(1)), sv: g.p.map((p) => +p.sv.toFixed(1)), state: g.p.map((p) => p.state), face: g.p.map((p) => p.face), hp: g.p.map((p) => Math.round(p.hp)), x: g.p.map((p) => Math.round(p.x)), phase: g.phase, wins: g.wins.slice(), stats: Object.assign({}, g.stats), t: +g.t.toFixed(2) };
     },

@@ -482,7 +482,18 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   check(bub.trace.some((t) => t[1][3] === "bubble" && t[1][1] > 50), "泡泡應該讓對手浮起來");
   const copy = await R({ c0: "u1004e-sally", c1: "x001-cube", steps: 400, script: [...W, sk(0, 50)] });
   check(copy.log.hits >= 2, `複製體應該也會攻擊：命中 ${copy.log.hits}`);
-  return "13＋5＋10 種效果都有作用";
+  // v5.3.1：召喚物（會攻擊、會被打倒、擋投射物、被「清除召喚物」封鎖）、變形外觀
+  const sum = await R({ c0: "u1009e-sally", c1: "x001-cube", steps: 500, script: [sk(0, 5), { side: 1, from: 60, to: 500, atk: 30 }] });
+  check(sum.log.summons >= 1 && sum.trace.some((t) => t[2].length) && !sum.trace[499][2].length, `召喚物應該出現、會被打倒：最多 ${sum.log.summons} 隻`);
+  const atkBy = await R({ c0: "u1009e-sally", c1: "x001-cube", steps: 400, script: [sk(0, 5)] });
+  check(atkBy.log.hits >= 3, `召喚物應該會攻擊：命中 ${atkBy.log.hits}`);
+  const block = await R({ c0: "u1009e-sally", c1: "x002-orb", steps: 300, script: [sk(0, 5), sk(2, 90, 1), sk(2, 140, 1)] });
+  check(block.hp[0] === block.maxHp[0], "召喚物應該擋下對手的投射物");
+  const nos = await R({ c0: "u1009e-sally", c1: "u1016h-pegasus", steps: 300, script: [sk(1, 2, 1), sk(0, 10)] });
+  check(!nos.log.summons, "對手有「清除召喚物」時應該叫不出召喚物");
+  const polyForm = await p.evaluate(() => window.__rk.fightPolyForm("u376u-cony"));
+  check(polyForm === "u376sk-cony", `造物神兔兔的變形外觀應該是 u376sk-cony：${polyForm}`);
+  return "13＋5＋10 種效果、召喚、變形外觀都有作用";
 });
 
 await test("官方角色對戰可執行", async (open) => {

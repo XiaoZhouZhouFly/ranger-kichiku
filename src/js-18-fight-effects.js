@@ -149,7 +149,14 @@
     } },
     // 複製體：在自己前面叫出對手的複製體（見 fightCloneSpawn）；對手有「防複製」就失敗
     copy: { apply(g, src) { fightCloneSpawn(g, src); } },
-    noCopy: { apply(g, src, t, e, P) { if (fxSet(t, "noCopy", fxDur(e, P), 1)) fxText(g, t, "防複製", "#7dff9a"); } },
+    // 清除召喚物：打掉對手場上的召喚物，持續期間對手叫不出召喚物、也叫不出我的複製體
+    noCopy: { apply(g, src, t, e, P) {
+      let n = 0; for (const m of g.summons) if (m.side !== t.side && m.hp > 0) { m.hp = 0; n++; }
+      if (n) fxText(g, t, "清除召喚物", "#7dff9a");
+      if (fxSet(t, "noCopy", fxDur(e, P), 1)) fxText(g, t, "防召喚", "#7dff9a");
+    } },
+    // 召喚（v5.3.1）：叫出這個技能的召喚物（見 fightSummonSpawn）
+    summon: { apply(g, src, t, e, P, hit) { fightSummonSpawn(g, src, hit.s, fxDur(e, P)); } },
   });
   // 會打斷動作的控制類（突進途中不生效）
   const FX_CONTROL = new Set(["stun", "down", "bubble", "fear", "poly", "pull", "swap"]);
@@ -169,7 +176,7 @@
     atkDef: ["普防", "#7dd3ff"], atkVul: ["普弱", "#ff8a3d"], atkBoxUp: ["普框↑", "#ffd84a"], atkBoxDown: ["普框↓", "#9fd0ff"], skBoxUp: ["技框↑", "#ffd84a"],
     skBoxDown: ["技框↓", "#9fd0ff"], cdFast: ["冷卻快", "#7dd3ff"], cdSlow: ["冷卻慢", "#ff8a3d"], atkSpdUp: ["攻速↑", "#ffb14a"], atkSpdDown: ["攻速↓", "#9fd0ff"],
     vamp: ["吸血", "#ff6b8a"], mirror: ["反射", "#7dd3ff"], noBuff: ["封增", "#ff8a3d"], noRegen: ["封回", "#ff8a3d"], noDebuff: ["淨", "#7dff9a"], noDot: ["抗毒", "#7dff9a"],
-    charm: ["魅惑", "#ff6bd5"], fear: ["恐懼", "#b46bff"], poly: ["變形", "#ffd84a"], big: ["變大", "#ffd84a"], noCopy: ["防複製", "#7dff9a"] };
+    charm: ["魅惑", "#ff6bd5"], fear: ["恐懼", "#b46bff"], poly: ["變形", "#ffd84a"], big: ["變大", "#ffd84a"], noCopy: ["防召喚", "#7dff9a"] };
 
   // 狀態換算成倍率（加總：增益 + 、減益 −）
   const fxV = (p, name) => (p.st[name] ? p.st[name].v : 0);

@@ -151,10 +151,10 @@
       else if (k.damaging || toEnemy) {
         const dd = normDelivery(k.cfg, rg, false); k.form = dd.form; k.src = dd.src;
         if (dd.note) issue(dd.unsupported ? "unsupported" : "guess", where, dd.note);
-      } else if (summon) k.form = "target";
+      } else if (summon && !FIGHT_FX.SUMMON) k.form = "target"; // 召喚還沒支援時的代替
       else if (toSelf) k.form = "self";
       else { k.form = "buff"; issue("unsupported", where, "效果全都還沒支援（待做），暫時用「加攻＋回血」代替"); }
-      if (summon && !p) issue("unsupported", where, k.damaging ? "召喚未支援（待做），目前只有傷害部分" : "召喚未支援（待做），以指定位置打擊代替");
+      if (summon && !p && !FIGHT_FX.SUMMON) issue("unsupported", where, k.damaging ? "召喚未支援（待做），目前只有傷害部分" : "召喚未支援（待做），以指定位置打擊代替");
       if (!p && k.form === "target" && k.effectRange.st === "missing") issue("guess", where, "沒有作用範圍，用預設寬度");
       // 還沒支援的效果（傷害、召喚以外；召喚上面已經標過）
       const todo = k.fx.filter((e) => e.sup !== "ok" && e.sup !== "none" && !FX_SUMMON.has(e.c)); // 「格鬥場不用」的效果不算問題
