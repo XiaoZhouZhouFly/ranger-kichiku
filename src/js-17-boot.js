@@ -150,6 +150,7 @@
     document.querySelectorAll("p.hint:not(.warn)").forEach((p) => {
       const txt = p.textContent.trim();
       if (p.closest(".modal")) return; // 彈出視窗裡的說明直接顯示
+      if (p.closest("details")) return; // 本來就在折疊區裡（例如格鬥場的分層操作說明），不再折一次
       if (p.id !== "dModeHint" && txt.length <= 60) return;
       const d = document.createElement("details"); d.className = "hint-fold";
       const sm = document.createElement("summary");

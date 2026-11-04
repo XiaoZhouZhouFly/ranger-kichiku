@@ -457,14 +457,18 @@ await test("格鬥場：線上對戰準備（同步檢查代碼穩定、延遲�
   return `同步代碼 ${a.code}，延遲 ${t[1].seq}`;
 });
 
-await test("格鬥場：線上對戰（假資料庫、兩個分頁：開房、加入、直連、準備、同步、鏡像、再一場、斷線）", async (open) => {
+await test("格鬥場：線上對戰（假資料庫、兩個分頁：開房、清過期房間、加入、直連、準備、同步、鏡像、再一場、斷線）", async (open) => {
   const A = await open({ width: 390, height: 844 });
   const ready = (q) => q.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
   await A.goto(BASE + "?app=fight&fakefb=1"); await ready(A);
   await A.click("[data-fmode='online']");
   await A.evaluate(() => { const r = document.getElementById("fRounds"), s = document.getElementById("fSecs"); r.value = "1"; r.dispatchEvent(new Event("change")); s.value = "20"; s.dispatchEvent(new Event("change")); });
+  // v6.2：先放一間「3 小時前」的過期房間，開房時應該被清掉
+  await A.evaluate(() => { localStorage.setItem("rk_fakefb:rooms/OLD1/host", JSON.stringify("x")); localStorage.setItem("rk_fakefb:rooms/OLD1/created", JSON.stringify(Date.now() - 3 * 3600 * 1000)); });
   await A.click("#fOnCreate"); await A.waitForFunction(() => window.__rk.fightOnline().code, null, { timeout: 20000 });
   const code = await A.evaluate(() => window.__rk.fightOnline().code);
+  await A.waitForFunction(() => !localStorage.getItem("rk_fakefb:rooms/OLD1/created"), null, { timeout: 5000 }).catch(() => {});
+  check(!(await A.evaluate(() => localStorage.getItem("rk_fakefb:rooms/OLD1/created"))), "開房時應該清掉過期房間");
   const B = await A.context().newPage(); await B.goto(BASE + `?app=fight&fakefb=1&room=${code}`); await ready(B);
   for (const q of [A, B]) await q.waitForSelector("#fOnReady:not([hidden])", { timeout: 30000 });
   const link = await A.evaluate(() => window.__rk.fightOnline().link);

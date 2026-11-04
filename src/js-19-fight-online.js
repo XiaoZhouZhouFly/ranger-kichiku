@@ -17,6 +17,8 @@
   const FB_SDK = "https://cdn.jsdelivr.net/npm/firebase@10.12.2/";
   const ONLINE = {
     DELAY: 4,          // 直連的輸入延遲（格）
+    ROOM_TTL: 2 * 3600 * 1000, // 房間建立超過這麼久算過期（房主斷線時 Firebase 沒自動刪掉的會留下來）
+    CLEAN_MAX: 20,     // 每次開房最多順便刪幾間過期房間（安全規則也限制一次最多查 20 間）
     RELAY_DELAY: 6,    // 轉送模式的輸入延遲（格；繞伺服器比較慢）
     P2P_TIMEOUT: 8000, // 幾毫秒內直連沒通就改轉送
     ICE: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
@@ -34,7 +36,8 @@
 
   /* 資料庫的小介面（真的 Firebase 跟假的都一樣）：
      set(路徑, 值)、update(路徑, 物件)、push(路徑, 值)、get(路徑)、remove(路徑)、
-     watch(路徑, 回呼(值)) → 取消函式、added(路徑, 回呼(值)) → 取消函式（新增的子項目）、dropOnLeave(路徑)（斷線時自動刪）、uid */
+     watch(路徑, 回呼(值)) → 取消函式、added(路徑, 回呼(值)) → 取消函式（新增的子項目）、dropOnLeave(路徑)（斷線時自動刪）、uid、
+     oldRooms(時間, 幾間) → 建立時間早於「時間」的房號清單（過期房間清理用） */
   let onlineDbPromise = null;
   function onlineDb() {
     if (!onlineDbPromise) onlineDbPromise = (qs.has("fakefb") ? fakeDb() : firebaseDb()).catch((e) => { onlineDbPromise = null; throw e; });
@@ -52,6 +55,7 @@
       watch: (p, cb) => { const f = (s) => cb(s.val()); R(p).on("value", f); return () => R(p).off("value", f); },
       added: (p, cb) => { const f = (s) => cb(s.val()); R(p).on("child_added", f); return () => R(p).off("child_added", f); },
       dropOnLeave: (p) => R(p).onDisconnect().remove(),
+      oldRooms: async (before, n) => Object.keys((await db.ref("rooms").orderByChild("created").endAt(before).limitToFirst(n).get()).val() || {}),
     };
   }
   /* 假資料庫（只給本機測試用）：每個路徑各存成一筆 localStorage（rk_fakefb:路徑），
@@ -86,6 +90,7 @@
       watch: (p, cb) => { let last; const s = (t) => { const v = JSON.stringify(at(t, p) ?? null); if (v !== last) { last = v; cb(JSON.parse(v)); } }; subs.add(s); s(load()); return () => subs.delete(s); },
       added: (p, cb) => { const seen = new Set(); const s = (t) => { const o = at(t, p) || {}; for (const k of Object.keys(o).sort()) if (!seen.has(k)) { seen.add(k); cb(o[k]); } }; subs.add(s); s(load()); return () => subs.delete(s); },
       dropOnLeave: (p) => window.addEventListener("pagehide", () => { drop(p); }),
+      oldRooms: async (before, n) => Object.entries(load().rooms || {}).filter(([, r]) => r && r.created <= before).sort((a, b) => a[1].created - b[1].created).slice(0, n).map(([k]) => k),
     };
   }
 
@@ -107,6 +112,7 @@
     await OL.db.set(olRoot(), { host: OL.db.uid, created: Date.now(), cfg: Object.assign({ seed: newSeed(1e9), v: APP_VERSION }, cfg) });
     OL.db.dropOnLeave(olRoot()); // 房主離開＝房間消失
     olLog(`建立房間 ${OL.code}`); olWatch(); olSet("等待對手加入…");
+    olCleanup();
   }
   // 加入房間（自己＝右方）
   async function olJoin(code) {
@@ -138,6 +144,15 @@
     for (const f of OL.unsub) f(); OL.unsub = [];
     if (OL.db && OL.code) { if (OL.side === 0) OL.db.remove(olRoot()); else { OL.db.remove(`${olRoot()}/guest`); OL.db.remove(`${olRoot()}/p1`); } }
     Object.assign(OL, { code: null, room: null, started: false, status: "" });
+  }
+  /* 過期房間清理：開房時順便刪掉建立超過 ROOM_TTL 的房間（最多 CLEAN_MAX 間）。
+     平常房主離開時 Firebase 會自動刪房間；手機斷電、閃退時偶爾沒刪到，就靠這裡清。失敗不影響開房。 */
+  async function olCleanup() {
+    try {
+      const old = (await OL.db.oldRooms(Date.now() - ONLINE.ROOM_TTL, ONLINE.CLEAN_MAX)).filter((c) => c !== OL.code);
+      for (const c of old) await OL.db.remove(`rooms/${c}`);
+      if (old.length) olLog(`清掉 ${old.length} 間過期房間`);
+    } catch (e) { olLog("過期房間清理失敗：" + (e.message || e)); }
   }
   // 自己的選角：角色 id、雙方角色數值雜湊（兩邊算出來要一樣）、準備好了沒
   const olPick = (v) => OL.db && OL.code && OL.db.update(`${olRoot()}/p${OL.side}`, v);
@@ -215,6 +230,9 @@
     $("fOnShare").hidden = !(inRoom && OL.side === 0 && OL.room && !OL.room.guest);
     if (inRoom) $("fOnRoom").textContent = `房號 ${OL.code}`;
     const other = olOther(), mine = olMine(), connected = !!(OL.link && OL.link.ready);
+    // 步驟：①開房／加入（連上對手才算完成）②選角色（雙方都選了）③準備開打
+    const step = !inRoom || !connected ? 0 : !(other && other.id && mine && mine.id) ? 1 : 2;
+    document.querySelectorAll("#fOnSteps li").forEach((li, k) => { li.classList.toggle("done", k < step); li.classList.toggle("now", k === step); });
     $("fOnReady").hidden = !(inRoom && connected && other && other.id);
     $("fOnReady").textContent = mine && mine.ready ? "取消準備" : "準備";
     const hashBad = mine && other && mine.h && other.h && mine.h !== other.h;

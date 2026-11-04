@@ -108,6 +108,7 @@
   function fightPanel(i) {
     const r = S.index.find((x) => x.id === fightCardId(i));
     $(`fname${i}`).textContent = r ? r.name : "未選擇";
+    document.querySelectorAll(".fight-pick .fighter")[i].classList.toggle("picked", !!r); // 選好了：外框亮起來
     const comp = $(`fcomp${i}`), c = r ? fightCompatOf(r) : null;
     comp.className = "compat" + (c ? " " + c.lvl : ""); comp.textContent = c ? COMPAT_LABEL[c.lvl] : ""; comp.title = c ? c.why : "";
     const th = $(`fthumb${i}`); th.textContent = "";
@@ -179,7 +180,7 @@
     $("fCpuBox").hidden = st.mode !== "cpu"; $("fDummyBox").hidden = st.mode !== "dummy";
     const online = st.mode === "online";
     $("fRoundBox").hidden = st.mode === "dummy" || (online && OL.code && OL.side === 1);
-    $("fOnlineBox").hidden = !online; $("fStart").hidden = online; $("fNetBox").hidden = online;
+    $("fOnlineBox").hidden = !online; document.querySelector(".fight-start-bar").hidden = online; $("fNetBox").hidden = online;
     document.querySelector(".fighter.is-b .f-search").hidden = online; $("fSwap").hidden = online; $("fRandAll").hidden = online;
     if (online) olUi(); else if (OL.code) olLeave();
     for (const i of [0, 1]) { fightPanel(i); }

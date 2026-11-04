@@ -372,6 +372,27 @@ body.fight-on { overflow: hidden; }
 .f-detail > div { white-space: pre-line; font-size: 12px; margin-top: 4px; }
 .online-qr { width: 160px; max-width: 60%; background: #fff; padding: 6px; border-radius: 10px; margin-top: 6px; }
 .online-qr svg { display: block; width: 100%; height: auto; }
+
+/* 格鬥場設定頁（v6.2）：VS、大頭像、選好的外框、開始列、線上步驟、分層說明 */
+.fight-pick .f-head { grid-template-columns: auto 72px minmax(0, 1fr); }
+.fight-pick .f-thumb { width: 72px; height: 72px; border-radius: 12px; }
+.fight-pick .f-name { font-size: 17px; line-height: 1.3; }
+.fight-pick .fighter.picked { box-shadow: 0 0 0 3px var(--accent), 3px 3px 0 var(--shadow); }
+.fight-pick .vs { font-size: 34px; font-weight: 900; font-style: italic; letter-spacing: 1px; color: var(--hot); -webkit-text-stroke: 1px var(--ink); line-height: 1; }
+@media (max-width: 520px) { .fight-pick .mid-tools { align-items: center; gap: 10px; } .fight-pick .vs { font-size: 28px; } }
+.fight-start-bar { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 10px 0; background: var(--panel); border-top: 2px solid var(--line); margin-top: 6px; }
+.fight-start-bar[hidden] { display: none; }
+.btn.big { font-size: 20px; padding: 12px 28px; border-radius: 14px; flex: 0 0 auto; }
+@media (max-width: 520px) { .fight-start-bar .btn.big { flex: 1 1 auto; } }
+#fAdvBox > *:not(summary) { margin-top: 8px; }
+.ol-steps { display: flex; gap: 6px; list-style: none; padding: 0; margin: 4px 0 8px; counter-reset: st; flex-wrap: wrap; }
+.ol-steps li { counter-increment: st; font-size: 13px; font-weight: 800; padding: 4px 10px 4px 6px; border-radius: 999px; background: var(--stage); color: var(--muted); }
+.ol-steps li::before { content: counter(st); display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 6px; border-radius: 50%; background: var(--line); color: var(--panel); font-size: 11px; }
+.ol-steps li.done { color: var(--ink); }
+.ol-steps li.done::before { content: "✓"; background: #2fa565; }
+.ol-steps li.now { background: var(--accent); color: var(--accent-ink); }
+.ol-steps li.now::before { background: var(--accent-ink); color: var(--accent); }
+.fight-help .more { margin-top: 4px; }
 </style>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}</style>
 </head>
@@ -638,6 +659,7 @@ body.fight-on { overflow: hidden; }
       </div>
       <div class="group" id="fOnlineBox" hidden>
         <span class="lbl">線上對戰（測試中）</span>
+        <ol class="ol-steps" id="fOnSteps"><li>開房／加入</li><li>選角色</li><li>準備開打</li></ol>
         <div class="row">
           <button class="btn small primary" id="fOnCreate" type="button">建立房間</button>
           <input id="fOnCode" type="text" maxlength="4" placeholder="房號（4 碼）" autocomplete="off" style="max-width:9em;text-transform:uppercase">
@@ -669,6 +691,7 @@ body.fight-on { overflow: hidden; }
             <p class="hint" id="fInfo0"></p>
           </div>
           <div class="mid-tools">
+            <div class="vs" aria-hidden="true">VS</div>
             <button class="btn small swap" id="fSwap" type="button" aria-label="左右交換">⇄</button>
             <button class="btn small rand-btn" id="fRandAll" type="button" title="兩邊都隨機">🎲 全部隨機</button>
           </div>
@@ -709,32 +732,49 @@ body.fight-on { overflow: hidden; }
           <button class="chip" data-ftele="sync" aria-pressed="false">跟前搖同步</button>
         </div>
       </div>
-      <label class="check"><input type="checkbox" id="fShowBox" checked> 顯示碰撞箱（黃色虛線＝受傷判定框：寬 60、一個身高，跟圖片大小無關；黃圈＝投射物的命中範圍；短線＝面朝方向；頭上＝目前狀態）</label>
-      <label class="check"><input type="checkbox" id="fShowRange" checked> 顯示判定範圍（綠色＝這招最遠打得到的範圍，白色虛線＝目前拖曳的位置）</label>
-      <details class="more" id="fNetBox">
-        <summary>網路模擬（v6 線上對戰測試）</summary>
-        <p class="hint">線上對戰會把每個按鍵延後幾格才生效（兩邊同時拿到才一起動）。這裡可以先在單機上試手感：右方（電腦或第 2 位玩家）當成「網路另一頭」，照下面的網路延遲晚一點才收到；延遲格數不夠蓋過網路延遲時畫面會停一下等待（右上角會顯示卡頓次數）。</p>
-        <div class="row">
-          <label class="field">輸入延遲<select id="fNetDelay"></select></label>
-          <label class="field">假網路延遲（單程）<select id="fNetLat"></select></label>
-          <label class="field">抖動<select id="fNetJit"></select></label>
+      <div class="fight-start-bar"><button class="btn primary big" id="fStart" type="button">開始對戰</button><span class="hint" id="fStartMsg"></span></div>
+      <details class="more" id="fAdvBox">
+        <summary>進階（測試工具：碰撞箱、判定範圍、網路模擬、同步檢查）</summary>
+        <label class="check"><input type="checkbox" id="fShowBox" checked> 顯示碰撞箱（黃色虛線＝受傷判定框：寬 60、一個身高，跟圖片大小無關；黃圈＝投射物的命中範圍；短線＝面朝方向；頭上＝目前狀態）</label>
+        <label class="check"><input type="checkbox" id="fShowRange" checked> 顯示判定範圍（綠色＝這招最遠打得到的範圍，白色虛線＝目前拖曳的位置）</label>
+        <div id="fNetBox">
+          <span class="lbl">網路模擬（線上對戰測試）</span>
+          <p class="hint">線上對戰會把每個按鍵延後幾格才生效（兩邊同時拿到才一起動）。這裡可以先在單機上試手感：右方（電腦或第 2 位玩家）當成「網路另一頭」，照下面的網路延遲晚一點才收到；延遲格數不夠蓋過網路延遲時畫面會停一下等待（右上角會顯示卡頓次數）。</p>
+          <div class="row">
+            <label class="field">輸入延遲<select id="fNetDelay"></select></label>
+            <label class="field">假網路延遲（單程）<select id="fNetLat"></select></label>
+            <label class="field">抖動<select id="fNetJit"></select></label>
+          </div>
+          <p class="hint">同步檢查：用固定的種子跑 6 場電腦對打，算出一組代碼。在電腦、iPhone、Android 各按一次，代碼一樣＝這幾台裝置的計算結果完全相同，可以線上對戰。</p>
+          <div class="row"><button class="btn small" id="fSyncRun" type="button">同步檢查</button><span class="hint" id="fSyncOut"></span></div>
         </div>
-        <p class="hint">同步檢查：用固定的種子跑 6 場電腦對打，算出一組代碼。在電腦、iPhone、Android 各按一次，代碼一樣＝這幾台裝置的計算結果完全相同，可以線上對戰。</p>
-        <div class="row"><button class="btn small" id="fSyncRun" type="button">同步檢查</button><span class="hint" id="fSyncOut"></span></div>
       </details>
-      <div class="row"><button class="btn primary" id="fStart" type="button">開始</button><span class="hint" id="fStartMsg"></span></div>
-      <details class="more">
-        <summary>操作說明</summary>
-        <p class="hint">左手：左下一整條移動區，按左半邊往左、右半邊往右，手指可以滑來滑去換方向。右手：普攻、兩個技能，加上右上角的「跳」和右下角的「防」。防禦條在「防」左邊：按住每秒扣 20，擋下攻擊不扣血但扣防禦條，扣完＝破防（1 秒不能動）；放開 0.5 秒後慢慢回。<br>
-        右下：紅色劍＝普攻；紫色＝技能（原作的技能圖標，上緣小字是種類）；盾牌＝防、箭頭＝跳。
-        定點技能（按鈕寫「定點」，矩形預告）、拋物線（含「普攻⌒」）：按住拖曳，從按下當下對手的距離開始，左右拖曳調整遠近，放開出招。「普攻→」是瞬間直線：按下就朝面向出手，前搖時有虛線預告，不會飛行。
-        直線（技能與「普攻↔」）：只決定方向，點一下就朝面向射出、一直飛到場地外或打中；按住會顯示路徑，可以用 ◀ ▶ 轉向，放開才射。
-        按住任何招式時拖到外面的虛線圈再放開＝取消；按住時 ◀ ▶ 可以邊走邊瞄準。
-        定點技能會先預告再打下來（預告時間跟出招前搖一樣）；拋物線落點會先標出來。近戰普攻與輔助技能按下就放。<br>
-        技能前搖有輕霸體：被普通攻擊打中照樣扣血，但招式不會中斷（頭上跳「霸體」），硬直值累積加倍；被暈眩、擊倒、泡泡、變形等控制效果打中，或硬直值累積滿了，招式才會被打斷（跳「中斷」，定點技能的預告會消失）。給自己的效果（加攻、護盾、回血…）在前搖結束時才生效。<br>
-        被打中會累積硬直值（血條下的黃條），滿了就倒地，起身後 1 秒無敵（角色閃爍）；同一串連續被打，傷害會遞減（100／90／80／70／60%）。
-        出招中、冷卻中提早按，0.15 秒內會自動接上。電腦上也可以用鍵盤：A D 移動、W 跳、S 防禦、J 普攻、K L 技能（兩人模式右方用方向鍵與 1 2 3）。</p>
-      </details>
+      <div class="fight-help">
+        <span class="lbl">操作說明</span>
+        <details class="more" open>
+          <summary>基本操作（移動、攻擊、防禦）</summary>
+          <p class="hint">左手：左下一整條移動區，按左半邊往左、右半邊往右，手指可以滑來滑去換方向。<br>
+          右手：紅色劍＝普攻；紫色＝技能（原作的技能圖標，上緣小字是種類）；箭頭＝跳；盾牌＝防。<br>
+          防禦條在「防」左邊：按住每秒扣 20，擋下攻擊不扣血但扣防禦條，扣完＝破防（1 秒不能動）；放開 0.5 秒後慢慢回。</p>
+        </details>
+        <details class="more">
+          <summary>招式操作（拖曳、瞄準、取消）</summary>
+          <p class="hint">定點技能（矩形預告）、拋物線（含「普攻⌒」）：按住拖曳，從按下當下對手的距離開始，左右拖曳調整遠近，放開出招。定點技能會先預告再打下來（預告時間跟出招前搖一樣）；拋物線落點會先標出來。<br>
+          「普攻→」是瞬間直線：按下就朝面向出手，前搖時有虛線預告，不會飛行。<br>
+          直線（技能與「普攻↔」）：只決定方向，點一下就朝面向射出、一直飛到場地外或打中；按住會顯示路徑，可以用 ◀ ▶ 轉向，放開才射。<br>
+          突進：按住後左右拖曳選落點（不管面向，左右都可以），衝的途中不會被打斷。<br>
+          按住任何招式時拖到外面的虛線圈再放開＝取消；按住時 ◀ ▶ 可以邊走邊瞄準。近戰普攻與自身技能按下就放。出招中、冷卻中提早按，0.15 秒內會自動接上。</p>
+        </details>
+        <details class="more">
+          <summary>戰鬥機制（硬直、霸體、破防）</summary>
+          <p class="hint">被打中會累積硬直值（血條下的黃條），滿了就倒地，起身後 1 秒無敵（角色閃爍）；同一串連續被打，傷害會遞減（100／90／80／70／60%）。<br>
+          技能前搖有輕霸體：被普通攻擊打中照樣扣血，但招式不會中斷（頭上跳「霸體」），硬直值累積加倍；被暈眩、擊倒、泡泡、變形等控制效果打中，或硬直值累積滿了，招式才會被打斷（跳「中斷」，定點技能的預告會消失）。給自己的效果（加攻、護盾、回血…）在前搖結束時才生效。</p>
+        </details>
+        <details class="more">
+          <summary>鍵盤（電腦版）</summary>
+          <p class="hint">A D 移動、W 跳、S 防禦、J 普攻、K L 技能。兩人同機時右方用方向鍵與 1 2 3。線上對戰一律用 A D W S J K L。</p>
+        </details>
+      </div>
     </div>
     <div class="fight-stage" id="fStage" hidden>
       <canvas id="fcv" width="720" height="1280" aria-label="格鬥場"></canvas>
@@ -933,7 +973,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v6.1";
+  const APP_VERSION = "v6.2";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -5224,6 +5264,7 @@ body.fight-on { overflow: hidden; }
     document.querySelectorAll("p.hint:not(.warn)").forEach((p) => {
       const txt = p.textContent.trim();
       if (p.closest(".modal")) return; // 彈出視窗裡的說明直接顯示
+      if (p.closest("details")) return; // 本來就在折疊區裡（例如格鬥場的分層操作說明），不再折一次
       if (p.id !== "dModeHint" && txt.length <= 60) return;
       const d = document.createElement("details"); d.className = "hint-fold";
       const sm = document.createElement("summary");
@@ -6886,6 +6927,8 @@ body.fight-on { overflow: hidden; }
   const FB_SDK = "https://cdn.jsdelivr.net/npm/firebase@10.12.2/";
   const ONLINE = {
     DELAY: 4,          // 直連的輸入延遲（格）
+    ROOM_TTL: 2 * 3600 * 1000, // 房間建立超過這麼久算過期（房主斷線時 Firebase 沒自動刪掉的會留下來）
+    CLEAN_MAX: 20,     // 每次開房最多順便刪幾間過期房間（安全規則也限制一次最多查 20 間）
     RELAY_DELAY: 6,    // 轉送模式的輸入延遲（格；繞伺服器比較慢）
     P2P_TIMEOUT: 8000, // 幾毫秒內直連沒通就改轉送
     ICE: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
@@ -6903,7 +6946,8 @@ body.fight-on { overflow: hidden; }
 
   /* 資料庫的小介面（真的 Firebase 跟假的都一樣）：
      set(路徑, 值)、update(路徑, 物件)、push(路徑, 值)、get(路徑)、remove(路徑)、
-     watch(路徑, 回呼(值)) → 取消函式、added(路徑, 回呼(值)) → 取消函式（新增的子項目）、dropOnLeave(路徑)（斷線時自動刪）、uid */
+     watch(路徑, 回呼(值)) → 取消函式、added(路徑, 回呼(值)) → 取消函式（新增的子項目）、dropOnLeave(路徑)（斷線時自動刪）、uid、
+     oldRooms(時間, 幾間) → 建立時間早於「時間」的房號清單（過期房間清理用） */
   let onlineDbPromise = null;
   function onlineDb() {
     if (!onlineDbPromise) onlineDbPromise = (qs.has("fakefb") ? fakeDb() : firebaseDb()).catch((e) => { onlineDbPromise = null; throw e; });
@@ -6921,6 +6965,7 @@ body.fight-on { overflow: hidden; }
       watch: (p, cb) => { const f = (s) => cb(s.val()); R(p).on("value", f); return () => R(p).off("value", f); },
       added: (p, cb) => { const f = (s) => cb(s.val()); R(p).on("child_added", f); return () => R(p).off("child_added", f); },
       dropOnLeave: (p) => R(p).onDisconnect().remove(),
+      oldRooms: async (before, n) => Object.keys((await db.ref("rooms").orderByChild("created").endAt(before).limitToFirst(n).get()).val() || {}),
     };
   }
   /* 假資料庫（只給本機測試用）：每個路徑各存成一筆 localStorage（rk_fakefb:路徑），
@@ -6955,6 +7000,7 @@ body.fight-on { overflow: hidden; }
       watch: (p, cb) => { let last; const s = (t) => { const v = JSON.stringify(at(t, p) ?? null); if (v !== last) { last = v; cb(JSON.parse(v)); } }; subs.add(s); s(load()); return () => subs.delete(s); },
       added: (p, cb) => { const seen = new Set(); const s = (t) => { const o = at(t, p) || {}; for (const k of Object.keys(o).sort()) if (!seen.has(k)) { seen.add(k); cb(o[k]); } }; subs.add(s); s(load()); return () => subs.delete(s); },
       dropOnLeave: (p) => window.addEventListener("pagehide", () => { drop(p); }),
+      oldRooms: async (before, n) => Object.entries(load().rooms || {}).filter(([, r]) => r && r.created <= before).sort((a, b) => a[1].created - b[1].created).slice(0, n).map(([k]) => k),
     };
   }
 
@@ -6976,6 +7022,7 @@ body.fight-on { overflow: hidden; }
     await OL.db.set(olRoot(), { host: OL.db.uid, created: Date.now(), cfg: Object.assign({ seed: newSeed(1e9), v: APP_VERSION }, cfg) });
     OL.db.dropOnLeave(olRoot()); // 房主離開＝房間消失
     olLog(`建立房間 ${OL.code}`); olWatch(); olSet("等待對手加入…");
+    olCleanup();
   }
   // 加入房間（自己＝右方）
   async function olJoin(code) {
@@ -7007,6 +7054,15 @@ body.fight-on { overflow: hidden; }
     for (const f of OL.unsub) f(); OL.unsub = [];
     if (OL.db && OL.code) { if (OL.side === 0) OL.db.remove(olRoot()); else { OL.db.remove(`${olRoot()}/guest`); OL.db.remove(`${olRoot()}/p1`); } }
     Object.assign(OL, { code: null, room: null, started: false, status: "" });
+  }
+  /* 過期房間清理：開房時順便刪掉建立超過 ROOM_TTL 的房間（最多 CLEAN_MAX 間）。
+     平常房主離開時 Firebase 會自動刪房間；手機斷電、閃退時偶爾沒刪到，就靠這裡清。失敗不影響開房。 */
+  async function olCleanup() {
+    try {
+      const old = (await OL.db.oldRooms(Date.now() - ONLINE.ROOM_TTL, ONLINE.CLEAN_MAX)).filter((c) => c !== OL.code);
+      for (const c of old) await OL.db.remove(`rooms/${c}`);
+      if (old.length) olLog(`清掉 ${old.length} 間過期房間`);
+    } catch (e) { olLog("過期房間清理失敗：" + (e.message || e)); }
   }
   // 自己的選角：角色 id、雙方角色數值雜湊（兩邊算出來要一樣）、準備好了沒
   const olPick = (v) => OL.db && OL.code && OL.db.update(`${olRoot()}/p${OL.side}`, v);
@@ -7084,6 +7140,9 @@ body.fight-on { overflow: hidden; }
     $("fOnShare").hidden = !(inRoom && OL.side === 0 && OL.room && !OL.room.guest);
     if (inRoom) $("fOnRoom").textContent = `房號 ${OL.code}`;
     const other = olOther(), mine = olMine(), connected = !!(OL.link && OL.link.ready);
+    // 步驟：①開房／加入（連上對手才算完成）②選角色（雙方都選了）③準備開打
+    const step = !inRoom || !connected ? 0 : !(other && other.id && mine && mine.id) ? 1 : 2;
+    document.querySelectorAll("#fOnSteps li").forEach((li, k) => { li.classList.toggle("done", k < step); li.classList.toggle("now", k === step); });
     $("fOnReady").hidden = !(inRoom && connected && other && other.id);
     $("fOnReady").textContent = mine && mine.ready ? "取消準備" : "準備";
     const hashBad = mine && other && mine.h && other.h && mine.h !== other.h;
@@ -7314,6 +7373,7 @@ body.fight-on { overflow: hidden; }
   function fightPanel(i) {
     const r = S.index.find((x) => x.id === fightCardId(i));
     $(`fname${i}`).textContent = r ? r.name : "未選擇";
+    document.querySelectorAll(".fight-pick .fighter")[i].classList.toggle("picked", !!r); // 選好了：外框亮起來
     const comp = $(`fcomp${i}`), c = r ? fightCompatOf(r) : null;
     comp.className = "compat" + (c ? " " + c.lvl : ""); comp.textContent = c ? COMPAT_LABEL[c.lvl] : ""; comp.title = c ? c.why : "";
     const th = $(`fthumb${i}`); th.textContent = "";
@@ -7385,7 +7445,7 @@ body.fight-on { overflow: hidden; }
     $("fCpuBox").hidden = st.mode !== "cpu"; $("fDummyBox").hidden = st.mode !== "dummy";
     const online = st.mode === "online";
     $("fRoundBox").hidden = st.mode === "dummy" || (online && OL.code && OL.side === 1);
-    $("fOnlineBox").hidden = !online; $("fStart").hidden = online; $("fNetBox").hidden = online;
+    $("fOnlineBox").hidden = !online; document.querySelector(".fight-start-bar").hidden = online; $("fNetBox").hidden = online;
     document.querySelector(".fighter.is-b .f-search").hidden = online; $("fSwap").hidden = online; $("fRandAll").hidden = online;
     if (online) olUi(); else if (OL.code) olLeave();
     for (const i of [0, 1]) { fightPanel(i); }
