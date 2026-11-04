@@ -339,6 +339,7 @@ footer a { color: inherit; }
 .fight-pick .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .fight-pick .row input, .fight-pick .row select { padding: 8px 10px; border: 2px solid var(--ink); border-radius: 10px; font: inherit; background: var(--panel, #fff); }
 .fight-pick select, .fight-pick input { width: 100%; }
+#fInfo0, #fInfo1 { white-space: pre-line; }
 .fight-pick .row input { flex: 1 1 160px; width: auto; }
 .fight-stage { position: fixed; inset: 0; z-index: 60; background: #0b0d18; display: grid; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
 .fight-stage[hidden] { display: none; }
@@ -634,7 +635,7 @@ body.fight-on { overflow: hidden; }
           <button class="chip" data-fhold="turn" aria-pressed="true">只轉身</button>
           <button class="chip" data-fhold="move" aria-pressed="false">可移動</button>
         </div>
-        <span class="lbl">矩形預告時間</span>
+        <span class="lbl">定點技能預告時間</span>
         <div class="chips" id="fTeleMode">
           <button class="chip" data-ftele="dist" aria-pressed="true">依距離（0.3～0.8 秒）</button>
           <button class="chip" data-ftele="sync" aria-pressed="false">跟前搖同步</button>
@@ -647,10 +648,10 @@ body.fight-on { overflow: hidden; }
         <summary>操作說明</summary>
         <p class="hint">左下方向鍵：◀ ▶ 移動、跳、防。防禦條在「防」下面：按住每秒扣 20，擋下攻擊不扣血但扣防禦條，扣完＝破防（1 秒不能動）；放開 0.5 秒後慢慢回。<br>
         右下：紅色＝普攻；紫色＝技能，按鈕上寫著種類。
-        矩形、拋物線：按住拖曳，從按下當下對手的距離開始，左右拖曳調整遠近，放開出招。
+        定點技能（按鈕寫「定點」，矩形預告）、拋物線（含「普攻⌒」）：按住拖曳，從按下當下對手的距離開始，左右拖曳調整遠近，放開出招。「普攻→」是瞬間直線：按下就朝面向出手，前搖時有虛線預告，不會飛行。
         直線（技能與「普攻↔」）：只決定方向，點一下就朝面向射出、一直飛到場地外或打中；按住會顯示路徑，可以用 ◀ ▶ 轉向，放開才射。
         按住任何招式時拖到外面的虛線圈再放開＝取消；按住時 ◀ ▶ 預設只轉身（可在上面切換成可移動）。
-        矩形會先預告再打下來（預告秒數顯示在預覽旁邊）；拋物線落點會先標出來。近戰普攻與輔助技能按下就放。<br>
+        定點技能會先預告再打下來（預告秒數顯示在預覽旁邊）；拋物線落點會先標出來。近戰普攻與輔助技能按下就放。<br>
         被打中會累積硬直值（血條下的黃條），滿了就倒地，起身後 1 秒無敵（角色閃爍）；同一串連續被打，傷害會遞減（100／90／80／70／60%）。
         出招中、冷卻中提早按，0.15 秒內會自動接上。電腦上也可以用鍵盤：A D 移動、W 跳、S 防禦、J 普攻、K L 技能（兩人模式右方用方向鍵與 1 2 3）。</p>
       </details>
@@ -852,7 +853,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v5.0";
+  const APP_VERSION = "v5.1";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -879,7 +880,7 @@ body.fight-on { overflow: hidden; }
   const ctx = cv.getContext("2d");
 
   const S = {
-    index: [], skills: {}, proj: {}, stats: {}, projOn: true, projPlan: null, clipN: 0, bul: {},
+    index: [], skills: {}, proj: {}, stats: {}, fx: {}, projOn: true, projPlan: null, clipN: 0, bul: {},
     unit: null, meta: null, partKey: "body", part: null, animName: null,
     atlas: null, sprites: new Map(), hueCache: new Map(),
     bounds: null, centers: [],
@@ -967,6 +968,15 @@ body.fight-on { overflow: hidden; }
       fetchData(CUSTOM + "stats.json", "json").catch(() => ({})),
     ]).then(([x, c]) => { S.stats = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); });
     return statsPromise;
+  }
+  /* 技能的完整效果清單（只有格鬥場用；單人、雙人不讀）。沒有這個檔（例如還沒同步過）時當作空的，格鬥場改看 stats.json 的傷害欄位 */
+  let fxPromise = null;
+  function ensureSkillFx() {
+    if (!fxPromise) fxPromise = Promise.all([
+      fetchData(LOCAL + "skill_fx.json", "json").catch(() => ({})),
+      fetchData(CUSTOM + "skill_fx.json", "json").catch(() => ({})),
+    ]).then(([x, c]) => { S.fx = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); });
+    return fxPromise;
   }
   /* 角色的動畫資料（單人、雙人共用）：官方角色是壓縮檔 .json.gz（找不到才讀 .json），自製角色是 .json */
   async function loadUnitMeta(id) {
@@ -5009,7 +5019,13 @@ body.fight-on { overflow: hidden; }
        spec = { c0, c1, mode, rounds, secs, seed, steps, holdMove, teleMode, ai: [難度, 難度],
                 script: [{ side, from, to, mx, guard, atk: 每幾步按一次, jump, sk: [技能序（2＝投射物普攻）, 按下步, 放開步, 往前拖] }] }
        回傳事件次數、最後狀態與 trace（每一步雙方的 x、y、hp、state）；同樣的 spec 一定得到同樣的結果。 */
+    // 格鬥場：一隻角色的標準化結果（相容性）、全部角色的相容性報告
+    fightNorm: async (id) => { await Promise.all([ensureStats(), ensureSkillFx()]); const f = await fightLoad(id), fs = fightStats(f); return { N: fs.N, atk: fs.atk.kind, sk: fs.sk.map((k) => k && k.kind), summary: fightSummary(fs) }; },
+    fightCompat: () => normAll(),
+    // 標準化的小零件（健檢用；都不改任何狀態）
+    fightNormUnit: (r, anims) => normUnit(r, new Set(anims)), fightDelivery: (cfg, rg, isAtk) => normDelivery(cfg, rg, isAtk), fightField: (obj, key, def) => normField(obj, key, def),
     fightRun: async (spec) => {
+      await ensureSkillFx();
       const f = await Promise.all([fightLoad(spec.c0), fightLoad(spec.c1)]), fs = f.map(fightStats);
       const g = fightNew({ f, fs, rounds: spec.rounds || 1, secs: spec.secs ?? 0, mode: spec.mode || "dummy", seed: spec.seed || 1,
         holdMove: !!spec.holdMove, teleMode: spec.teleMode || "dist" });
@@ -5030,7 +5046,7 @@ body.fight-on { overflow: hidden; }
         });
         const invBefore = g.p.map((p) => p.inv > 0);
         fightStep(g, inputs);
-        for (const e of g.events) { if (e.type === "hit") log.hits++; if (e.type === "guard") log.guards++; if (e.type === "break") log.breaks++; if (e.type === "ko") log.ko++; if (e.type === "down") log.downs++; if (e.type === "hit") { log.dmg.push(e.dmg); log.scale.push(e.scale); } }
+        for (const e of g.events) { if (e.type === "hit") log.hits++; if (e.type === "guard") log.guards++; if (e.type === "break") log.breaks++; if (e.type === "ko") log.ko++; if (e.type === "down") log.downs++; if (e.type === "unsupported") log.unsupported = (log.unsupported || 0) + 1; if (e.type === "hit") { log.dmg.push(e.dmg); log.scale.push(e.scale); } }
         g.p.forEach((p, i) => { if (p.inv > 0 && !invBefore[i]) log.inv++; });
         if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face]));
       }
@@ -5154,7 +5170,16 @@ body.fight-on { overflow: hidden; }
     AIM_MIN: 60,                                      // 矩形、拋物線的最近距離（從身體前緣算）
     TELE_MIN: 0.3, TELE_MAX: 0.8, TELE_SYNC_MIN: 0.2, // 矩形預告：依距離＝近～遠；跟前搖同步時最短 0.2 秒
     AIR_SAFE: 40,                                     // 離地超過這個高度，矩形與拋物線爆炸就打不到
-    LOB_TIME: 0.8, LOB_R: 60,                         // 拋物線飛行時間、落地爆炸半徑
+    LOB_TIME: 0.8, LOB_R: 60,                         // 拋物線基準飛行時間（資料速度 LOB_V0 時）、落地爆炸半徑
+    // 原始資料 → 場地（射程、速度是遊戲單位；換算係數集中在這裡）
+    MELEE_RG: 200,                                    // 普攻沒有飛行過程時：射程小於這個＝近戰，以上＝瞬間直線
+    RG_REACH: 0.6, REACH_MIN: 70, REACH_MAX: 150,     // 近戰距離＝射程 × 0.6（70～150）
+    DLINE_MIN: 150, DLINE_MAX: 560,                   // 瞬間直線距離＝射程 × 0.6（150～560，場地開場相距 440）
+    RG_CAST: 1.4, CAST_MIN: 220, CAST_MAX: 700,       // 指定位置打擊的最遠施放距離＝射程 × 1.4
+    RG_LOB: 1.2, LOB_MIN: 260, LOB_MAX: 620,          // 拋物線最遠距離＝射程 × 1.2
+    AR_WIDTH: 0.5, WIDTH_MIN: 90, WIDTH_MAX: 260, WIDTH_DEF: 160, // 指定位置打擊的寬度＝作用範圍 × 0.5
+    SPEED_K: 20, SPEED_MIN: 300, SPEED_MAX: 1000, SPEED_DEF: 600, // 直線投射物速度＝資料速度 × 20（資料中位數 30 → 600）
+    LOB_V0: 20, LOB_TMIN: 0.55, LOB_TMAX: 1.1,        // 拋物線飛行時間＝0.8 × 20 ÷ 資料速度（資料中位數 20 → 0.8 秒）
     // 被打中
     STUN_ATK: 0.3, STUN_SK: 0.5,                      // 硬直秒數（普攻／技能）
     PUSH_ATK: 160, PUSH_SK: 420, PUSH_DOWN: 820,      // 往後推的初速（普攻／技能／倒地）
@@ -5177,8 +5202,9 @@ body.fight-on { overflow: hidden; }
 
   /* 招式的操作方式：dist＝按住拖曳決定位置（矩形、拋物線），dir＝只決定方向、點一下就放（直線、普攻投射物），
      tap＝按下就放（近戰普攻、輔助技能） */
-  const AIM_MODE = { rect: "dist", lob: "dist", line: "dir", shot: "dir", melee: "tap", buff: "tap" };
-  const SK_KIND_LABEL = { rect: "矩形瞄準", line: "直線投射物", lob: "拋物線", buff: "輔助（加攻＋回血）" };
+  const AIM_MODE = { rect: "dist", lob: "dist", line: "dir", shot: "dir", melee: "tap", dline: "tap", buff: "tap" };
+  const SK_KIND_LABEL = { rect: "指定位置打擊（矩形預告）", line: "直線投射物", lob: "拋物線", buff: "輔助（加攻＋回血）" };
+  const ATK_KIND_LABEL = { melee: "近戰", dline: "瞬間直線", shot: "直線投射物", lob: "拋物線" };
 
   /* 自製角色的手寫數值（官方角色由 fightStats 從資料換算）；沒寫的欄位用換算值 */
   const FIGHT_PRESET = {
@@ -5196,6 +5222,9 @@ body.fight-on { overflow: hidden; }
     ["u1164h-moon", "中距離＋直線投射物技能（冰球）"],
     ["u1015h-sally", "拋物線＋直線投射物技能"],
     ["u013e-moon", "近戰＋輔助技能"],
+    ["u1028e-sally", "普攻瞬間直線（射程 800）"],
+    ["u014e-cony", "普攻拋物線＋技能有減速效果"],
+    ["u021u-brown", "技能有暈眩效果（未支援的效果示範）"],
   ];
 
   /* 體力、減傷依「在全部角色裡的排名」換算（折衷：有差異但不極端）。排名表第一次用到時算一次。 */
@@ -5215,40 +5244,45 @@ body.fight-on { overflow: hidden; }
     return fightRankCache;
   }
 
-  /* 角色 → 格鬥場數值
-     回傳 { hp, dr（減傷）, bw（身體寬，用在推擠）, walk, atk, sk: [技能1, 技能2] }
-     每招：{ kind, clip, dur（動作長度）, hitAt（前搖＝出招到判定的時間）, dmg, cd, range, … }
+  /* 角色 → 格鬥場數值（只讀標準化資料 N，見 js-18-fight-norm.js）
+     回傳 { hp, dr（減傷）, bw（身體寬，用在推擠）, walk, atk, sk: [技能1, 技能2], N }
+     每招：{ kind, form, clip, dur（動作長度）, hitAt（前搖）, dmg, cd, sv, … }，依種類另有：
+       melee reach｜dline range｜shot、line speed｜lob range、lobT（飛行時間）｜rect range（最遠施放距離）、width（判定寬度）
      前搖：資料裡有準備動作（*_ready）就依它算，沒有就取動作長度的 50%（見 hitFrac）。 */
+  const fSpeed = (cfg) => (cfg && cfg.v > 0 ? fclamp(cfg.v * FT.SPEED_K, FT.SPEED_MIN, FT.SPEED_MAX) : FT.SPEED_DEF);
+  const fLobT = (cfg) => (cfg && cfg.v > 0 ? fclamp(FT.LOB_TIME * FT.LOB_V0 / cfg.v, FT.LOB_TMIN, FT.LOB_TMAX) : FT.LOB_TIME);
   function fightStats(f) {
-    const id = f.r.id, st = S.stats[id] || {}, pj = f.proj || {}, pre = FIGHT_PRESET[id] || {}, rk = fightRanks();
-    const rg = +st.rg || 150, mv = +st.mv || 90, ai = +st.ai || 1.2;
-    const fly = (c) => (c && (c.m === "LINEAR" || c.m === "CURVE") && c.v > 0 && c.e ? c.m : null);
+    const N = normUnit(f.r, animNames(f.part)), pre = FIGHT_PRESET[f.r.id] || {}, rk = fightRanks(), F = N.f;
+    const rg = F.rg.v, ai = F.ai.v || 1.2;
     const dur = (clip, lo, hi) => fclamp(clip && f.part.animations[clip] ? f.part.animations[clip].frame_count / (f.part.anim_rate || 24) : lo, lo, hi);
-    const atkClip = f.clips.attack;
-    const ad = dur(atkClip, 0.3, 0.6);
-    const nFly = fly(pj.n);
-    const atk = Object.assign({ clip: atkClip, dur: ad, cd: Math.max(ad, fclamp(ai * 0.45, 0.35, 0.8)), hitAt: ad * (atkClip ? hitFrac(f, atkClip) : 0.5),
-      kind: nFly ? "shot" : "melee", reach: fclamp(rg * 0.6, 70, 150), speed: 700, bul: nFly ? pj.n : null, sv: FT.SV_ATK }, pre.atk || {});
+    // 普攻
+    const a = N.atk, atkClip = a.clip, ad = dur(atkClip, 0.3, 0.6);
+    const atk = Object.assign({ form: a.form, kind: FORM_KIND.atk[a.form], clip: atkClip, dur: ad, cd: Math.max(ad, fclamp(ai * 0.45, 0.35, 0.8)),
+      hitAt: ad * (atkClip ? hitFrac(f, atkClip) : 0.5), sv: FT.SV_ATK, bul: a.form === "line" || a.form === "lob" ? a.cfg : null,
+      reach: fclamp(rg * FT.RG_REACH, FT.REACH_MIN, FT.REACH_MAX), range: a.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : fclamp(rg * FT.RG_REACH, FT.DLINE_MIN, FT.DLINE_MAX),
+      speed: fSpeed(a.cfg), lobT: fLobT(a.cfg) }, pre.atk || {});
+    if (pre.atk) atk.kind = pre.atk.kind;
     if (atk.dmg == null) atk.dmg = Math.round(fclamp(70 * atk.cd / 0.55, 40, 80));
     atk.cd = Math.max(atk.cd, atk.dur);
-    const sk = [0, 1].map((s) => {
-      const base = (st.sk || [])[s], clip = f.clips[s ? "skill2" : "skill1"], p = (pre.sk || [])[s];
-      if (!clip || (!base && !p)) return null;
-      const cfg = pj[s ? "s2" : "s1"], fk = fly(cfg);
-      const d = dur(clip, 0.4, 1.0);
-      const o = { clip, dur: d, hitAt: d * hitFrac(f, clip), dmg: s ? 200 : 120, sv: s ? FT.SV_SK2 : FT.SV_SK1,
-        cd: s ? fclamp(+(base && base.cd) || 12, 8, 15) : fclamp(+(base && base.cd) || 6, 4, 10),
-        name: (f.skills && f.skills[s] && f.skills[s].name) || `技能${s + 1}`, bul: cfg && cfg.p && f.bul[cfg.p] ? cfg : null };
-      if (p) return Object.assign(o, { range: 400, width: 160, speed: 560 }, p);
-      if (!(base.e && base.e.length)) return Object.assign(o, { kind: "buff" });
-      if (fk === "LINEAR") return Object.assign(o, { kind: "line", speed: 560 });
-      if (fk === "CURVE") return Object.assign(o, { kind: "lob", range: fclamp(rg * 1.2, 260, 620) });
-      return Object.assign(o, { kind: "rect", range: fclamp(rg * 1.4, 220, 700), width: fclamp((+base.ar || 200) * 0.5, 90, 260) });
+    // 技能
+    const sk = N.sk.map((k, s) => {
+      if (!k.exists || !k.clip) return null;
+      const d = dur(k.clip, 0.4, 1.0), p = (pre.sk || [])[s];
+      const o = { form: k.form, kind: FORM_KIND.sk[k.form], clip: k.clip, clipSub: k.clipSub, dur: d, hitAt: d * hitFrac(f, k.clip), dmg: s ? 200 : 120, sv: s ? FT.SV_SK2 : FT.SV_SK1,
+        cd: s ? fclamp(k.cd.v || 12, 8, 15) : fclamp(k.cd.v || 6, 4, 10),
+        name: (f.skills && f.skills[s] && f.skills[s].name) || `技能${s + 1}`, bul: k.cfg && k.cfg.p && f.bul[k.cfg.p] ? k.cfg : null,
+        range: k.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : fclamp(rg * FT.RG_CAST, FT.CAST_MIN, FT.CAST_MAX),
+        width: k.effectRange.v ? fclamp(k.effectRange.v * FT.AR_WIDTH, FT.WIDTH_MIN, FT.WIDTH_MAX) : FT.WIDTH_DEF,
+        speed: fSpeed(k.cfg), lobT: fLobT(k.cfg) };
+      if (p) Object.assign(o, { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME }, p);
+      return o;
     });
+    // 體力、減傷（暫時沿用排名換算；第三輪改總預算制）。沒有體力資料時用中位數（N 已標成推測）
+    const hpPct = F.hp.st === "ok" ? rk.hp(F.hp.v) : 0.5;
     return {
-      hp: pre.hp || Math.round(FT.HP_MIN + (FT.HP_MAX - FT.HP_MIN) * rk.hp(st.hp)),
-      dr: pre.dr != null ? pre.dr : +(FT.DR_MAX * rk.def(st.pd, st.md)).toFixed(3),
-      bw: fclamp(f.w / f.h * FT.CH, 56, 120), walk: pre.walk || fclamp(110 + mv * 1.5, 170, 340), atk, sk,
+      hp: pre.hp || Math.round(FT.HP_MIN + (FT.HP_MAX - FT.HP_MIN) * hpPct),
+      dr: pre.dr != null ? pre.dr : +(FT.DR_MAX * rk.def(F.pd.v, F.md.v)).toFixed(3),
+      bw: fclamp(f.w / f.h * FT.CH, 56, 120), walk: pre.walk || fclamp(110 + F.mv.v * 1.5, 170, 340), atk, sk, N,
     };
   }
   // 招式的「前搖／有效／後搖」（格）。有效：近戰＝持續判定、投射物＝射出那一格、矩形＝預告結束那一格
@@ -5260,13 +5294,13 @@ body.fight-on { overflow: hidden; }
   function fightSummary(fs) {
     const a = fs.atk, fr = (k, m) => { const x = fightFrames(k, m); return `${x.startup}／${x.active}／${x.recovery} 格`; };
     const parts = [`體力 ${fs.hp}、減傷 ${Math.round(fs.dr * 100)}%、移動 ${Math.round(fs.walk)}`,
-      (a.kind === "melee" ? `普攻 近戰 ${Math.round(a.reach)} 遠・${a.dmg}` : `普攻 直線投射物・${a.dmg}`) + `（${fr(a, a.kind === "melee")}）`];
+      `普攻 ${ATK_KIND_LABEL[a.kind]}${a.kind === "melee" ? " " + Math.round(a.reach) + " 遠" : a.kind === "dline" || a.kind === "lob" ? " " + Math.round(a.range) + " 遠" : ""}・${a.dmg}（${fr(a, a.kind === "melee")}）`];
     fs.sk.forEach((k, s) => {
       if (!k) { parts.push(`技能${s + 1} 沒有`); return; }
       const extra = k.kind === "rect" ? `，射程 ${Math.round(k.range)}、寬 ${Math.round(k.width)}` : k.kind === "lob" ? `，射程 ${Math.round(k.range)}` : "";
       parts.push(`技能${s + 1} ${SK_KIND_LABEL[k.kind]}${k.kind === "buff" ? "" : "・" + k.dmg}${extra}・冷卻 ${k.cd.toFixed(1)} 秒（${fr(k, false)}）`);
     });
-    return parts.join("｜") + "　※ 前搖／有效／後搖";
+    return parts.join("｜") + "　※ 前搖／有效／後搖\n" + normSummary(fs.N);
   }
   /* ---------- 格鬥場（v5.0 測試版）：規則引擎 ----------
      一對一、側面、玩家自己操作。fightStep 每一步（1/60 秒）只吃「雙方這一步的按鍵」與固定亂數，
@@ -5483,6 +5517,7 @@ body.fight-on { overflow: hidden; }
     if (s === 2) p.atkCd = k.cd; else p.cd[s] = k.cd;
     fightAnim(p, k.clip || idleClip(f));
     if (s < 2) g.events.push({ type: "cast", side: p.side });
+    if (k.kind === "dline") { const bw = g.cfg.fs[p.side].bw; g.fx.push({ kind: "dlineTele", own: p.side, x0: p.x + p.face * bw / 2, x1: p.x + p.face * (bw / 2 + k.range), y: p.y + FT.CH * 0.4, t: 0, life: k.hitAt }); }
     if (act.melee) { const bw = g.cfg.fs[p.side].bw; g.fx.push({ kind: "reach", own: p.side, x0: p.x + p.face * bw / 2, x1: p.x + p.face * (bw / 2 + k.reach), y: p.y, t: 0, life: FT.ACTIVE + k.hitAt + 0.1 }); }
     if (k.kind === "buff") g.fx.push({ kind: "selfring", own: p.side, x: p.x, t: 0, life: 0.8 });
   }
@@ -5551,22 +5586,36 @@ body.fight-on { overflow: hidden; }
     return true;
   }
   // 射出投射物或使用輔助技能（前搖結束的那一刻）
-  function fightRelease(g, p, o, a) {
-    const fs = g.cfg.fs[p.side], k = fightSlot(fs, a.s);
-    if (k.kind === "buff") {
+  /* 前搖結束的那一刻：依招式種類交給對應的處理函式（近戰、矩形不在這裡：近戰在 fightActing 判定，矩形由預告結算）。
+     沒有處理函式的種類不會被當成別的招式，只記錄「不支援」（標準化層應該已經換成支援的形式，這裡是最後一道保險）。 */
+  const FIGHT_RELEASE = {
+    buff(g, p, o, a, k) {
       p.buff = FT.BUFF_TIME; p.hp = Math.min(p.maxHp, p.hp + FT.HEAL);
-      g.fx.push({ kind: "buff", x: p.x, y: FT.CH, t: 0, life: 1.0 }); return;
-    }
-    const x = p.x + p.face * fs.bw / 2, base = { own: p.side, x, px: x, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id };
-    if (k.kind === "lob") {
-      // 拋物線：LOB_TIME 秒後落在拖曳的距離（從身體前緣算）；畫面會在落點畫預告
-      const T = FT.LOB_TIME, h0 = FT.CH * 0.6 + p.y, land = x + p.face * a.aimD;
-      g.projs.push(Object.assign(base, { kind: "lob", y: h0, py: h0, vx: (land - x) / T, vy: (0.5 * FT.GRAV * T * T - h0) / T, landX: land }));
-    } else {
-      // 直線（技能與普攻投射物）：朝面向一直飛，飛出場地或打中才消失
-      const y = p.y + FT.CH * (a.s === 2 ? 0.35 : 0.28);
-      g.projs.push(Object.assign(base, { kind: "line", y, py: y, vx: p.face * (k.speed || 560), vy: 0 }));
-    }
+      g.fx.push({ kind: "buff", x: p.x, y: FT.CH, t: 0, life: 1.0 });
+    },
+    // 拋物線：k.lobT 秒後落在拖曳的距離（從身體前緣算）；畫面會在落點畫預告
+    lob(g, p, o, a, k) {
+      const b = fightProjBase(g, p, a, k), T = k.lobT || FT.LOB_TIME, h0 = FT.CH * 0.6 + p.y, land = b.x + p.face * a.aimD;
+      g.projs.push(Object.assign(b, { kind: "lob", y: h0, py: h0, vx: (land - b.x) / T, vy: (0.5 * FT.GRAV * T * T - h0) / T, landX: land }));
+    },
+    // 直線（技能與普攻投射物）：朝面向一直飛，飛出場地或打中才消失
+    line(g, p, o, a, k) {
+      const b = fightProjBase(g, p, a, k), y = p.y + FT.CH * (a.s === 2 ? 0.35 : 0.28);
+      g.projs.push(Object.assign(b, { kind: "line", y, py: y, vx: p.face * (k.speed || FT.SPEED_DEF), vy: 0 }));
+    },
+    // 瞬間直線（遠程直接命中的普攻）：不產生飛行物，這一刻檢查身體前緣往前 range 內、同一高度有沒有對手
+    dline(g, p, o, a, k) {
+      const fs = g.cfg.fs[p.side], x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.range, h = fHurt(o);
+      g.fx.push({ kind: "dline", own: p.side, x0, x1, y: p.y + FT.CH * 0.4, t: 0, life: 0.25 });
+      if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && h.y0 <= p.y + FT.CH * 0.8 && h.y1 >= p.y) fightHit(g, p, o, k.dmg, k.sv, a.s < 2, a.id);
+    },
+  };
+  FIGHT_RELEASE.shot = FIGHT_RELEASE.line;
+  const fightProjBase = (g, p, a, k) => { const x = p.x + p.face * g.cfg.fs[p.side].bw / 2; return { own: p.side, x, px: x, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id }; };
+  function fightRelease(g, p, o, a) {
+    const k = fightSlot(g.cfg.fs[p.side], a.s), fn = FIGHT_RELEASE[k.kind];
+    if (fn) fn(g, p, o, a, k);
+    else { g.events.push({ type: "unsupported", side: p.side, kind: k.kind }); g.fx.push({ kind: "text", text: "不支援", x: p.x, y: FT.CH * 1.2, t: 0, life: 0.6 }); }
   }
   // 投射物：用「上一步到這一步的連線」判斷有沒有碰到受傷框（快的投射物也不會穿過去）
   function fightProjectiles(g) {
@@ -5681,12 +5730,198 @@ body.fight-on { overflow: hidden; }
       if (k.kind === "line" || far <= k.range) return press(s);
     }
     // 普攻與走位
-    const a = fs.atk, reach = a.kind === "melee" ? a.reach : 420, want = a.kind === "melee" ? a.reach * 0.8 : 260;
-    if (gap <= reach && p.atkCd <= 0 && rnd() > P.err) { if (a.kind === "melee") inp.atk = true; else return press(2); }
+    // 出手距離：近戰＝reach、瞬間直線／拋物線＝range、直線投射物＝420；理想站位取出手距離的 0.8（直線投射物 260）
+    const a = fs.atk, tap = AIM_MODE[a.kind] === "tap";
+    const reach = a.kind === "melee" ? a.reach : a.kind === "shot" ? 420 : a.range, want = a.kind === "shot" ? 260 : reach * 0.8;
+    if (gap <= reach && p.atkCd <= 0 && rnd() > P.err) { if (tap) inp.atk = true; else return press(2); }
     if (gap > want + 10) inp.mx = toward;
     else if (a.kind !== "melee" && gap < want * 0.5) inp.mx = -toward;
     mem.mx = inp.mx;
     return inp;
+  }
+  /* ---------- 格鬥場：角色資料標準化（解讀層） ----------
+     原始資料（stats.json、projectiles.json、skill_fx.json、動畫名稱）→ 一份統一格式 N。
+     這裡只負責「這隻角色是什麼」：每個欄位的值、狀態、出處，普攻與技能的攻擊形式、效果清單、哪些還不支援。
+     「換算成多少數字」在 js-18-fight-data.js 的 fightStats（只讀 N，不直接讀原始資料）。
+
+     欄位狀態 st：ok 有值、zero 值是 0（保留 0，不會被換成預設值）、missing 沒有、bad 格式錯誤。
+     guess＝true 表示用了預設值或從別的欄位推出來（會列進相容性問題）。
+     問題等級 lvl：unfit 不適合格鬥場、unsupported 有功能還不支援（有明確的代替方式）、guess 推測、info 補充。 */
+
+  // 攻擊形式（delivery）：普攻、技能共用的名稱
+  const FORM_LABEL = { melee: "近戰", dline: "瞬間直線", line: "直線投射物", lob: "拋物線", target: "指定位置打擊", buff: "輔助" };
+  // 形式 → 引擎的招式種類（引擎看 kind；普攻的直線投射物叫 shot）
+  const FORM_KIND = { atk: { melee: "melee", dline: "dline", line: "shot", lob: "lob" }, sk: { target: "rect", line: "line", lob: "lob", buff: "buff" } };
+  const FIELD_ST_LABEL = { ok: "有值", zero: "0", missing: "沒有", bad: "格式錯誤" };
+
+  /* 技能效果代碼（skill_fx.json 的 c，去掉 SKILLEFF_）→ [名稱, 支援狀態]
+     支援狀態：ok 已支援、part 部分支援、r2 第二輪（第一批效果）、b2 第二批、none 未規劃。沒列到的依字首判斷（fxInfo）。 */
+  const FX_STATUS_LABEL = { ok: "已支援", part: "部分支援", r2: "未支援（第二輪）", b2: "未支援（第二批）", none: "未規劃" };
+  const FX_INFO = {
+    DMG: ["傷害", "ok"], DOT: ["持續傷害", "part"],
+    STUN: ["暈眩", "r2"], KNOCKBACK: ["擊退", "r2"], HEAL: ["回血", "r2"], DOTHEAL: ["持續回血", "r2"], UNBEAT: ["無敵", "r2"], SILENCE: ["沉默", "r2"],
+    "BUFF-ATK": ["攻擊增加", "r2"], "DEBUFF-ATK": ["攻擊降低", "r2"], "BUFF-SPEED": ["移速增加", "r2"], "DEBUFF-SPEED": ["移速降低", "r2"],
+    SUMMON: ["召喚", "b2"], SUMMON_ENEMY: ["召喚對手複製體", "b2"], "BUFF-HP": ["體力增加", "b2"], "BUFF-ATKSPD": ["攻速增加", "b2"], "DEBUFF-ATKSPD": ["攻速降低", "b2"],
+    "BUFF-NORMAL_DEF": ["物防增加", "b2"], "DEBUFF-NORMAL_DEF": ["物防降低", "b2"], "BUFF-SPECIAL_DEF": ["魔防增加", "b2"], "DEBUFF-SPECIAL_DEF": ["魔防降低", "b2"],
+    MOVE_ENEMY1: ["拉動敵人", "b2"], MOVE_ENEMY2: ["拉動敵人", "b2"], MOVE_ATTACK: ["突進", "b2"], FEAR: ["恐懼", "b2"], TEMPT: ["魅惑", "b2"], POLYMORPH: ["變形", "b2"], BUBBLE: ["泡泡", "b2"],
+  };
+  // 增益／減益／清除後面接的能力名稱
+  const FX_STAT = { ATK: "攻擊", HP: "體力", SPEED: "移速", ATKSPD: "攻速", NORMAL_DEF: "物防", SPECIAL_DEF: "魔防", SKILL_RESIST: "技能抗性", SKILL_AVOID_CHANCE: "技能閃避",
+    SKILL_CHANCE: "技能發動率", ANTI_SK_AVOID_PROB: "技能命中", ANTI_AVOID_PROB: "命中", AVOID_CHANCE: "閃避", CRITICAL_CHANCE: "爆擊率", CRITICAL_POWER: "爆擊傷害",
+    ATKRANGE: "攻擊距離", SKILLRANGE: "技能範圍", CHANGE_SPLASH: "攻擊變範圍", VAMPIRE: "吸血", UNBEAT: "無敵", ENEMY: "敵方增益", ALLY: "我方減益", DOTHEAL: "持續回血",
+    POISON: "中毒", DEBUFF: "減益", SUMMON: "召喚物" };
+  Object.assign(FX_INFO, { MIRROR_PHY: ["反射物理傷害", "b2"], MIRROR_MAG: ["反射魔法傷害", "b2"], CURSE_DEBUFF: ["詛咒", "b2"], SKILL_RESET: ["技能冷卻重置", "b2"],
+    SCALE: ["縮放", "none"], THROW_ALLY: ["投擲隊友", "none"], CHANGE_ENEMY: ["改變敵人", "none"] });
+  const FX_NOTE = { DMG: "傷害量目前固定，第三輪改用官方倍率", DOT: "目前以一次傷害代替" };
+  function fxInfo(code) {
+    if (FX_INFO[code]) return FX_INFO[code];
+    const stat = (x) => FX_STAT[x] || x;
+    if (code.startsWith("BUFF-")) return [stat(code.slice(5)) + "增加", "b2"];
+    if (code.startsWith("DEBUFF-")) return [stat(code.slice(7)) + "降低", "b2"];
+    if (/^CLEAN/.test(code)) return ["清除" + stat(code.replace(/^CLEAN(ING)?_/, "")), "b2"];
+    if (code.startsWith("CHANGE_")) return ["屬性轉換", "none"];
+    return [code || "（空白代碼）", "none"];
+  }
+  const FX_DAMAGE = new Set(["DMG", "DOT"]);
+  const FX_SUMMON = new Set(["SUMMON", "SUMMON_ENEMY"]);
+
+  // 一個數字欄位：陣列取第一個（1 級數值）；0 保留；沒有或格式錯誤時用 def 並標記 guess
+  function normField(obj, key, def) {
+    const raw = obj && obj[key] != null ? (Array.isArray(obj[key]) ? obj[key][0] : obj[key]) : undefined;
+    if (raw === undefined) return { v: def, st: "missing", guess: def != null };
+    const v = typeof raw === "number" ? raw : raw === "" ? NaN : +raw;
+    if (!Number.isFinite(v)) return { v: def, st: "bad", guess: def != null, raw };
+    return { v, st: v === 0 ? "zero" : "ok", guess: false };
+  }
+  // 動畫名稱 → 各動作用哪一段（跟單人、雙人同一張 CLIPS 表）
+  function normClips(anims) {
+    const out = {};
+    for (const c of CLIPS) out[c.key] = c.names.find((n) => anims.has(n)) || null;
+    return out;
+  }
+  // 有影格的動畫名稱
+  const animNames = (part) => new Set(Object.keys(part.animations).filter((n) => part.animations[n]?.frames?.length));
+
+  /* 原始飛行方式 → 攻擊形式。cfg＝projectiles.json 的 n／s1／s2，rg＝射程（遊戲單位）。
+     回傳 { form, src, note }；note 有值時代表做了推測或代替（會列進問題）。 */
+  const fMoving = (c) => !!(c && c.v > 0 && c.e);
+  function normDelivery(cfg, rg, isAtk) {
+    const m = cfg ? String(cfg.m || "NONE") : null;
+    const near = (src, note) => ({ form: rg < FT.MELEE_RG ? "melee" : "dline", src, note }); // 普攻：沒有飛行過程時依射程分近戰／瞬間直線
+    if (!cfg) return isAtk ? near("射程", "沒有投射物資料，依射程判斷") : { form: "target", src: "預設" };
+    if ((m === "LINEAR" || m === "CURVE") && fMoving(cfg)) return { form: m === "LINEAR" ? "line" : "lob", src: m };
+    if (m === "LINEAR" || m === "CURVE") return isAtk ? near(m, "投射物不會移動，當成直接命中") : { form: "target", src: m, note: "投射物不會移動，當成指定位置打擊" };
+    if (m === "DIRECT" || m === "NONE") return isAtk ? near(m) : { form: "target", src: m };
+    // RETURN、BEAM 或不認識的：明確代替並記錄（目前資料裡沒有）
+    return { form: isAtk ? "line" : "target", src: m, note: `${m} 未支援，以${isAtk ? "直線投射物" : "指定位置打擊"}代替`, unsupported: true };
+  }
+
+  /* 一隻角色 → N
+     r＝角色（id、name），anims＝有影格的動畫名稱（Set）。preset＝FIGHT_PRESET 的覆寫（有寫的部分不算問題）。 */
+  function normUnit(r, anims) {
+    const id = r.id, st = S.stats[id], pj = S.proj[id] || null, fxAll = (S.fx || {})[id] || null, pre = FIGHT_PRESET[id] || null;
+    const N = { id, name: r.name || "", issues: [], f: {}, clips: normClips(anims), atk: null, sk: [], preset: !!pre };
+    const issue = (lvl, where, msg) => N.issues.push({ lvl, where, msg });
+    // 適不適合格鬥場
+    if (!r.name) issue("unfit", "名稱", "沒有名稱（多半是頭目、NPC 或召喚物）");
+    if (!st) issue("unfit", "數值", "stats.json 沒有這隻");
+    // 基本數值：體力沒有就沒有（換算時用中位數並標推測），其他給預設值
+    const FIELDS = [["hp", null, "體力"], ["pd", 0, "物防"], ["md", 0, "魔防"], ["rg", 150, "射程"], ["mv", 90, "移速"], ["ai", 1.2, "攻擊間隔"]];
+    for (const [k, def, label] of FIELDS) {
+      const x = (N.f[k] = Object.assign(normField(st, k, def), { label }));
+      if (st && (x.st === "missing" || x.st === "bad")) issue("guess", label, `${FIELD_ST_LABEL[x.st]}${x.guess ? `，用預設值 ${def}` : ""}`);
+    }
+    if (st && N.f.hp.st !== "missing" && N.f.hp.v <= 1) issue("unfit", "體力", "佔位資料（體力 ≤ 1）");
+    if (!N.clips.idle && !N.clips.attack) issue("unfit", "動作", "沒有待機也沒有攻擊動作");
+    const rg = N.f.rg.v;
+
+    // 普攻
+    const d = normDelivery(pj && pj.n, rg, true);
+    N.atk = { form: d.form, src: d.src, cfg: (pj && pj.n) || null, clip: N.clips.attack };
+    if (pre && pre.atk) N.atk.form = { melee: "melee", shot: "line", lob: "lob", dline: "dline" }[pre.atk.kind] || N.atk.form;
+    else if (d.note) issue(d.unsupported ? "unsupported" : "guess", "普攻", d.note);
+    if (!N.atk.clip) issue("guess", "普攻", "沒有普攻動作（用待機動作代替）");
+
+    // 技能
+    for (const s of [0, 1]) {
+      const where = `技能${s + 1}`, base = st && st.sk && st.sk[s], fxs = fxAll && fxAll[s], p = pre && pre.sk && pre.sk[s];
+      if (!base && !fxs && !p) { N.sk.push({ s, exists: false, why: st ? "資料裡沒有這個技能" : "沒有數值資料" }); continue; }
+      const k = { s, exists: true, clip: N.clips[s ? "skill2" : "skill1"], clipSub: false, fx: [], cfg: (pj && pj[s ? "s2" : "s1"]) || null };
+      if (!k.clip) { k.clip = N.clips.attack; k.clipSub = true; issue("guess", where, "沒有技能動作（用普攻動作代替）"); }
+      // 效果：優先用完整效果清單（skill_fx.json），沒有就用 stats.json 的傷害欄位
+      if (fxs && Array.isArray(fxs.fx)) {
+        k.fxSrc = "skill_fx";
+        k.fx = fxs.fx.map((e) => { const [label, sup] = fxInfo(String(e.c || "")); return { c: String(e.c || ""), label, sup, dur: e.d && +e.d.seconds || 0, r: +e.r || 0 }; });
+      } else if (base) {
+        k.fxSrc = "stats";
+        k.fx = (base.e || []).map((e) => (e.t === "dot" ? { c: "DOT", label: "持續傷害", sup: "part", dur: +e.d || 0, r: 0 } : { c: "DMG", label: "傷害", sup: "ok", dur: 0, r: 0 }));
+        if (!p) issue("info", where, "沒有完整效果資料（只看傷害欄位）");
+      }
+      // 冷卻、作用範圍（左右各多少，遊戲單位）
+      k.cd = normField(base, "cd", null); if (k.cd.st === "missing" && fxs && fxs.cd != null) k.cd = { v: +fxs.cd, st: "ok", guess: false };
+      const fxR = Math.max(0, ...k.fx.map((e) => e.r));
+      k.effectRange = base && +base.ar > 0 ? { v: +base.ar, st: "ok" } : fxR > 0 ? { v: fxR, st: "ok" } : { v: null, st: "missing" };
+      // 攻擊形式：有傷害效果才看飛行方式；沒有傷害＝輔助（召喚另外標示）
+      const damaging = k.fx.some((e) => FX_DAMAGE.has(e.c)), summon = k.fx.some((e) => FX_SUMMON.has(e.c));
+      if (p) k.form = { rect: "target", line: "line", lob: "lob", buff: "buff" }[p.kind] || "target";
+      else if (damaging) {
+        const dd = normDelivery(k.cfg, rg, false); k.form = dd.form; k.src = dd.src;
+        if (dd.note) issue(dd.unsupported ? "unsupported" : "guess", where, dd.note);
+      } else if (summon) k.form = "target";
+      else { k.form = "buff"; if (!p) issue("unsupported", where, "沒有傷害的技能：效果還沒支援，暫時用「加攻＋回血」代替"); }
+      if (summon && !p) issue("unsupported", where, damaging ? "召喚未支援（第二批），目前只有傷害部分" : "召喚未支援（第二批），以指定位置打擊代替");
+      if (!p && k.form === "target" && k.effectRange.st === "missing") issue("guess", where, "沒有作用範圍，用預設寬度");
+      // 還沒支援的效果（傷害、召喚以外；召喚上面已經標過）
+      const todo = k.fx.filter((e) => e.sup !== "ok" && !FX_SUMMON.has(e.c));
+      if (todo.length && !p) issue(todo.every((e) => e.sup === "part") ? "info" : "unsupported", where, todo.map((e) => `${e.label}${e.sup === "part" ? "（" + FX_NOTE[e.c] + "）" : ""}`).filter((x, i, a) => a.indexOf(x) === i).join("、") + (todo.some((e) => e.sup !== "part") ? " 未支援" : ""));
+      N.sk.push(k);
+    }
+    N.fit = !N.issues.some((x) => x.lvl === "unfit");
+    return N;
+  }
+
+  // 選角畫面用的相容性說明（一行一項；沒有問題就寫「資料完整」）
+  function normSummary(N) {
+    const icon = { unfit: "⛔", unsupported: "⚠", guess: "？", info: "ⓘ" };
+    const head = `普攻 ${FORM_LABEL[N.atk.form]}｜` + N.sk.map((k, s) => `技能${s + 1} ${k.exists ? FORM_LABEL[k.form] : "沒有"}`).join("｜");
+    const rows = N.issues.map((x) => `${icon[x.lvl]} ${x.where}：${x.msg}`);
+    return `相容性：${head}\n` + (rows.length ? rows.join("\n") : "✓ 資料完整") + (N.preset ? "\n✎ 自製角色（手寫數值）" : "");
+  }
+
+  /* 相容性報告：把全部角色跑一次標準化（只讀動畫的名稱，不載圖片）。
+     回傳 { rows: [{ id, name, fit, atk, sk, issues }], summary }；tools/fight_compat.mjs 會把它寫成報告。 */
+  async function normAll(onProgress) {
+    await Promise.all([ensureStats(), ensureSkillFx()]);
+    const rows = [], list = S.index.slice();
+    let next = 0;
+    const work = async () => {
+      while (next < list.length) {
+        const r = list[next++];
+        let anims = new Set();
+        try { const meta = await loadUnitMeta(r.id); const part = meta.parts.body || meta.parts[Object.keys(meta.parts)[0]]; anims = animNames(part); } catch {}
+        const N = normUnit(r, anims);
+        rows.push({ id: r.id, name: N.name, fit: N.fit, atk: N.atk.form, sk: N.sk.map((k) => (k.exists ? k.form : null)),
+          fx: N.sk.map((k) => (k.exists ? k.fx.map((e) => e.c) : [])), issues: N.issues.map((x) => [x.lvl, x.where, x.msg]) });
+        if (onProgress && rows.length % 200 === 0) onProgress(rows.length, list.length);
+      }
+    };
+    await Promise.all(Array.from({ length: 8 }, work));
+    rows.sort((a, b) => (a.id < b.id ? -1 : 1));
+    // 統計
+    const fit = rows.filter((x) => x.fit), count = (arr, key) => arr.reduce((m, x) => ((m[key(x)] = (m[key(x)] || 0) + 1), m), {});
+    const lvl = (x, l) => x.issues.some((i) => i[0] === l);
+    const fxCount = {};
+    for (const x of fit) for (const list2 of x.fx) for (const c of list2) fxCount[c] = (fxCount[c] || 0) + 1;
+    const summary = {
+      total: rows.length, fit: fit.length,
+      unfitWhy: count(rows.filter((x) => !x.fit), (x) => x.issues.filter((i) => i[0] === "unfit").map((i) => i[2]).join("＋")),
+      clean: fit.filter((x) => !x.issues.some((i) => i[0] !== "info")).length,
+      withUnsupported: fit.filter((x) => lvl(x, "unsupported")).length, withGuess: fit.filter((x) => lvl(x, "guess")).length,
+      atkForms: count(fit, (x) => x.atk), skForms: count(fit.flatMap((x) => x.sk.filter(Boolean).map((f) => ({ f }))), (y) => y.f),
+      skillCount: count(fit, (x) => x.sk.filter(Boolean).length),
+      fx: Object.fromEntries(Object.entries(fxCount).sort((a, b) => b[1] - a[1]).map(([c, n]) => [c, { n, label: fxInfo(c)[0], sup: fxInfo(c)[1] }])),
+    };
+    return { rows, summary };
   }
   /* ---------- 格鬥場（v5.0 測試版）：選角、畫面、觸控、回合 ----------
      畫布寬 720、高度隨手機比例（直拿）。一人：上面血條、中間場地、下面按鈕。
@@ -5767,7 +6002,7 @@ body.fight-on { overflow: hidden; }
   }
   async function initFight() {
     if (FG.inited) return; FG.inited = true;
-    await ensureStats();
+    await Promise.all([ensureStats(), ensureSkillFx()]);
     fightCharOptions($("fChar0"), FG.set.c0); fightCharOptions($("fChar1"), FG.set.c1);
     fightSetupUi(); fightInfo(0); fightInfo(1);
   }
@@ -5831,7 +6066,8 @@ body.fight-on { overflow: hidden; }
   const fightCtl = () => ({ pads: new Map(), btn: {}, jump: false, atk: false, skDown: [false, false, false], skUp: [false, false, false], skCancelAt: [false, false, false] });
   const SLOT_OF = { sk0: 0, sk1: 1, atk: 2 };
   const PADS = ["up", "down", "left", "right"];
-  const atkIsShot = (who) => !!(FG.fs[who] && FG.fs[who].atk.kind === "shot");
+  // 普攻是「按住才出」的種類（直線投射物、拋物線）：普攻鈕改走按住／放開的流程
+  const atkIsShot = (who) => !!(FG.fs[who] && FT_AIMED[FG.fs[who].atk.kind]);
   function fightLocal(ev) {
     const r = fcv.getBoundingClientRect();
     let x = (ev.clientX - r.left) / r.width * FW, y = (ev.clientY - r.top) / r.height * FH;
@@ -6100,7 +6336,12 @@ body.fight-on { overflow: hidden; }
   function fightDrawFx(c, g, e, X, Y, gy) {
     const pr = e.t / (e.life || 0.6);
     c.save(); c.globalAlpha = Math.max(0, 1 - pr);
-    if (e.kind === "reach" || e.kind === "selfring") {
+    if (e.kind === "dlineTele" || e.kind === "dline") { // 瞬間直線：前搖期間細線預告，出手瞬間粗線
+      const y = Y(e.y), tele = e.kind === "dlineTele";
+      c.globalAlpha = tele ? 0.5 + 0.5 * pr : Math.max(0, 1 - pr);
+      c.strokeStyle = tele ? "#ffd0d0" : "#fff6a8"; c.lineWidth = tele ? 3 : 14; c.setLineDash(tele ? [10, 8] : []);
+      c.beginPath(); c.moveTo(X(e.x0), y); c.lineTo(X(e.x1), y); c.stroke();
+    } else if (e.kind === "reach" || e.kind === "selfring") {
       if (FG.set.showRange) {
         c.globalAlpha = Math.max(0, 1 - pr) * 0.9; c.fillStyle = "rgba(60,220,110,0.22)"; c.strokeStyle = "rgba(60,220,110,0.9)"; c.lineWidth = 3;
         if (e.kind === "reach") { const a = Math.min(X(e.x0), X(e.x1)), b = Math.max(X(e.x0), X(e.x1)); c.fillRect(a, Y(e.y + FT.CH * 0.8), b - a, FT.CH * 0.8 * fScale); c.strokeRect(a, Y(e.y + FT.CH * 0.8), b - a, FT.CH * 0.8 * fScale); }
@@ -6201,10 +6442,10 @@ body.fight-on { overflow: hidden; }
       c.fillText(label, b.x, b.y - (cdLeft > 0 ? 10 : 0));
       if (cdLeft > 0) { c.font = canvasFont(900, 22); c.fillText(cdLeft.toFixed(1), b.x, b.y + 16); }
     };
-    btn("atk", fs.atk.kind === "shot" ? "普攻↔" : "普攻", p.atkCd, fs.atk.cd, false);
+    btn("atk", { shot: "普攻↔", lob: "普攻⌒", dline: "普攻→" }[fs.atk.kind] || "普攻", p.atkCd, fs.atk.cd, false);
     for (const s of [0, 1]) {
       const k = fs.sk[s];
-      const lab = k ? ({ rect: "矩形", line: "直線", lob: "拋物", buff: "輔助" }[k.kind] + (s + 1)) : "—";
+      const lab = k ? ({ rect: "定點", line: "直線", lob: "拋物", buff: "輔助" }[k.kind] + (s + 1)) : "—";
       btn("sk" + s, lab, k ? p.cd[s] : 0, k ? k.cd : 1, !k);
     }
     c.restore();

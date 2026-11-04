@@ -311,6 +311,7 @@ footer a { color: inherit; }
 .fight-pick .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .fight-pick .row input, .fight-pick .row select { padding: 8px 10px; border: 2px solid var(--ink); border-radius: 10px; font: inherit; background: var(--panel, #fff); }
 .fight-pick select, .fight-pick input { width: 100%; }
+#fInfo0, #fInfo1 { white-space: pre-line; }
 .fight-pick .row input { flex: 1 1 160px; width: auto; }
 .fight-stage { position: fixed; inset: 0; z-index: 60; background: #0b0d18; display: grid; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
 .fight-stage[hidden] { display: none; }

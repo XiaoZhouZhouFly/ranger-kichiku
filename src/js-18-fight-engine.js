@@ -213,6 +213,7 @@
     if (s === 2) p.atkCd = k.cd; else p.cd[s] = k.cd;
     fightAnim(p, k.clip || idleClip(f));
     if (s < 2) g.events.push({ type: "cast", side: p.side });
+    if (k.kind === "dline") { const bw = g.cfg.fs[p.side].bw; g.fx.push({ kind: "dlineTele", own: p.side, x0: p.x + p.face * bw / 2, x1: p.x + p.face * (bw / 2 + k.range), y: p.y + FT.CH * 0.4, t: 0, life: k.hitAt }); }
     if (act.melee) { const bw = g.cfg.fs[p.side].bw; g.fx.push({ kind: "reach", own: p.side, x0: p.x + p.face * bw / 2, x1: p.x + p.face * (bw / 2 + k.reach), y: p.y, t: 0, life: FT.ACTIVE + k.hitAt + 0.1 }); }
     if (k.kind === "buff") g.fx.push({ kind: "selfring", own: p.side, x: p.x, t: 0, life: 0.8 });
   }
@@ -281,22 +282,36 @@
     return true;
   }
   // 射出投射物或使用輔助技能（前搖結束的那一刻）
-  function fightRelease(g, p, o, a) {
-    const fs = g.cfg.fs[p.side], k = fightSlot(fs, a.s);
-    if (k.kind === "buff") {
+  /* 前搖結束的那一刻：依招式種類交給對應的處理函式（近戰、矩形不在這裡：近戰在 fightActing 判定，矩形由預告結算）。
+     沒有處理函式的種類不會被當成別的招式，只記錄「不支援」（標準化層應該已經換成支援的形式，這裡是最後一道保險）。 */
+  const FIGHT_RELEASE = {
+    buff(g, p, o, a, k) {
       p.buff = FT.BUFF_TIME; p.hp = Math.min(p.maxHp, p.hp + FT.HEAL);
-      g.fx.push({ kind: "buff", x: p.x, y: FT.CH, t: 0, life: 1.0 }); return;
-    }
-    const x = p.x + p.face * fs.bw / 2, base = { own: p.side, x, px: x, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id };
-    if (k.kind === "lob") {
-      // 拋物線：LOB_TIME 秒後落在拖曳的距離（從身體前緣算）；畫面會在落點畫預告
-      const T = FT.LOB_TIME, h0 = FT.CH * 0.6 + p.y, land = x + p.face * a.aimD;
-      g.projs.push(Object.assign(base, { kind: "lob", y: h0, py: h0, vx: (land - x) / T, vy: (0.5 * FT.GRAV * T * T - h0) / T, landX: land }));
-    } else {
-      // 直線（技能與普攻投射物）：朝面向一直飛，飛出場地或打中才消失
-      const y = p.y + FT.CH * (a.s === 2 ? 0.35 : 0.28);
-      g.projs.push(Object.assign(base, { kind: "line", y, py: y, vx: p.face * (k.speed || 560), vy: 0 }));
-    }
+      g.fx.push({ kind: "buff", x: p.x, y: FT.CH, t: 0, life: 1.0 });
+    },
+    // 拋物線：k.lobT 秒後落在拖曳的距離（從身體前緣算）；畫面會在落點畫預告
+    lob(g, p, o, a, k) {
+      const b = fightProjBase(g, p, a, k), T = k.lobT || FT.LOB_TIME, h0 = FT.CH * 0.6 + p.y, land = b.x + p.face * a.aimD;
+      g.projs.push(Object.assign(b, { kind: "lob", y: h0, py: h0, vx: (land - b.x) / T, vy: (0.5 * FT.GRAV * T * T - h0) / T, landX: land }));
+    },
+    // 直線（技能與普攻投射物）：朝面向一直飛，飛出場地或打中才消失
+    line(g, p, o, a, k) {
+      const b = fightProjBase(g, p, a, k), y = p.y + FT.CH * (a.s === 2 ? 0.35 : 0.28);
+      g.projs.push(Object.assign(b, { kind: "line", y, py: y, vx: p.face * (k.speed || FT.SPEED_DEF), vy: 0 }));
+    },
+    // 瞬間直線（遠程直接命中的普攻）：不產生飛行物，這一刻檢查身體前緣往前 range 內、同一高度有沒有對手
+    dline(g, p, o, a, k) {
+      const fs = g.cfg.fs[p.side], x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.range, h = fHurt(o);
+      g.fx.push({ kind: "dline", own: p.side, x0, x1, y: p.y + FT.CH * 0.4, t: 0, life: 0.25 });
+      if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && h.y0 <= p.y + FT.CH * 0.8 && h.y1 >= p.y) fightHit(g, p, o, k.dmg, k.sv, a.s < 2, a.id);
+    },
+  };
+  FIGHT_RELEASE.shot = FIGHT_RELEASE.line;
+  const fightProjBase = (g, p, a, k) => { const x = p.x + p.face * g.cfg.fs[p.side].bw / 2; return { own: p.side, x, px: x, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id }; };
+  function fightRelease(g, p, o, a) {
+    const k = fightSlot(g.cfg.fs[p.side], a.s), fn = FIGHT_RELEASE[k.kind];
+    if (fn) fn(g, p, o, a, k);
+    else { g.events.push({ type: "unsupported", side: p.side, kind: k.kind }); g.fx.push({ kind: "text", text: "不支援", x: p.x, y: FT.CH * 1.2, t: 0, life: 0.6 }); }
   }
   // 投射物：用「上一步到這一步的連線」判斷有沒有碰到受傷框（快的投射物也不會穿過去）
   function fightProjectiles(g) {
@@ -411,8 +426,10 @@
       if (k.kind === "line" || far <= k.range) return press(s);
     }
     // 普攻與走位
-    const a = fs.atk, reach = a.kind === "melee" ? a.reach : 420, want = a.kind === "melee" ? a.reach * 0.8 : 260;
-    if (gap <= reach && p.atkCd <= 0 && rnd() > P.err) { if (a.kind === "melee") inp.atk = true; else return press(2); }
+    // 出手距離：近戰＝reach、瞬間直線／拋物線＝range、直線投射物＝420；理想站位取出手距離的 0.8（直線投射物 260）
+    const a = fs.atk, tap = AIM_MODE[a.kind] === "tap";
+    const reach = a.kind === "melee" ? a.reach : a.kind === "shot" ? 420 : a.range, want = a.kind === "shot" ? 260 : reach * 0.8;
+    if (gap <= reach && p.atkCd <= 0 && rnd() > P.err) { if (tap) inp.atk = true; else return press(2); }
     if (gap > want + 10) inp.mx = toward;
     else if (a.kind !== "melee" && gap < want * 0.5) inp.mx = -toward;
     mem.mx = inp.mx;

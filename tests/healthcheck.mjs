@@ -404,6 +404,38 @@ await test("格鬥場（測試版）：矩形、防禦條、硬直值倒地、�
   return `電腦對打 ${a.wins.join("：")}、命中 ${a.log.hits}、防禦 ${a.log.guards}、倒地 ${a.log.downs}`;
 });
 
+await test("格鬥場：角色資料解讀（攻擊形式、缺資料、不支援的標示）", async (open) => {
+  const p = await open(); await p.goto(BASE + "?app=fight");
+  await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
+  const N = (id) => p.evaluate((x) => window.__rk.fightNorm(x), id);
+  const R = (spec) => p.evaluate((s) => window.__rk.fightRun(s), spec);
+  // 射程 800、直接命中的普攻＝瞬間直線（不是近戰），開場距離就打得到；起跳可以躲
+  const sally = await N("u1028e-sally");
+  check(sally.atk === "dline", `u1028e-sally 普攻應該是瞬間直線，實際 ${sally.atk}`);
+  const hit = await R({ c0: "u1028e-sally", c1: "x001-cube", steps: 120, script: [{ side: 0, from: 5, to: 6, atk: 1 }] });
+  check(hit.log.hits === 1, `瞬間直線從開場距離應該打得到：${JSON.stringify(hit.log)}`);
+  // 拋物線普攻＝拋物線（不是直線）
+  const cony = await N("u014e-cony");
+  check(cony.atk === "lob", `u014e-cony 普攻應該是拋物線，實際 ${cony.atk}`);
+  const lob = await R({ c0: "u014e-cony", c1: "x001-cube", steps: 150, script: [{ side: 0, sk: [2, 5, 6, 0] }] });
+  check(lob.log.hits === 1, `拋物線普攻點一下應該落在對手位置：${JSON.stringify(lob.log)}`);
+  // 沒有技能資料＝沒有技能（不是缺動作）
+  const james = await N("u015e-james");
+  check(james.sk[0] === null && james.sk[1] === null, `u015e-james 應該沒有技能：${james.sk}`);
+  // 0 不會被換成預設值；佔位資料、沒有數值的單位標成不適合
+  const F = (o, k, d) => p.evaluate(([o, k, d]) => window.__rk.fightField(o, k, d), [o, k, d]);
+  const z = await F({ rg: [0] }, "rg", 150), miss = await F({}, "rg", 150), bad = await F({ rg: "abc" }, "rg", 150);
+  check(z.v === 0 && z.st === "zero" && miss.st === "missing" && miss.guess && bad.st === "bad", `欄位狀態判斷錯誤：${JSON.stringify([z, miss, bad])}`);
+  const leon = await p.evaluate(() => window.__rk.fightNormUnit({ id: "u001s-leonard", name: "測試" }, ["idle", "attack"]));
+  check(!leon.fit, "體力 1 的佔位資料應該標成不適合格鬥場");
+  const nostat = await p.evaluate(() => window.__rk.fightNormUnit({ id: "x-no-such-unit", name: "" }, []));
+  check(!nostat.fit, "沒有數值的單位應該標成不適合");
+  // 不認識的飛行方式：明確代替並標成不支援（不會默默變成別的）
+  const unk = await p.evaluate(() => window.__rk.fightDelivery({ m: "BEAM", v: 30, e: 1 }, 300, true));
+  check(unk.unsupported && unk.note.includes("BEAM"), `BEAM 應該標成不支援：${JSON.stringify(unk)}`);
+  return `莎莉 瞬間直線、兔兔 拋物線、詹姆士 沒有技能`;
+});
+
 await test("官方角色對戰可執行", async (open) => {
   const p = await open(); await p.goto(BASE + "?app=duel&type=raw"); await waitDuel(p);
   const d = await p.evaluate(() => window.__rk.duel());

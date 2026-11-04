@@ -69,6 +69,15 @@
     ]).then(([x, c]) => { S.stats = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); });
     return statsPromise;
   }
+  /* 技能的完整效果清單（只有格鬥場用；單人、雙人不讀）。沒有這個檔（例如還沒同步過）時當作空的，格鬥場改看 stats.json 的傷害欄位 */
+  let fxPromise = null;
+  function ensureSkillFx() {
+    if (!fxPromise) fxPromise = Promise.all([
+      fetchData(LOCAL + "skill_fx.json", "json").catch(() => ({})),
+      fetchData(CUSTOM + "skill_fx.json", "json").catch(() => ({})),
+    ]).then(([x, c]) => { S.fx = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); });
+    return fxPromise;
+  }
   /* 角色的動畫資料（單人、雙人共用）：官方角色是壓縮檔 .json.gz（找不到才讀 .json），自製角色是 .json */
   async function loadUnitMeta(id) {
     const base = baseOf(id);

@@ -37,7 +37,13 @@
        spec = { c0, c1, mode, rounds, secs, seed, steps, holdMove, teleMode, ai: [難度, 難度],
                 script: [{ side, from, to, mx, guard, atk: 每幾步按一次, jump, sk: [技能序（2＝投射物普攻）, 按下步, 放開步, 往前拖] }] }
        回傳事件次數、最後狀態與 trace（每一步雙方的 x、y、hp、state）；同樣的 spec 一定得到同樣的結果。 */
+    // 格鬥場：一隻角色的標準化結果（相容性）、全部角色的相容性報告
+    fightNorm: async (id) => { await Promise.all([ensureStats(), ensureSkillFx()]); const f = await fightLoad(id), fs = fightStats(f); return { N: fs.N, atk: fs.atk.kind, sk: fs.sk.map((k) => k && k.kind), summary: fightSummary(fs) }; },
+    fightCompat: () => normAll(),
+    // 標準化的小零件（健檢用；都不改任何狀態）
+    fightNormUnit: (r, anims) => normUnit(r, new Set(anims)), fightDelivery: (cfg, rg, isAtk) => normDelivery(cfg, rg, isAtk), fightField: (obj, key, def) => normField(obj, key, def),
     fightRun: async (spec) => {
+      await ensureSkillFx();
       const f = await Promise.all([fightLoad(spec.c0), fightLoad(spec.c1)]), fs = f.map(fightStats);
       const g = fightNew({ f, fs, rounds: spec.rounds || 1, secs: spec.secs ?? 0, mode: spec.mode || "dummy", seed: spec.seed || 1,
         holdMove: !!spec.holdMove, teleMode: spec.teleMode || "dist" });
@@ -58,7 +64,7 @@
         });
         const invBefore = g.p.map((p) => p.inv > 0);
         fightStep(g, inputs);
-        for (const e of g.events) { if (e.type === "hit") log.hits++; if (e.type === "guard") log.guards++; if (e.type === "break") log.breaks++; if (e.type === "ko") log.ko++; if (e.type === "down") log.downs++; if (e.type === "hit") { log.dmg.push(e.dmg); log.scale.push(e.scale); } }
+        for (const e of g.events) { if (e.type === "hit") log.hits++; if (e.type === "guard") log.guards++; if (e.type === "break") log.breaks++; if (e.type === "ko") log.ko++; if (e.type === "down") log.downs++; if (e.type === "unsupported") log.unsupported = (log.unsupported || 0) + 1; if (e.type === "hit") { log.dmg.push(e.dmg); log.scale.push(e.scale); } }
         g.p.forEach((p, i) => { if (p.inv > 0 && !invBefore[i]) log.inv++; });
         if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face]));
       }

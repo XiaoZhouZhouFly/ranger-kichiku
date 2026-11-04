@@ -1,4 +1,4 @@
-  const APP_VERSION = "v5.0";
+  const APP_VERSION = "v5.1";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -25,7 +25,7 @@
   const ctx = cv.getContext("2d");
 
   const S = {
-    index: [], skills: {}, proj: {}, stats: {}, projOn: true, projPlan: null, clipN: 0, bul: {},
+    index: [], skills: {}, proj: {}, stats: {}, fx: {}, projOn: true, projPlan: null, clipN: 0, bul: {},
     unit: null, meta: null, partKey: "body", part: null, animName: null,
     atlas: null, sprites: new Map(), hueCache: new Map(),
     bounds: null, centers: [],

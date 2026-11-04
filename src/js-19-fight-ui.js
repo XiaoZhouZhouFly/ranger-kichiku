@@ -77,7 +77,7 @@
   }
   async function initFight() {
     if (FG.inited) return; FG.inited = true;
-    await ensureStats();
+    await Promise.all([ensureStats(), ensureSkillFx()]);
     fightCharOptions($("fChar0"), FG.set.c0); fightCharOptions($("fChar1"), FG.set.c1);
     fightSetupUi(); fightInfo(0); fightInfo(1);
   }
@@ -141,7 +141,8 @@
   const fightCtl = () => ({ pads: new Map(), btn: {}, jump: false, atk: false, skDown: [false, false, false], skUp: [false, false, false], skCancelAt: [false, false, false] });
   const SLOT_OF = { sk0: 0, sk1: 1, atk: 2 };
   const PADS = ["up", "down", "left", "right"];
-  const atkIsShot = (who) => !!(FG.fs[who] && FG.fs[who].atk.kind === "shot");
+  // 普攻是「按住才出」的種類（直線投射物、拋物線）：普攻鈕改走按住／放開的流程
+  const atkIsShot = (who) => !!(FG.fs[who] && FT_AIMED[FG.fs[who].atk.kind]);
   function fightLocal(ev) {
     const r = fcv.getBoundingClientRect();
     let x = (ev.clientX - r.left) / r.width * FW, y = (ev.clientY - r.top) / r.height * FH;
@@ -410,7 +411,12 @@
   function fightDrawFx(c, g, e, X, Y, gy) {
     const pr = e.t / (e.life || 0.6);
     c.save(); c.globalAlpha = Math.max(0, 1 - pr);
-    if (e.kind === "reach" || e.kind === "selfring") {
+    if (e.kind === "dlineTele" || e.kind === "dline") { // 瞬間直線：前搖期間細線預告，出手瞬間粗線
+      const y = Y(e.y), tele = e.kind === "dlineTele";
+      c.globalAlpha = tele ? 0.5 + 0.5 * pr : Math.max(0, 1 - pr);
+      c.strokeStyle = tele ? "#ffd0d0" : "#fff6a8"; c.lineWidth = tele ? 3 : 14; c.setLineDash(tele ? [10, 8] : []);
+      c.beginPath(); c.moveTo(X(e.x0), y); c.lineTo(X(e.x1), y); c.stroke();
+    } else if (e.kind === "reach" || e.kind === "selfring") {
       if (FG.set.showRange) {
         c.globalAlpha = Math.max(0, 1 - pr) * 0.9; c.fillStyle = "rgba(60,220,110,0.22)"; c.strokeStyle = "rgba(60,220,110,0.9)"; c.lineWidth = 3;
         if (e.kind === "reach") { const a = Math.min(X(e.x0), X(e.x1)), b = Math.max(X(e.x0), X(e.x1)); c.fillRect(a, Y(e.y + FT.CH * 0.8), b - a, FT.CH * 0.8 * fScale); c.strokeRect(a, Y(e.y + FT.CH * 0.8), b - a, FT.CH * 0.8 * fScale); }
@@ -511,10 +517,10 @@
       c.fillText(label, b.x, b.y - (cdLeft > 0 ? 10 : 0));
       if (cdLeft > 0) { c.font = canvasFont(900, 22); c.fillText(cdLeft.toFixed(1), b.x, b.y + 16); }
     };
-    btn("atk", fs.atk.kind === "shot" ? "普攻↔" : "普攻", p.atkCd, fs.atk.cd, false);
+    btn("atk", { shot: "普攻↔", lob: "普攻⌒", dline: "普攻→" }[fs.atk.kind] || "普攻", p.atkCd, fs.atk.cd, false);
     for (const s of [0, 1]) {
       const k = fs.sk[s];
-      const lab = k ? ({ rect: "矩形", line: "直線", lob: "拋物", buff: "輔助" }[k.kind] + (s + 1)) : "—";
+      const lab = k ? ({ rect: "定點", line: "直線", lob: "拋物", buff: "輔助" }[k.kind] + (s + 1)) : "—";
       btn("sk" + s, lab, k ? p.cd[s] : 0, k ? k.cd : 1, !k);
     }
     c.restore();

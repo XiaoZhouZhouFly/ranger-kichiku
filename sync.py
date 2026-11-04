@@ -10,6 +10,7 @@
   data/res/<id>/*.png         圖集與縮圖
   data/units.json             可用角色清單（id、名稱、星數、類型、屬性）
   data/sync_state.json        上次同步到的上游版本與時間
+  data/skill_fx.json          技能的完整效果清單（格鬥場用；單人、雙人不讀）
 
 原則：
   * 只新增或更新，從不刪除。上游刪檔、改成私人或消失時，已同步的資料全部保留。
@@ -45,6 +46,7 @@ UNIT_LIST = DATA / "units.json"
 SKILLS = DATA / "skills.json"
 PROJECTILES = DATA / "projectiles.json"
 STATS = DATA / "stats.json"
+SKILL_FX = DATA / "skill_fx.json"
 
 META_RE = re.compile(r"^animation_meta/(u[^/]+)\.json$")
 PNG_RE = re.compile(r"^(u[^/]+)/\1-(body|bul\d?)\.png$")
@@ -391,15 +393,72 @@ def _sec(du: dict, default=10.0):
     return None
 
 
-def fetch_summons() -> dict:
-    """新版資料的技能細節。回傳 {(角色, 技能序): {"sums": [召喚物…], "cpy": 對手複製體, "ar": 技能範圍}}。
-    sums：每一隻召喚物（id、等級公式、存在秒數），一個技能可以召喚好幾隻（例如亡者歸來 2 個棺木）。
-    cpy：「將範圍內敵人召喚為我方夥伴」＝在我方出現對手的複製體（固定等級、秒數）。"""
+def fetch_v2():
+    """新版角色資料（英文欄位、效果代碼完整）。連不到回傳 None。"""
     try:
         with urllib.request.urlopen(RANGERS_V2_URL, timeout=300) as resp:
             data = json.loads(resp.read().decode("utf-8"))
+        if len(data.get("rangers") or []) > 100:
+            return data
+        log("⚠ 新版角色資料內容異常，略過")
     except Exception as e:  # noqa: BLE001
-        log(f"⚠ 讀不到新版角色資料，召喚物先略過：{e}")
+        log(f"⚠ 讀不到新版角色資料，略過：{e}")
+    return None
+
+
+def _compact(d):
+    """去掉值是 null 的鍵（保留其他所有欄位，包含不認識的）。"""
+    return {k: v for k, v in d.items() if v is not None} if isinstance(d, dict) else d
+
+
+def sync_skill_fx(data) -> None:
+    """格鬥場用：每個技能的完整效果清單，原樣保留上游的效果代碼與欄位（不認識的也保留），
+    讓網頁端自己決定支援哪些。這一步失敗只會跳過這個檔，不影響其他資料。
+    格式：{角色: [技能1, 技能2]}，技能＝null 或 {"cd": 冷卻, "rate": 發動率, "trig": 觸發方式,
+          "fx": [{"c": 效果代碼（去掉 SKILLEFF_）, "m": 數值物件, "d": 持續物件, "r": 範圍, 其他上游欄位…}]}"""
+    if not data:
+        return
+    try:
+        out = load_json(SKILL_FX, {})
+        for r in data.get("rangers") or []:
+            uid = r.get("rangerCode") or ""
+            if not re.match(r"u(\d+)([a-z]?)-(.+)$", uid):
+                continue
+            skills = []
+            for sk in (r.get("skillSet") or [])[:2]:
+                if not isinstance(sk, dict):
+                    skills.append(None)
+                    continue
+                fx = []
+                for e in sk.get("effects") or []:
+                    if not isinstance(e, dict):
+                        continue
+                    item = {"c": str(e.get("effectCode") or "").replace("SKILLEFF_", "")}
+                    for k, v in e.items():
+                        if k == "effectCode" or v is None:
+                            continue
+                        key = {"magnitude": "m", "duration": "d", "rangePoints": "r"}.get(k, k)
+                        item[key] = _compact(v)
+                    fx.append(item)
+                skills.append(_compact({"cd": sk.get("cooldownSeconds"), "rate": sk.get("activationRate"),
+                                        "trig": (sk.get("trigger") or {}).get("type"), "fx": fx}))
+            while len(skills) < 2:
+                skills.append(None)
+            out[uid] = skills
+        write_if_changed(SKILL_FX, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode())
+        log(f"技能效果：{len(out)} 隻角色")
+    except Exception as e:  # noqa: BLE001
+        log(f"⚠ 技能效果整理失敗，這次略過（其他資料不受影響）：{e}")
+
+
+def fetch_summons(data=None) -> dict:
+    """新版資料的技能細節。回傳 {(角色, 技能序): {"sums": [召喚物…], "cpy": 對手複製體, "ar": 技能範圍}}。
+    sums：每一隻召喚物（id、等級公式、存在秒數），一個技能可以召喚好幾隻（例如亡者歸來 2 個棺木）。
+    cpy：「將範圍內敵人召喚為我方夥伴」＝在我方出現對手的複製體（固定等級、秒數）。"""
+    if data is None:
+        data = fetch_v2()
+    if not data:
+        log("⚠ 沒有新版角色資料，召喚物先略過")
         return {}
     out = {}
     for r in data.get("rangers") or []:
@@ -506,7 +565,9 @@ def main() -> int:
     rows = fetch_rangers_data()
     sync_names(rows)
     sync_skills(rows)
-    sync_stats(rows, fetch_summons())
+    v2 = fetch_v2()
+    sync_stats(rows, fetch_summons(v2))
+    sync_skill_fx(v2)
     sync_projectiles()
     if state.get("res_commit") != before or not STATE.exists():
         state["synced_at"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
