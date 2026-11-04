@@ -444,11 +444,15 @@
     }
     /* 技能前搖的輕霸體（v6.0.2）：被普通攻擊打中照樣扣血、累積硬直值，但不中斷、不被推；
        帶控制效果（暈眩、擊倒…）或硬直值累積滿了才會打斷（走下面一般的命中） */
+    /* v6.0.3：霸體期間硬直值累積 ×SV_ARMOR_MUL（等於上限減半），累積滿了就倒地（技能被打斷） */
     const ctl = fx.some((e) => FX_CONTROL.has(FIGHT_FX[e.c].b) || FIGHT_FX[e.c].knockdown);
-    if (o.act && o.act.kind === "sk" && o.act.t < o.act.hitAt && !ctl && !(full > 0 && (id == null || o.lastSvId !== id) && o.sv + sv >= FT.SV_MAX)) {
+    if (o.act && o.act.kind === "sk" && o.act.t < o.act.hitAt && !ctl) {
+      const newSv = full > 0 && (id == null || o.lastSvId !== id);
+      if (newSv && o.sv + sv * FT.SV_ARMOR_MUL >= FT.SV_MAX) { o.sv += sv * FT.SV_ARMOR_MUL; o.lastSvId = id; } // 滿了：走下面一般命中 → 倒地
+      else {
       let v = 0;
       if (full > 0) {
-        if (id == null || o.lastSvId !== id) { o.sv += sv; o.lastSvId = id; }
+        if (newSv) { o.sv += sv * FT.SV_ARMOR_MUL; o.lastSvId = id; }
         const raw = fx.some((e) => e.c === "DOT") ? full * FX_NUM.DOT_FIRST : full;
         v = fightDamage(g, a, o, raw * (1 - o.dr), { pierce: fx.some((e) => FIGHT_FX[e.c].pierce), heavy });
         g.events.push({ type: "hit", side: a.side, heavy, dmg: v, scale: 1 });
@@ -456,6 +460,7 @@
       } else g.events.push({ type: "fxhit", side: a.side });
       fxOnHit(g, a, o, fx, { dmg: v, full, dir, bul });
       return;
+      }
     }
     let v = 0;
     if (full > 0) {

@@ -547,6 +547,8 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   // v6.0.2：技能前搖被普攻打中不中斷（預告照樣打下來）；被暈眩打中會中斷（預告消失）
   const armor = await R({ c0: "x001-cube", c1: "x001-cube", steps: 160, script: [{ side: 0, from: 0, to: 40, mx: 1 }, { side: 1, from: 0, to: 40, mx: -1 }, sk(0, 60, 1), { side: 0, from: 62, to: 63, atk: 1 }] });
   check(armor.hp[1] < armor.maxHp[1] && armor.hp[0] < armor.maxHp[0], `前搖被普攻打中，技能應該照樣打中對手：${armor.hp}`);
+  // v6.0.3：霸體期間硬直值累積加倍（普攻 25 → 50）
+  check(Math.max(...armor.trace.map((t) => t[1][5])) >= 50, `霸體期間被普攻打中，硬直值應該加倍：最高 ${Math.max(...armor.trace.map((t) => t[1][5]))}`);
   const cut = await R({ c0: "u006e-clark", c1: "x001-cube", steps: 220, script: [{ side: 0, from: 0, to: 40, mx: 1 }, { side: 1, from: 0, to: 40, mx: -1 }, sk(0, 60, 0), sk(0, 70, 1)] });
   check(cut.hp[0] === cut.maxHp[0], `前搖被暈眩打中，技能應該被打斷（預告消失）：${cut.hp}`);
   const buff = await R({ c0: "u023u-sindy", c1: "x001-cube", steps: 60, script: [sk(1, 5)] });

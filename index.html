@@ -731,7 +731,7 @@ body.fight-on { overflow: hidden; }
         直線（技能與「普攻↔」）：只決定方向，點一下就朝面向射出、一直飛到場地外或打中；按住會顯示路徑，可以用 ◀ ▶ 轉向，放開才射。
         按住任何招式時拖到外面的虛線圈再放開＝取消；按住時 ◀ ▶ 可以邊走邊瞄準。
         定點技能會先預告再打下來（預告時間跟出招前搖一樣）；拋物線落點會先標出來。近戰普攻與輔助技能按下就放。<br>
-        技能前搖有輕霸體：被普通攻擊打中照樣扣血，但招式不會中斷（頭上跳「霸體」）；被暈眩、擊倒、泡泡、變形等控制效果打中，或硬直值累積滿了，招式才會被打斷（跳「中斷」，定點技能的預告會消失）。給自己的效果（加攻、護盾、回血…）在前搖結束時才生效。<br>
+        技能前搖有輕霸體：被普通攻擊打中照樣扣血，但招式不會中斷（頭上跳「霸體」），硬直值累積加倍；被暈眩、擊倒、泡泡、變形等控制效果打中，或硬直值累積滿了，招式才會被打斷（跳「中斷」，定點技能的預告會消失）。給自己的效果（加攻、護盾、回血…）在前搖結束時才生效。<br>
         被打中會累積硬直值（血條下的黃條），滿了就倒地，起身後 1 秒無敵（角色閃爍）；同一串連續被打，傷害會遞減（100／90／80／70／60%）。
         出招中、冷卻中提早按，0.15 秒內會自動接上。電腦上也可以用鍵盤：A D 移動、W 跳、S 防禦、J 普攻、K L 技能（兩人模式右方用方向鍵與 1 2 3）。</p>
       </details>
@@ -933,7 +933,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v6.0.2";
+  const APP_VERSION = "v6.0.3";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -5395,7 +5395,7 @@ body.fight-on { overflow: hidden; }
     PUSH_ATK: 160, PUSH_SK: 420, PUSH_DOWN: 820,      // 往後推的初速（普攻／技能／倒地）
     COMBO_RESET: 0.5,                                 // 恢復操作後多久沒挨打，連段就算結束
     COMBO_SCALE: [1, 0.9, 0.8, 0.7, 0.6],             // 連段傷害遞減：第 1、2、3、4、5 下以後
-    SV_ATK: 25, SV_SK1: 40, SV_SK2: 60, SV_MAX: 100,  // 硬直累積值：每下加多少、滿多少倒地
+    SV_ATK: 25, SV_SK1: 40, SV_SK2: 60, SV_MAX: 100, SV_ARMOR_MUL: 2,  // 硬直累積值：每下加多少、滿多少倒地
     SV_DECAY_WAIT: 0.5, SV_DECAY: 30,                 // 多久沒挨打開始下降、每秒降多少
     DOWN_TIME: 0.6, WAKE_INV: 1.0,                    // 倒地躺多久、起身無敵多久
     // 防禦
@@ -6278,11 +6278,15 @@ body.fight-on { overflow: hidden; }
     }
     /* 技能前搖的輕霸體（v6.0.2）：被普通攻擊打中照樣扣血、累積硬直值，但不中斷、不被推；
        帶控制效果（暈眩、擊倒…）或硬直值累積滿了才會打斷（走下面一般的命中） */
+    /* v6.0.3：霸體期間硬直值累積 ×SV_ARMOR_MUL（等於上限減半），累積滿了就倒地（技能被打斷） */
     const ctl = fx.some((e) => FX_CONTROL.has(FIGHT_FX[e.c].b) || FIGHT_FX[e.c].knockdown);
-    if (o.act && o.act.kind === "sk" && o.act.t < o.act.hitAt && !ctl && !(full > 0 && (id == null || o.lastSvId !== id) && o.sv + sv >= FT.SV_MAX)) {
+    if (o.act && o.act.kind === "sk" && o.act.t < o.act.hitAt && !ctl) {
+      const newSv = full > 0 && (id == null || o.lastSvId !== id);
+      if (newSv && o.sv + sv * FT.SV_ARMOR_MUL >= FT.SV_MAX) { o.sv += sv * FT.SV_ARMOR_MUL; o.lastSvId = id; } // 滿了：走下面一般命中 → 倒地
+      else {
       let v = 0;
       if (full > 0) {
-        if (id == null || o.lastSvId !== id) { o.sv += sv; o.lastSvId = id; }
+        if (newSv) { o.sv += sv * FT.SV_ARMOR_MUL; o.lastSvId = id; }
         const raw = fx.some((e) => e.c === "DOT") ? full * FX_NUM.DOT_FIRST : full;
         v = fightDamage(g, a, o, raw * (1 - o.dr), { pierce: fx.some((e) => FIGHT_FX[e.c].pierce), heavy });
         g.events.push({ type: "hit", side: a.side, heavy, dmg: v, scale: 1 });
@@ -6290,6 +6294,7 @@ body.fight-on { overflow: hidden; }
       } else g.events.push({ type: "fxhit", side: a.side });
       fxOnHit(g, a, o, fx, { dmg: v, full, dir, bul });
       return;
+      }
     }
     let v = 0;
     if (full > 0) {

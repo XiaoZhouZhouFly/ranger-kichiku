@@ -35,7 +35,7 @@
     PUSH_ATK: 160, PUSH_SK: 420, PUSH_DOWN: 820,      // 往後推的初速（普攻／技能／倒地）
     COMBO_RESET: 0.5,                                 // 恢復操作後多久沒挨打，連段就算結束
     COMBO_SCALE: [1, 0.9, 0.8, 0.7, 0.6],             // 連段傷害遞減：第 1、2、3、4、5 下以後
-    SV_ATK: 25, SV_SK1: 40, SV_SK2: 60, SV_MAX: 100,  // 硬直累積值：每下加多少、滿多少倒地
+    SV_ATK: 25, SV_SK1: 40, SV_SK2: 60, SV_MAX: 100, SV_ARMOR_MUL: 2,  // 硬直累積值：每下加多少、滿多少倒地
     SV_DECAY_WAIT: 0.5, SV_DECAY: 30,                 // 多久沒挨打開始下降、每秒降多少
     DOWN_TIME: 0.6, WAKE_INV: 1.0,                    // 倒地躺多久、起身無敵多久
     // 防禦
