@@ -1,3 +1,5 @@
+# GitHub 執行環境（v6.1）：作業系統固定 ubuntu-24.04（不用 ubuntu-latest，避免 GitHub 換成新版 Ubuntu 時突然壞掉；
+# 要升級時改這裡的三個 runs-on，再手動跑一次確認）。官方 Actions 都用 Node.js 24 的版本。
 name: 同步角色資料並發布網站
 
 on:
@@ -20,12 +22,12 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -44,37 +46,43 @@ jobs:
             git push
           fi
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: .
 
   # 自動健檢：測試「即將發布的那一份網站」，沒過就不發布（網站維持上一個正常版本）
   healthcheck:
     needs: sync
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           sparse-checkout: |
             tests
             src
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: 檢查 index.html 是不是由 src/ 產生（忘了一起上傳時會在這裡擋下）
         run: python build.py --check
       - name: 取得即將發布的網站
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: github-pages
           path: _pages
-      - run: mkdir -p _site && tar -xf _pages/artifact.tar -C _site
-      - uses: actions/setup-node@v4
+      # 網站包通常是 _pages/artifact.tar；新版 download-artifact 不一定自動解壓，所以自己找 .tar，找不到就當成已經解開
+      - name: 解開網站包
+        run: |
+          mkdir -p _site
+          t=$(find _pages -name '*.tar' | head -1)
+          if [ -n "$t" ]; then tar -xf "$t" -C _site; else cp -r _pages/. _site/; fi
+          test -f _site/index.html
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
       - name: 安裝測試用瀏覽器
         working-directory: tests
         run: |
@@ -84,7 +92,7 @@ jobs:
         run: node tests/healthcheck.mjs _site
       - name: 失敗時保存截圖
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: healthcheck-screenshots
           path: tests/out
@@ -92,10 +100,10 @@ jobs:
 
   deploy:
     needs: healthcheck
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

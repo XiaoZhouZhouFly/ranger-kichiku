@@ -457,7 +457,7 @@ await test("格鬥場：線上對戰準備（同步檢查代碼穩定、延遲�
   return `同步代碼 ${a.code}，延遲 ${t[1].seq}`;
 });
 
-await test("格鬥場：線上對戰（假資料庫、兩個分頁：開房、加入、直連、準備、同步、再一場、斷線）", async (open) => {
+await test("格鬥場：線上對戰（假資料庫、兩個分頁：開房、加入、直連、準備、同步、鏡像、再一場、斷線）", async (open) => {
   const A = await open({ width: 390, height: 844 });
   const ready = (q) => q.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
   await A.goto(BASE + "?app=fight&fakefb=1"); await ready(A);
@@ -470,6 +470,12 @@ await test("格鬥場：線上對戰（假資料庫、兩個分頁：開房、�
   const link = await A.evaluate(() => window.__rk.fightOnline().link);
   await A.click("#fOnReady"); await B.click("#fOnReady");
   for (const q of [A, B]) await q.waitForFunction(() => window.__rk.fight().running && window.__rk.fightNet().frame > 60, null, { timeout: 30000 });
+  // v6.1 鏡像：加入者（右方）畫面左右對調，按「右」＝往對手（場上往左）走
+  await B.waitForFunction(() => window.__rk.fightNet().phase === "fight", null, { timeout: 20000 });
+  const bx0 = (await B.evaluate(() => window.__rk.fightNet().x))[1];
+  await B.keyboard.down("d"); await B.waitForTimeout(500); await B.keyboard.up("d"); await B.waitForTimeout(300);
+  const bx1 = (await B.evaluate(() => window.__rk.fightNet().x))[1];
+  check(bx1 < bx0, `鏡像：加入者按右應該往對手走（場上 x 變小）：${bx0} → ${bx1}`);
   await A.keyboard.down("d"); await B.keyboard.down("a");
   for (let k = 0; k < 15; k++) { await A.keyboard.press("j"); await B.keyboard.press("j"); await A.waitForTimeout(150); }
   await A.keyboard.up("d"); await B.keyboard.up("a");

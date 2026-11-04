@@ -165,3 +165,8 @@ js-19-fight-ui.js     觸控、畫面、回合流程
 - 第 2 步（完成 demo）：連線層 `src/js-19-fight-net.js`（`netNew`／`netStep`／`netQuant`）。輸入延遲 0～8 格、假網路延遲 0～250ms、抖動；畫面右上顯示卡頓次數。所有對戰（含單機）都經過連線層，延遲 0 時跟以前一樣。
 - 第 3 步（v6.0 測試版）：Firebase 連線、房間、WebRTC 直連＋轉送、準備／再一場／斷線／不同步。本機用假資料庫＋兩個分頁測過（直連、轉送都同步）；真實連線要上傳後用兩支手機測。
 - 第 4 步：收尾（安全規則、過期房間清理、介面、文件）。
+
+## v6.1（已交付）
+- GitHub 工作流程（`.github/workflows/sync.yml`）：官方 Actions 升到 Node.js 24 的版本（checkout v6、setup-python v6、setup-node v6、configure-pages v6、upload-pages-artifact v5、deploy-pages v5、upload-artifact v7、download-artifact v8）；健檢用 Node 24；作業系統固定 ubuntu-24.04。download-artifact v8 不一定自動解壓，健檢改成自己找網站包的 .tar。上傳後要到 Actions 手動跑一次確認。
+- 鏡像：完成（FG.mirror；只改畫法與按鍵翻譯，不影響同步）。
+- 注意：CHANGELOG 的 v6.1 段落等打包時才寫（`build.py --check` 會比對網頁版本號與 CHANGELOG 最新版本）。

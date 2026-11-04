@@ -2,6 +2,19 @@
 
 最新的在最上面。
 
+## v6.1（2026-11-05）
+線上對戰：鏡像；GitHub 自動流程升級（單人、雙人不變）。
+
+- 鏡像：線上對戰加入房間的一方（場上的右方），畫面改成左右對調，也看到自己在左邊、對手在右邊，上方血條自己的也在左邊。
+  - 只改「怎麼畫」和「按鍵怎麼翻譯」：畫面的左右鍵、技能拖曳方向、突進方向、鍵盤 A D 都會在送出前翻回場上的方向，所以雙方的計算完全一樣（不影響同步）。
+  - 傷害數字、狀態標籤等文字不會變成反字，只是位置對調。房主（左方）的畫面不變。
+- GitHub 自動流程（`.github/workflows/sync.yml`）：
+  - 官方 Actions 升到 Node.js 24 的版本（checkout v6、setup-python v6、setup-node v6、configure-pages v6、upload-pages-artifact v5、deploy-pages v5、upload-artifact v7、download-artifact v8），健檢改用 Node 24，解決「Node.js 20 is deprecated」警告。
+  - 作業系統固定 `ubuntu-24.04`（不用 ubuntu-latest，GitHub 換成 Ubuntu 26 時不會突然壞掉）。
+  - 新版 download-artifact 不一定自動解壓，健檢改成自己找網站包的 .tar。
+- 自動健檢「線上對戰」一項加測鏡像（加入者按右＝往對手走），共 32 項。
+- 規格小抄：資料檔、網址、專案檔格式都不變。新增 `FG.mirror`、`fightM()`、`fightFlip(face)`（js-19-fight-ui.js）；`window.__rk.fightNet()` 多了 `x`（雙方場上位置）。
+
 ## v6.0.3（2026-11-05）
 格鬥場：霸體不要太硬（單人、雙人不變）。
 
