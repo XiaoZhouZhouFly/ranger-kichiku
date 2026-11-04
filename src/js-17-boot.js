@@ -28,6 +28,42 @@
   window.__rk = Object.freeze({
     version: APP_VERSION,
     single: () => ({ unit: S.unit && S.unit.id, anim: S.animName, mode: S.mode, segs: S.segs.length, timeline: S.timeline.length, histAt: H.at, histLen: H.list.length, playing: S.playing, ready: !!(S.part && S.atlas) && $("overlay").hidden }),
+    fight: () => { const g = FG.g; return { inited: !!FG.inited, running: FG.running, ready: !!(FG.inited && $("fChar0").options.length), set: Object.assign({}, FG.set),
+      phase: g && g.phase, round: g && g.round, wins: g && g.wins.slice(), hp: g && g.p.map((p) => Math.round(p.hp)), x: g && g.p.map((p) => Math.round(p.x)),
+      stun: g && g.p.map((p) => +p.stun.toFixed(2)), inv: g && g.p.map((p) => +p.inv.toFixed(2)), gauge: g && g.p.map((p) => +p.gauge.toFixed(1)), sv: g && g.p.map((p) => +p.sv.toFixed(1)), state: g && g.p.map((p) => p.state), aim: g && g.p.map((p) => p.aim.map((a) => (a ? Math.round(a.d) : null))),
+      face: g && g.p.map((p) => p.face), teles: g ? g.teles.length : 0, projs: g ? g.projs.length : 0, stats: g && Object.assign({}, g.stats), winner: g && g.winner, t: g && +g.t.toFixed(2),
+      fs: FG.fs.map((x) => x && { walk: x.walk, atk: x.atk.kind, sk: x.sk.map((k) => k && k.kind) }), canvas: [FW, FH], btn: fightButtons(fightLayout()) }; },
+    /* 格鬥場的固定輸入測試（不畫面、不影響正在玩的那一場）：
+       spec = { c0, c1, mode, rounds, secs, seed, steps, holdMove, teleMode, ai: [難度, 難度],
+                script: [{ side, from, to, mx, guard, atk: 每幾步按一次, jump, sk: [技能序（2＝投射物普攻）, 按下步, 放開步, 往前拖] }] }
+       回傳事件次數、最後狀態與 trace（每一步雙方的 x、y、hp、state）；同樣的 spec 一定得到同樣的結果。 */
+    fightRun: async (spec) => {
+      const f = await Promise.all([fightLoad(spec.c0), fightLoad(spec.c1)]), fs = f.map(fightStats);
+      const g = fightNew({ f, fs, rounds: spec.rounds || 1, secs: spec.secs ?? 0, mode: spec.mode || "dummy", seed: spec.seed || 1,
+        holdMove: !!spec.holdMove, teleMode: spec.teleMode || "dist" });
+      g.phase = "fight"; g.phaseT = 1;
+      const log = { hits: 0, guards: 0, breaks: 0, downs: 0, inv: 0, ko: 0, dmg: [], scale: [] }, mem = [{}, {}], trace = [];
+      for (let k = 0; k < (spec.steps || 600); k++) {
+        const inputs = [0, 1].map((side) => {
+          const inp = fightBlankInput();
+          if (spec.ai && spec.ai[side]) return fightAi(g, side, spec.ai[side], mem[side]);
+          for (const s of spec.script || []) {
+            if (s.side !== side || k < (s.from || 0) || k >= (s.to ?? 1e9)) continue;
+            if (s.mx) inp.mx = s.mx; if (s.guard) inp.guard = true;
+            if (s.atk && (k - (s.from || 0)) % s.atk === 0) inp.atk = true;
+            if (s.jump && k === s.from) inp.jump = true;
+            if (s.sk) { const [n, down, up, drag] = s.sk; if (k === down) inp.skDown[n] = true; if (k > down && k < up) inp.skAim[n] = drag || 0; if (k === up) { inp.skUp[n] = true; inp.skAim[n] = drag || 0; } }
+          }
+          return inp;
+        });
+        const invBefore = g.p.map((p) => p.inv > 0);
+        fightStep(g, inputs);
+        for (const e of g.events) { if (e.type === "hit") log.hits++; if (e.type === "guard") log.guards++; if (e.type === "break") log.breaks++; if (e.type === "ko") log.ko++; if (e.type === "down") log.downs++; if (e.type === "hit") { log.dmg.push(e.dmg); log.scale.push(e.scale); } }
+        g.p.forEach((p, i) => { if (p.inv > 0 && !invBefore[i]) log.inv++; });
+        if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face]));
+      }
+      return { log, trace, maxHp: g.p.map((p) => p.maxHp), dr: g.p.map((p) => p.dr), gauge: g.p.map((p) => +p.gauge.toFixed(1)), sv: g.p.map((p) => +p.sv.toFixed(1)), state: g.p.map((p) => p.state), face: g.p.map((p) => p.face), hp: g.p.map((p) => Math.round(p.hp)), x: g.p.map((p) => Math.round(p.x)), phase: g.phase, wins: g.wins.slice(), stats: Object.assign({}, g.stats), t: +g.t.toFixed(2) };
+    },
     duel: () => ({ inited: !!D.inited, a: D.f[0] && D.f[0].r.id, b: D.f[1] && D.f[1].r.id, kind: D.type, mode: D.mode, seed: D.seed, settings: settingsToSaved(),
       state: D.cd != null ? "countdown" : D.playing ? "playing" : D.idle ? (D.pos > 0 ? "ended" : "idle") : "paused", pos: Math.floor(D.pos || 0),
       sysSfx: duelSfxList().filter((e) => e.sys).map((e) => e.sys + "@" + e.k).join(","), ko: D.ko,
@@ -123,7 +159,7 @@
       if (pend.mode === "remix") setMode("remix");
     }
     if (S.part) histReset(); // 分享連結或專案檔還原的狀態當作起點
-    setApp(urlApp === "duel" || urlApp === "single" ? urlApp : store.get("app", "single"));
+    setApp(["duel", "single", "fight"].includes(urlApp) ? urlApp : store.get("app", "single"));
     S.urlSync.on = true; syncUrl();
     const pt = store.get("pendingToast", null);
     if (pt) { store.set("pendingToast", null); setTimeout(() => toast(pt), 600); }

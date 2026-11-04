@@ -332,6 +332,22 @@ footer p { margin: 0 0 6px; line-height: 1.6; }
 .report-text { width: 100%; min-height: 220px; box-sizing: border-box; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; padding: 8px; border: 2px solid var(--line, #ccd); border-radius: 10px; background: var(--paper); color: var(--ink); resize: vertical; }
 footer a { color: inherit; }
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+
+/* 格鬥場 */
+.app-mode small { font-size: 10px; margin-left: 3px; opacity: .7; }
+.fight-setup { display: grid; gap: 12px; max-width: 720px; padding: 16px; }
+.fight-pick .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.fight-pick .row input, .fight-pick .row select { padding: 8px 10px; border: 2px solid var(--ink); border-radius: 10px; font: inherit; background: var(--panel, #fff); }
+.fight-pick select, .fight-pick input { width: 100%; }
+.fight-pick .row input { flex: 1 1 160px; width: auto; }
+.fight-stage { position: fixed; inset: 0; z-index: 60; background: #0b0d18; display: grid; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
+.fight-stage[hidden] { display: none; }
+.fight-stage canvas { display: block; touch-action: none; }
+.fight-exit { position: absolute; top: 8px; right: 8px; z-index: 2; opacity: .85; }
+.fight-stage.pvp .fight-exit { top: 50%; right: auto; left: 6px; transform: translateY(-50%); }
+.fight-over { position: absolute; inset: auto 16px 50% 16px; transform: translateY(50%); z-index: 3; display: grid; gap: 12px; justify-items: center; padding: 18px; border: 2px solid var(--ink); border-radius: 14px; background: var(--panel, #fff); box-shadow: 4px 4px 0 var(--shadow); text-align: center; }
+.fight-over[hidden] { display: none; }
+body.fight-on { overflow: hidden; }
 </style>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}</style>
 </head>
@@ -345,6 +361,7 @@ footer a { color: inherit; }
       <div class="seg-mode app-mode" role="group" aria-label="模式">
         <button id="appSingle" aria-pressed="true">單人</button>
         <button id="appDuel" aria-pressed="false">雙人對打</button>
+        <button id="appFight" aria-pressed="false">格鬥場<small>測試</small></button>
       </div>
     </div>
     <span class="mode-note" id="modeNote">正在連線資料庫…</span>
@@ -566,6 +583,88 @@ footer a { color: inherit; }
     </div>
   </div>
 
+  <section class="fight" data-app="fight" hidden aria-label="格鬥場">
+    <div class="panel fight-setup">
+      <p class="hint warn">格鬥場測試版：用手指操作的一對一格鬥。手感還在調整；官方角色的招式與數值目前是暫時的自動換算，之後會大改（例如遠程角色的普攻、技能的暈眩擊退等效果、新舊角色強度拉平），歡迎回報感想。</p>
+      <div class="group">
+        <span class="lbl">模式</span>
+        <div class="chips" id="fMode">
+          <button class="chip" data-fmode="dummy" aria-pressed="true">打木樁</button>
+          <button class="chip" data-fmode="cpu" aria-pressed="false">打電腦</button>
+          <button class="chip" data-fmode="pvp" aria-pressed="false">兩人同機</button>
+        </div>
+      </div>
+      <div class="group" id="fDummyBox">
+        <span class="lbl">木樁</span>
+        <div class="chips" id="fDummy">
+          <button class="chip" data-fdummy="standing" aria-pressed="true">站著不動</button>
+          <button class="chip" data-fdummy="guard" aria-pressed="false">一直防禦（測破防）</button>
+        </div>
+        <p class="hint">木樁不會倒，2 秒沒挨打就回滿血；上方會顯示這一串的傷害。</p>
+      </div>
+      <div class="group" id="fCpuBox" hidden>
+        <span class="lbl">電腦難度</span>
+        <div class="chips" id="fLevel">
+          <button class="chip" data-flevel="easy" aria-pressed="false">簡單</button>
+          <button class="chip" data-flevel="normal" aria-pressed="true">普通</button>
+          <button class="chip" data-flevel="hard" aria-pressed="false">困難</button>
+        </div>
+      </div>
+      <div class="group fight-pick">
+        <label class="field">左方（玩家 1）<select id="fChar0"></select></label>
+        <p class="hint" id="fInfo0"></p>
+        <label class="field"><span id="fRight">右方</span><select id="fChar1"></select></label>
+        <p class="hint" id="fInfo1"></p>
+        <div class="row">
+          <input id="fOther" type="search" placeholder="其他角色：輸入名稱或 id" autocomplete="off">
+          <select id="fOtherSide" aria-label="放到哪一邊"><option value="0">左方</option><option value="1">右方</option></select>
+          <button class="btn small" id="fOtherGo" type="button">換上</button>
+        </div>
+        <p class="hint" id="fOtherMsg"></p>
+      </div>
+      <div class="group" id="fRoundBox">
+        <div class="row">
+          <label class="field">回合數<select id="fRounds"><option value="1">1（一回合）</option><option value="3">3（三戰兩勝）</option><option value="5">5（五戰三勝）</option></select></label>
+          <label class="field">每回合秒數<input type="number" id="fSecs" min="20" max="300" step="10" value="60"></label>
+        </div>
+      </div>
+      <div class="group">
+        <span class="lbl">按住招式時 ◀ ▶</span>
+        <div class="chips" id="fHoldMove">
+          <button class="chip" data-fhold="turn" aria-pressed="true">只轉身</button>
+          <button class="chip" data-fhold="move" aria-pressed="false">可移動</button>
+        </div>
+        <span class="lbl">矩形預告時間</span>
+        <div class="chips" id="fTeleMode">
+          <button class="chip" data-ftele="dist" aria-pressed="true">依距離（0.3～0.8 秒）</button>
+          <button class="chip" data-ftele="sync" aria-pressed="false">跟前搖同步</button>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="fShowBox" checked> 顯示碰撞箱（黃色虛線＝受傷判定框：寬 60、一個身高，跟圖片大小無關；黃圈＝投射物的命中範圍；短線＝面朝方向；頭上＝目前狀態）</label>
+      <label class="check"><input type="checkbox" id="fShowRange" checked> 顯示判定範圍（綠色＝這招最遠打得到的範圍，白色虛線＝目前拖曳的位置）</label>
+      <div class="row"><button class="btn primary" id="fStart" type="button">開始</button><span class="hint" id="fStartMsg"></span></div>
+      <details class="more">
+        <summary>操作說明</summary>
+        <p class="hint">左下方向鍵：◀ ▶ 移動、跳、防。防禦條在「防」下面：按住每秒扣 20，擋下攻擊不扣血但扣防禦條，扣完＝破防（1 秒不能動）；放開 0.5 秒後慢慢回。<br>
+        右下：紅色＝普攻；紫色＝技能，按鈕上寫著種類。
+        矩形、拋物線：按住拖曳，從按下當下對手的距離開始，左右拖曳調整遠近，放開出招。
+        直線（技能與「普攻↔」）：只決定方向，點一下就朝面向射出、一直飛到場地外或打中；按住會顯示路徑，可以用 ◀ ▶ 轉向，放開才射。
+        按住任何招式時拖到外面的虛線圈再放開＝取消；按住時 ◀ ▶ 預設只轉身（可在上面切換成可移動）。
+        矩形會先預告再打下來（預告秒數顯示在預覽旁邊）；拋物線落點會先標出來。近戰普攻與輔助技能按下就放。<br>
+        被打中會累積硬直值（血條下的黃條），滿了就倒地，起身後 1 秒無敵（角色閃爍）；同一串連續被打，傷害會遞減（100／90／80／70／60%）。
+        出招中、冷卻中提早按，0.15 秒內會自動接上。電腦上也可以用鍵盤：A D 移動、W 跳、S 防禦、J 普攻、K L 技能（兩人模式右方用方向鍵與 1 2 3）。</p>
+      </details>
+    </div>
+    <div class="fight-stage" id="fStage" hidden>
+      <canvas id="fcv" width="720" height="1280" aria-label="格鬥場"></canvas>
+      <button class="btn small fight-exit" id="fExit" type="button">✕ 離開</button>
+      <div class="fight-over" id="fOver" hidden>
+        <strong id="fOverText"></strong>
+        <div class="row"><button class="btn primary" id="fAgain" type="button">再來一場</button><button class="btn" id="fBack" type="button">返回選角</button></div>
+      </div>
+    </div>
+  </section>
+
   <section class="duel" data-app="duel" hidden aria-label="雙人對打">
     <div class="fighters">
       <div class="fighter is-a">
@@ -753,7 +852,7 @@ footer a { color: inherit; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v4.14";
+  const APP_VERSION = "v5.0";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -1521,6 +1620,7 @@ footer a { color: inherit; }
     const dt = Math.min(0.1, (ts - S.lastTs) / 1000);
     S.lastTs = ts;
     if (S.app === "duel") { duelTick(dt); return; }
+    if (S.app === "fight") { fightTick(dt); return; }
     if (!S.part || S.recording) return;
     if (S.playing) {
       const len = totalLen();
@@ -3901,25 +4001,27 @@ footer a { color: inherit; }
     if (!isFinite(x0)) return { x0: -40, x1: 40, y0: -100, y1: 0 };
     return { x0, x1, y0, y1 };
   }
-  function drawFighter(f, anim, idx, x, faceLeft, flash, mul = 1) {
+  function drawFighter(f, anim, idx, x, faceLeft, flash, mul = 1) { drawFighterCtx(dctx, f, anim, idx, x, faceLeft, flash, mul); }
+  // 畫一個角色（腳底中央在 x、地面 0）；c＝要畫在哪個畫布（雙人對戰、格鬥場共用）
+  function drawFighterCtx(c, f, anim, idx, x, faceLeft, flash, mul = 1) {
     const a = f.part.animations[anim];
     if (!a) return;
     const frame = a.frames[Math.max(0, Math.min(a.frames.length - 1, idx))];
-    dctx.save();
-    dctx.translate(x, 0);
-    if (faceLeft) dctx.scale(-1, 1);
-    dctx.translate(f.ox, f.oy);
+    c.save();
+    c.translate(x, 0);
+    if (faceLeft) c.scale(-1, 1);
+    c.translate(f.ox, f.oy);
     for (const t of fItems(f, frame)) {
       const img = fSprite(f, t.name);
       if (!img) continue;
-      dctx.save();
-      dctx.globalAlpha = Math.min(1, t.alpha) * mul;
-      dctx.transform(t.A, t.D, t.B, t.E, t.C, t.F);
-      dctx.drawImage(img, 0, 0);
-      if (flash) { dctx.globalCompositeOperation = "lighter"; dctx.globalAlpha = Math.min(1, t.alpha) * 0.7; dctx.drawImage(img, 0, 0); }
-      dctx.restore();
+      c.save();
+      c.globalAlpha = Math.min(1, t.alpha) * mul;
+      c.transform(t.A, t.D, t.B, t.E, t.C, t.F);
+      c.drawImage(img, 0, 0);
+      if (flash) { c.globalCompositeOperation = "lighter"; c.globalAlpha = Math.min(1, t.alpha) * 0.7; c.drawImage(img, 0, 0); }
+      c.restore();
     }
-    dctx.restore();
+    c.restore();
   }
 
   function drawPartAt(dr, anim, idx, x, y, faceLeft, rotDeg) { drawPartCtx(dctx, dr, anim, idx, x, y, faceLeft, rotDeg); }
@@ -4395,14 +4497,17 @@ footer a { color: inherit; }
     S.app = mode;
     $("appSingle").setAttribute("aria-pressed", String(mode === "single"));
     $("appDuel").setAttribute("aria-pressed", String(mode === "duel"));
+    $("appFight").setAttribute("aria-pressed", String(mode === "fight"));
     document.querySelectorAll("[data-app]").forEach((el) => (el.hidden = el.dataset.app !== mode));
     store.set("app", mode);
     syncUrl();
     if (mode === "duel") initDuel();
+    if (mode === "fight") initFight();
   }
 
   $("appSingle").onclick = () => setApp("single");
   $("appDuel").onclick = () => setApp("duel");
+  $("appFight").onclick = () => setApp("fight");
   [0, 1].forEach((i) => {
     let t; $(`dq${i}`).addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => renderDuelResults(i), 250); });
     $(`dq${i}`).addEventListener("keydown", (e) => { if (e.key === "Enter") renderDuelResults(i); });
@@ -4707,6 +4812,8 @@ footer a { color: inherit; }
       p.set("app", "duel"); p.set("l", D.f[0].r.id); p.set("r", D.f[1].r.id);
       if (D.mode !== "trade" && D.moves.length) d.mv = encMoves(D.moves);
       settingsToUrl(p, d); // 其他設定：見 js-10 的 DUEL_SETTINGS
+    } else if (S.app === "fight") {
+      p.set("app", "fight");
     } else if (S.unit) {
       p.set("app", "single"); p.set("u", S.unit.id);
       const ck = currentClipKey(); if (ck) p.set("clip", ck);
@@ -4893,6 +5000,42 @@ footer a { color: inherit; }
   window.__rk = Object.freeze({
     version: APP_VERSION,
     single: () => ({ unit: S.unit && S.unit.id, anim: S.animName, mode: S.mode, segs: S.segs.length, timeline: S.timeline.length, histAt: H.at, histLen: H.list.length, playing: S.playing, ready: !!(S.part && S.atlas) && $("overlay").hidden }),
+    fight: () => { const g = FG.g; return { inited: !!FG.inited, running: FG.running, ready: !!(FG.inited && $("fChar0").options.length), set: Object.assign({}, FG.set),
+      phase: g && g.phase, round: g && g.round, wins: g && g.wins.slice(), hp: g && g.p.map((p) => Math.round(p.hp)), x: g && g.p.map((p) => Math.round(p.x)),
+      stun: g && g.p.map((p) => +p.stun.toFixed(2)), inv: g && g.p.map((p) => +p.inv.toFixed(2)), gauge: g && g.p.map((p) => +p.gauge.toFixed(1)), sv: g && g.p.map((p) => +p.sv.toFixed(1)), state: g && g.p.map((p) => p.state), aim: g && g.p.map((p) => p.aim.map((a) => (a ? Math.round(a.d) : null))),
+      face: g && g.p.map((p) => p.face), teles: g ? g.teles.length : 0, projs: g ? g.projs.length : 0, stats: g && Object.assign({}, g.stats), winner: g && g.winner, t: g && +g.t.toFixed(2),
+      fs: FG.fs.map((x) => x && { walk: x.walk, atk: x.atk.kind, sk: x.sk.map((k) => k && k.kind) }), canvas: [FW, FH], btn: fightButtons(fightLayout()) }; },
+    /* 格鬥場的固定輸入測試（不畫面、不影響正在玩的那一場）：
+       spec = { c0, c1, mode, rounds, secs, seed, steps, holdMove, teleMode, ai: [難度, 難度],
+                script: [{ side, from, to, mx, guard, atk: 每幾步按一次, jump, sk: [技能序（2＝投射物普攻）, 按下步, 放開步, 往前拖] }] }
+       回傳事件次數、最後狀態與 trace（每一步雙方的 x、y、hp、state）；同樣的 spec 一定得到同樣的結果。 */
+    fightRun: async (spec) => {
+      const f = await Promise.all([fightLoad(spec.c0), fightLoad(spec.c1)]), fs = f.map(fightStats);
+      const g = fightNew({ f, fs, rounds: spec.rounds || 1, secs: spec.secs ?? 0, mode: spec.mode || "dummy", seed: spec.seed || 1,
+        holdMove: !!spec.holdMove, teleMode: spec.teleMode || "dist" });
+      g.phase = "fight"; g.phaseT = 1;
+      const log = { hits: 0, guards: 0, breaks: 0, downs: 0, inv: 0, ko: 0, dmg: [], scale: [] }, mem = [{}, {}], trace = [];
+      for (let k = 0; k < (spec.steps || 600); k++) {
+        const inputs = [0, 1].map((side) => {
+          const inp = fightBlankInput();
+          if (spec.ai && spec.ai[side]) return fightAi(g, side, spec.ai[side], mem[side]);
+          for (const s of spec.script || []) {
+            if (s.side !== side || k < (s.from || 0) || k >= (s.to ?? 1e9)) continue;
+            if (s.mx) inp.mx = s.mx; if (s.guard) inp.guard = true;
+            if (s.atk && (k - (s.from || 0)) % s.atk === 0) inp.atk = true;
+            if (s.jump && k === s.from) inp.jump = true;
+            if (s.sk) { const [n, down, up, drag] = s.sk; if (k === down) inp.skDown[n] = true; if (k > down && k < up) inp.skAim[n] = drag || 0; if (k === up) { inp.skUp[n] = true; inp.skAim[n] = drag || 0; } }
+          }
+          return inp;
+        });
+        const invBefore = g.p.map((p) => p.inv > 0);
+        fightStep(g, inputs);
+        for (const e of g.events) { if (e.type === "hit") log.hits++; if (e.type === "guard") log.guards++; if (e.type === "break") log.breaks++; if (e.type === "ko") log.ko++; if (e.type === "down") log.downs++; if (e.type === "hit") { log.dmg.push(e.dmg); log.scale.push(e.scale); } }
+        g.p.forEach((p, i) => { if (p.inv > 0 && !invBefore[i]) log.inv++; });
+        if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face]));
+      }
+      return { log, trace, maxHp: g.p.map((p) => p.maxHp), dr: g.p.map((p) => p.dr), gauge: g.p.map((p) => +p.gauge.toFixed(1)), sv: g.p.map((p) => +p.sv.toFixed(1)), state: g.p.map((p) => p.state), face: g.p.map((p) => p.face), hp: g.p.map((p) => Math.round(p.hp)), x: g.p.map((p) => Math.round(p.x)), phase: g.phase, wins: g.wins.slice(), stats: Object.assign({}, g.stats), t: +g.t.toFixed(2) };
+    },
     duel: () => ({ inited: !!D.inited, a: D.f[0] && D.f[0].r.id, b: D.f[1] && D.f[1].r.id, kind: D.type, mode: D.mode, seed: D.seed, settings: settingsToSaved(),
       state: D.cd != null ? "countdown" : D.playing ? "playing" : D.idle ? (D.pos > 0 ? "ended" : "idle") : "paused", pos: Math.floor(D.pos || 0),
       sysSfx: duelSfxList().filter((e) => e.sys).map((e) => e.sys + "@" + e.k).join(","), ko: D.ko,
@@ -4988,12 +5131,1084 @@ footer a { color: inherit; }
       if (pend.mode === "remix") setMode("remix");
     }
     if (S.part) histReset(); // 分享連結或專案檔還原的狀態當作起點
-    setApp(urlApp === "duel" || urlApp === "single" ? urlApp : store.get("app", "single"));
+    setApp(["duel", "single", "fight"].includes(urlApp) ? urlApp : store.get("app", "single"));
     S.urlSync.on = true; syncUrl();
     const pt = store.get("pendingToast", null);
     if (pt) { store.set("pendingToast", null); setTimeout(() => toast(pt), 600); }
     requestAnimationFrame(loop);
   })();
+  /* ---------- 格鬥場（v5.0 測試版）：固定數值、角色資料換算 ----------
+     調平衡只要改這個檔：FT（全體共用的規則數值）、FIGHT_PRESET（自製角色手寫數值）、fightStats（官方角色換算）。
+     規則本身在 js-18-fight-engine.js，畫面與觸控在 js-19。時間單位一律是秒，畫面上的「格」＝ 1/60 秒。
+     座標：x 往右為正、場地中央為 0；y 往上為正、地面為 0；長度單位是「場地單位」（角色身高 CH＝170）。 */
+  const FT = {
+    // 基本
+    STEP: 1 / 60, AW: 760, CH: 170,                  // 每步秒數、場地寬、角色身高
+    HURT_W: 60,                                       // 受傷框寬度（跟圖片大小無關，所有角色一樣，置中在腳底）
+    HP_MIN: 850, HP_MAX: 1200, DR_MAX: 0.2,           // 體力、減傷的範圍（官方角色依資料排名換算）
+    // 移動
+    GRAV: 1700, JUMP_V: 800, AIR_CTRL: 0.85,          // 重力、起跳速度（約 188 高、滯空約 0.94 秒）、空中左右移動的比例
+    // 出招
+    ACTIVE: 4 / 60,                                   // 近戰普攻的有效判定持續時間（4 格）
+    BUFFER: 0.15,                                     // 輸入緩衝：出招中、冷卻中提早按下，0.15 秒內會自動接上
+    AIM_MIN: 60,                                      // 矩形、拋物線的最近距離（從身體前緣算）
+    TELE_MIN: 0.3, TELE_MAX: 0.8, TELE_SYNC_MIN: 0.2, // 矩形預告：依距離＝近～遠；跟前搖同步時最短 0.2 秒
+    AIR_SAFE: 40,                                     // 離地超過這個高度，矩形與拋物線爆炸就打不到
+    LOB_TIME: 0.8, LOB_R: 60,                         // 拋物線飛行時間、落地爆炸半徑
+    // 被打中
+    STUN_ATK: 0.3, STUN_SK: 0.5,                      // 硬直秒數（普攻／技能）
+    PUSH_ATK: 160, PUSH_SK: 420, PUSH_DOWN: 820,      // 往後推的初速（普攻／技能／倒地）
+    COMBO_RESET: 0.5,                                 // 恢復操作後多久沒挨打，連段就算結束
+    COMBO_SCALE: [1, 0.9, 0.8, 0.7, 0.6],             // 連段傷害遞減：第 1、2、3、4、5 下以後
+    SV_ATK: 25, SV_SK1: 40, SV_SK2: 60, SV_MAX: 100,  // 硬直累積值：每下加多少、滿多少倒地
+    SV_DECAY_WAIT: 0.5, SV_DECAY: 30,                 // 多久沒挨打開始下降、每秒降多少
+    DOWN_TIME: 0.6, WAKE_INV: 1.0,                    // 倒地躺多久、起身無敵多久
+    // 防禦
+    GAUGE_MAX: 100, GAUGE_HOLD: 20, GAUGE_HIT: 0.35,  // 防禦條：滿格、按住每秒扣、擋下扣原本傷害的幾成
+    GAUGE_WAIT: 0.5, GAUGE_REGEN: 25,                 // 放開後多久開始回、每秒回多少
+    GAUGE_REARM: 30,                                  // 破防後防禦條要回到這麼多才能再防（不然一直按著會連續破防）
+    BLOCK_STUN: 0.15, GUARD_PUSH: 140, BREAK_STUN: 1.0, // 擋下時的防禦硬直、滑行初速、破防硬直
+    // 其他
+    BUFF_TIME: 5, BUFF_MUL: 1.3, HEAL: 120,           // 輔助技能：加攻擊秒數與倍率、回血
+    DUMMY_REFILL: 2,                                  // 木樁多久沒挨打就回滿血
+  };
+  const fclamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const toFrames = (sec) => Math.round(sec * 60);
+
+  /* 招式的操作方式：dist＝按住拖曳決定位置（矩形、拋物線），dir＝只決定方向、點一下就放（直線、普攻投射物），
+     tap＝按下就放（近戰普攻、輔助技能） */
+  const AIM_MODE = { rect: "dist", lob: "dist", line: "dir", shot: "dir", melee: "tap", buff: "tap" };
+  const SK_KIND_LABEL = { rect: "矩形瞄準", line: "直線投射物", lob: "拋物線", buff: "輔助（加攻＋回血）" };
+
+  /* 自製角色的手寫數值（官方角色由 fightStats 從資料換算）；沒寫的欄位用換算值 */
+  const FIGHT_PRESET = {
+    "x001-cube": { hp: 1150, dr: 0.15, walk: 270, atk: { kind: "melee", reach: 110, dmg: 60, cd: 0.45 },
+      sk: [{ kind: "rect", range: 240, width: 170, cd: 5 }, { kind: "rect", range: 620, width: 200, cd: 10 }] },
+    "x002-orb": { hp: 880, dr: 0.02, walk: 200, atk: { kind: "shot", dmg: 50, cd: 0.55 },
+      sk: [{ kind: "line", speed: 600, cd: 6 }, { kind: "lob", range: 480, cd: 10 }] },
+  };
+  // 測試用角色：涵蓋長短手、各種投射物與輔助技能
+  const FIGHT_ROSTER = [
+    ["x001-cube", "自製・近戰＋兩招矩形（近、遠）"],
+    ["x002-orb", "自製・遠程＋直線投射物＋拋物線"],
+    ["u1001u-brown", "近戰短手＋矩形技能"],
+    ["u434u-edward", "長手＋普攻投射物＋矩形技能"],
+    ["u1164h-moon", "中距離＋直線投射物技能（冰球）"],
+    ["u1015h-sally", "拋物線＋直線投射物技能"],
+    ["u013e-moon", "近戰＋輔助技能"],
+  ];
+
+  /* 體力、減傷依「在全部角色裡的排名」換算（折衷：有差異但不極端）。排名表第一次用到時算一次。 */
+  let fightRankCache = null;
+  function fightRanks() {
+    if (fightRankCache && fightRankCache.src === S.stats) return fightRankCache;
+    const base = (v) => (Array.isArray(v) ? +v[0] : +v) || 0;
+    const hp = [], def = [];
+    for (const id in S.stats) {
+      const st = S.stats[id]; if (!st) continue;
+      const h = base(st.hp); if (h > 1) { hp.push(h); def.push(base(st.pd) + base(st.md)); }
+    }
+    hp.sort((a, b) => a - b); def.sort((a, b) => a - b);
+    // 這個值在排序陣列裡的百分位（0～1）
+    const pct = (arr, v) => { if (!arr.length) return 0.5; let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m] < v) lo = m + 1; else hi = m; } return lo / arr.length; };
+    fightRankCache = { src: S.stats, hp: (v) => pct(hp, base(v)), def: (pd, md) => pct(def, base(pd) + base(md)) };
+    return fightRankCache;
+  }
+
+  /* 角色 → 格鬥場數值
+     回傳 { hp, dr（減傷）, bw（身體寬，用在推擠）, walk, atk, sk: [技能1, 技能2] }
+     每招：{ kind, clip, dur（動作長度）, hitAt（前搖＝出招到判定的時間）, dmg, cd, range, … }
+     前搖：資料裡有準備動作（*_ready）就依它算，沒有就取動作長度的 50%（見 hitFrac）。 */
+  function fightStats(f) {
+    const id = f.r.id, st = S.stats[id] || {}, pj = f.proj || {}, pre = FIGHT_PRESET[id] || {}, rk = fightRanks();
+    const rg = +st.rg || 150, mv = +st.mv || 90, ai = +st.ai || 1.2;
+    const fly = (c) => (c && (c.m === "LINEAR" || c.m === "CURVE") && c.v > 0 && c.e ? c.m : null);
+    const dur = (clip, lo, hi) => fclamp(clip && f.part.animations[clip] ? f.part.animations[clip].frame_count / (f.part.anim_rate || 24) : lo, lo, hi);
+    const atkClip = f.clips.attack;
+    const ad = dur(atkClip, 0.3, 0.6);
+    const nFly = fly(pj.n);
+    const atk = Object.assign({ clip: atkClip, dur: ad, cd: Math.max(ad, fclamp(ai * 0.45, 0.35, 0.8)), hitAt: ad * (atkClip ? hitFrac(f, atkClip) : 0.5),
+      kind: nFly ? "shot" : "melee", reach: fclamp(rg * 0.6, 70, 150), speed: 700, bul: nFly ? pj.n : null, sv: FT.SV_ATK }, pre.atk || {});
+    if (atk.dmg == null) atk.dmg = Math.round(fclamp(70 * atk.cd / 0.55, 40, 80));
+    atk.cd = Math.max(atk.cd, atk.dur);
+    const sk = [0, 1].map((s) => {
+      const base = (st.sk || [])[s], clip = f.clips[s ? "skill2" : "skill1"], p = (pre.sk || [])[s];
+      if (!clip || (!base && !p)) return null;
+      const cfg = pj[s ? "s2" : "s1"], fk = fly(cfg);
+      const d = dur(clip, 0.4, 1.0);
+      const o = { clip, dur: d, hitAt: d * hitFrac(f, clip), dmg: s ? 200 : 120, sv: s ? FT.SV_SK2 : FT.SV_SK1,
+        cd: s ? fclamp(+(base && base.cd) || 12, 8, 15) : fclamp(+(base && base.cd) || 6, 4, 10),
+        name: (f.skills && f.skills[s] && f.skills[s].name) || `技能${s + 1}`, bul: cfg && cfg.p && f.bul[cfg.p] ? cfg : null };
+      if (p) return Object.assign(o, { range: 400, width: 160, speed: 560 }, p);
+      if (!(base.e && base.e.length)) return Object.assign(o, { kind: "buff" });
+      if (fk === "LINEAR") return Object.assign(o, { kind: "line", speed: 560 });
+      if (fk === "CURVE") return Object.assign(o, { kind: "lob", range: fclamp(rg * 1.2, 260, 620) });
+      return Object.assign(o, { kind: "rect", range: fclamp(rg * 1.4, 220, 700), width: fclamp((+base.ar || 200) * 0.5, 90, 260) });
+    });
+    return {
+      hp: pre.hp || Math.round(FT.HP_MIN + (FT.HP_MAX - FT.HP_MIN) * rk.hp(st.hp)),
+      dr: pre.dr != null ? pre.dr : +(FT.DR_MAX * rk.def(st.pd, st.md)).toFixed(3),
+      bw: fclamp(f.w / f.h * FT.CH, 56, 120), walk: pre.walk || fclamp(110 + mv * 1.5, 170, 340), atk, sk,
+    };
+  }
+  // 招式的「前搖／有效／後搖」（格）。有效：近戰＝持續判定、投射物＝射出那一格、矩形＝預告結束那一格
+  function fightFrames(k, melee) {
+    const active = melee ? FT.ACTIVE : FT.STEP;
+    return { startup: toFrames(k.hitAt), active: toFrames(active), recovery: Math.max(0, toFrames(k.dur - k.hitAt - active)) };
+  }
+  // 選角畫面用的說明
+  function fightSummary(fs) {
+    const a = fs.atk, fr = (k, m) => { const x = fightFrames(k, m); return `${x.startup}／${x.active}／${x.recovery} 格`; };
+    const parts = [`體力 ${fs.hp}、減傷 ${Math.round(fs.dr * 100)}%、移動 ${Math.round(fs.walk)}`,
+      (a.kind === "melee" ? `普攻 近戰 ${Math.round(a.reach)} 遠・${a.dmg}` : `普攻 直線投射物・${a.dmg}`) + `（${fr(a, a.kind === "melee")}）`];
+    fs.sk.forEach((k, s) => {
+      if (!k) { parts.push(`技能${s + 1} 沒有`); return; }
+      const extra = k.kind === "rect" ? `，射程 ${Math.round(k.range)}、寬 ${Math.round(k.width)}` : k.kind === "lob" ? `，射程 ${Math.round(k.range)}` : "";
+      parts.push(`技能${s + 1} ${SK_KIND_LABEL[k.kind]}${k.kind === "buff" ? "" : "・" + k.dmg}${extra}・冷卻 ${k.cd.toFixed(1)} 秒（${fr(k, false)}）`);
+    });
+    return parts.join("｜") + "　※ 前搖／有效／後搖";
+  }
+  /* ---------- 格鬥場（v5.0 測試版）：規則引擎 ----------
+     一對一、側面、玩家自己操作。fightStep 每一步（1/60 秒）只吃「雙方這一步的按鍵」與固定亂數，
+     同樣的按鍵就會得到同樣的結果（之後錄影、線上對戰都靠這點）。跟雙人對戰的 compileReal 完全分開。
+     數值在 js-18-fight-data.js，畫面與觸控在 js-19。 */
+
+  /* ---------- 狀態 ----------
+     cfg：{ f: [角色, 角色], fs: [數值, 數值], rounds, secs（0＝不限時）, mode: "dummy"|"cpu"|"pvp", seed,
+            holdMove（按住招式時左右鍵也能走路）, teleMode（矩形預告："dist" 依距離／"sync" 跟前搖） }
+     每位選手 p：
+       位置 x、y、vy、vx、face（1 往右）；hp／maxHp；dr（減傷）
+       act      正在做的招式 { kind: "atk"|"sk", s（0、1＝技能，2＝普攻）, t, dur, hitAt, id, air, … }
+       stun／stunKind  剩幾秒不能操作、原因："hit" 被打、"block" 防禦硬直、"break" 破防、"down" 倒地
+       kbv      被推的速度；inv 無敵剩幾秒（起身無敵）
+       sv       硬直累積值（滿 SV_MAX 倒地）；combo 這一串被打第幾下（傷害遞減用）；quiet 多久沒挨打；free 恢復操作多久了
+       gauge    防禦條；guard 這一步是否在防禦；guardIdle 多久沒防禦（回防禦條用）；guardLock 破防後還不能防
+       cd[2]／atkCd 冷卻；aim[3] 按住中的招式 { d0, d, cancel }；buf[3] 輸入緩衝 { t, up }
+       buff     加攻剩幾秒；state 目前狀態（給畫面與測試看，見 fightStateOf） */
+  function fightFighter(g, side) {
+    const fs = g.cfg.fs[side];
+    return { side, x: side ? 220 : -220, y: 0, vy: 0, vx: 0, face: side ? -1 : 1, hp: fs.hp, maxHp: fs.hp, dr: fs.dr,
+      act: null, stun: 0, stunKind: "", kbv: 0, inv: 0, sv: 0, combo: 0, quiet: 9, free: 9, gauge: FT.GAUGE_MAX, guard: false, guardIdle: 9, guardLock: false,
+      cd: [0, 0], atkCd: 0, aim: [null, null, null], buf: [null, null, null], buff: 0, anim: { clip: null, t: 0 }, ko: false, state: "idle" };
+  }
+  function fightNew(cfg) {
+    const g = { cfg, rng: mulberry32((cfg.seed || 1) * 7919 + 7), round: 1, wins: [0, 0], phase: "intro", phaseT: 0, timeLeft: cfg.secs,
+      projs: [], teles: [], fx: [], events: [], t: 0, winner: -1, roundWinner: -1, nextId: 1,
+      stats: { lastCombo: 0, lastDmg: 0, total: 0, hits: 0 } };
+    g.p = [fightFighter(g, 0), fightFighter(g, 1)];
+    g.events.push({ type: "round" });
+    return g;
+  }
+  /* 一步的按鍵：mx 左右（-1／0／1）、jump 起跳（按下那一步）、guard 防禦（按住）、atk 近戰普攻（按下那一步）；
+     「按住」的按鈕用三格陣列：0、1＝技能，2＝普攻（投射物角色）。skDown／skUp＝按下、放開那一步，
+     skAim＝從按下位置往前拖了多少場地單位（只有矩形、拋物線會用），skCancel＝手指在取消圈外 */
+  const fightBlankInput = () => ({ mx: 0, jump: false, guard: false, atk: false, skDown: [false, false, false], skUp: [false, false, false], skCancel: [false, false, false], skAim: [null, null, null] });
+  const FT_EMPTY = fightBlankInput();
+  const fightSlot = (fs, s) => (s === 2 ? fs.atk : fs.sk[s]); // 第 s 格按鈕對應的招式（2＝普攻）
+  const FT_AIMED = { rect: true, lob: true, line: true, shot: true }; // 按住才出招的種類（放開時出招）
+  const fOnGround = (p) => p.y <= 0.01;
+  const fFree = (p) => !p.ko && p.stun <= 0 && !p.act; // 可以出新招
+  // 矩形預告時間：依距離（近快遠慢）或跟這招的前搖一樣長
+  const fightTeleDelay = (g, k, d) => (g.cfg.teleMode === "sync" ? Math.max(FT.TELE_SYNC_MIN, k.hitAt) : FT.TELE_MIN + (FT.TELE_MAX - FT.TELE_MIN) * (d / k.range));
+  // 目前狀態（給畫面顯示與測試用；規則本身看各個計時器）
+  const FT_STATE_LABEL = { idle: "待機", walk: "走路", jump: "跳", aim: "瞄準", attack: "攻擊", skill: "技能", guard: "防禦", block: "防禦硬直", hit: "硬直", break: "破防", down: "倒地", ko: "倒下" };
+  function fightStateOf(p) {
+    if (p.ko) return "ko";
+    if (p.stun > 0) return p.stunKind || "hit";
+    if (p.act) return p.act.kind === "atk" ? "attack" : "skill";
+    if (p.aim.some(Boolean)) return "aim";
+    if (p.guard) return "guard";
+    if (!fOnGround(p)) return "jump";
+    return Math.abs(p.vx) > 1 ? "walk" : "idle";
+  }
+
+  /* ---------- 每一步 ---------- */
+  function fightStep(g, inputs) {
+    const dt = FT.STEP; g.t += dt; g.events = [];
+    fightPhase(g);
+    const live = g.phase === "fight";
+    if (live && g.cfg.secs > 0 && g.cfg.mode !== "dummy") {
+      g.timeLeft = Math.max(0, g.timeLeft - dt);
+      if (g.timeLeft <= 0) fightRoundEnd(g, -2);
+    }
+    for (const i of [0, 1]) fightUnit(g, g.p[i], g.p[1 - i], live && g.phase === "fight" ? inputs[i] || FT_EMPTY : FT_EMPTY);
+    fightSeparate(g);
+    fightProjectiles(g);
+    fightTeles(g);
+    for (const p of g.p) p.state = fightStateOf(p);
+    for (const e of g.fx) e.t += dt;
+    g.fx = g.fx.filter((e) => e.t < (e.life || 0.6));
+    // 木樁：一陣子沒挨打就回滿血，而且不會倒
+    if (g.cfg.mode === "dummy") {
+      const d = g.p[1];
+      if (d.quiet >= FT.DUMMY_REFILL && d.hp < d.maxHp) { d.hp = d.maxHp; g.stats.lastCombo = 0; }
+    }
+  }
+  // 回合流程：intro（第幾回合）→ count（3 2 1）→ fight → end（K.O.／時間到）→ 下一回合或 over
+  function fightPhase(g) {
+    const dt = FT.STEP; g.phaseT += dt;
+    if (g.phase === "intro" && g.phaseT >= 0.8) { g.phase = "count"; g.phaseT = 0; g.events.push({ type: "beep" }); }
+    else if (g.phase === "count") {
+      const n = Math.floor(g.phaseT);
+      if (n !== Math.floor(g.phaseT - dt) && n < 3) g.events.push({ type: "beep" });
+      if (g.phaseT >= 3) { g.phase = "fight"; g.phaseT = 0; g.events.push({ type: "go" }); }
+    } else if (g.phase === "end" && g.phaseT >= 2.2) {
+      const need = Math.ceil(g.cfg.rounds / 2);
+      if (g.wins[0] >= need || g.wins[1] >= need || g.round >= g.cfg.rounds) {
+        g.phase = "over"; g.winner = g.wins[0] === g.wins[1] ? -1 : g.wins[0] > g.wins[1] ? 0 : 1;
+      } else {
+        g.round++; g.phase = "intro"; g.phaseT = 0; g.timeLeft = g.cfg.secs;
+        g.p = [fightFighter(g, 0), fightFighter(g, 1)]; g.projs = []; g.teles = []; g.events.push({ type: "round" });
+      }
+    }
+  }
+  function fightRoundEnd(g, loser) {
+    if (g.phase !== "fight") return;
+    let w;
+    if (loser >= 0) w = 1 - loser;
+    else { const a = g.p[0].hp / g.p[0].maxHp, b = g.p[1].hp / g.p[1].maxHp; w = Math.abs(a - b) < 1e-6 ? -1 : a > b ? 0 : 1; } // 時間到：比剩餘血量比例
+    g.roundWinner = w; g.endKind = loser >= 0 ? "ko" : "time";
+    if (w >= 0) g.wins[w]++;
+    g.phase = "end"; g.phaseT = 0;
+    g.events.push({ type: loser >= 0 ? "ko" : "timeup" });
+  }
+
+  function fightAnim(p, clip) { if (p.anim.clip !== clip) p.anim = { clip, t: 0 }; }
+
+  /* 一位選手的一步：計時器 → 倒下／硬直 → 防禦 → 出招中 → 按住中的招式 → 移動與出新招 → 物理 */
+  function fightUnit(g, p, o, inp) {
+    const dt = FT.STEP, f = g.cfg.f[p.side];
+    fightTimers(p, inp);
+    if (p.ko) { p.x += p.kbv * dt; p.kbv *= 0.9; fightPhysics(g, p); return; }
+    if (p.stun > 0) { fightStunned(g, p); return; }
+    p.x += p.kbv * dt; p.kbv *= 0.8; // 擋下攻擊後的小滑行
+    const ground = fOnGround(p);
+    fightGuard(g, p, inp, ground);
+    if (p.stun > 0) return; // 這一步破防了
+    if (p.act) fightActing(g, p, o);
+    fightAims(g, p, o, inp);
+    if (!p.act) fightFreeMove(g, p, o, inp, ground);
+    if (!p.act) fightAnim(p, !ground ? f.clips.move || idleClip(f) : Math.abs(p.vx) > 1 ? f.clips.move || idleClip(f) : idleClip(f));
+    fightPhysics(g, p);
+  }
+
+  function fightTimers(p, inp) {
+    const dt = FT.STEP;
+    p.anim.t += dt;
+    p.cd = p.cd.map((c) => Math.max(0, c - dt)); p.atkCd = Math.max(0, p.atkCd - dt);
+    p.inv = Math.max(0, p.inv - dt); p.buff = Math.max(0, p.buff - dt);
+    p.quiet += dt;
+    // 硬直累積值：一陣子沒挨打就開始下降
+    if (p.quiet >= FT.SV_DECAY_WAIT) p.sv = Math.max(0, p.sv - FT.SV_DECAY * dt);
+    // 連段：恢復操作後 COMBO_RESET 秒內又被打中仍算同一串；超過就重來（傷害遞減歸零）
+    p.free = p.stun > 0 ? 0 : p.free + dt;
+    if (p.free >= FT.COMBO_RESET) p.combo = 0;
+    // 輸入緩衝：按下的那一步記起來，BUFFER 秒內能出招就自動接上；放開也記下來（點一下＝按下＋放開）
+    for (const s of [0, 1, 2]) {
+      const b = p.buf[s];
+      if (b) { b.t -= dt; if (b.t <= 0) p.buf[s] = null; }
+      const down = s === 2 ? inp.skDown[2] || inp.atk : inp.skDown[s];
+      if (down && !p.aim[s]) p.buf[s] = { t: FT.BUFFER, up: false };
+      if (inp.skUp[s] && p.buf[s]) p.buf[s].up = true;
+    }
+  }
+
+  // 硬直中（被打、防禦硬直、破防、倒地）：被推、播被擊退動作；倒地結束後給起身無敵
+  function fightStunned(g, p) {
+    const dt = FT.STEP, f = g.cfg.f[p.side];
+    p.stun -= dt; p.x += p.kbv * dt; p.kbv *= 0.88;
+    p.guard = p.stunKind === "block"; // 防禦硬直時仍然在防禦（連續的攻擊照樣擋）
+    if (p.stunKind !== "block") fightAnim(p, f.clips.knockback || idleClip(f));
+    if (p.stun <= 0) {
+      if (p.stunKind === "down") { p.inv = FT.WAKE_INV; g.fx.push({ kind: "text", text: "起身", x: p.x, y: FT.CH * 1.2, t: 0, life: 0.6 }); }
+      p.stun = 0; p.stunKind = "";
+    }
+    fightPhysics(g, p);
+  }
+
+  // 防禦：按住下、在地上、沒在出招、防禦條還有。按住本身會消耗防禦條，扣完就破防；破防後要回到 GAUGE_REARM 才能再防
+  function fightGuard(g, p, inp, ground) {
+    const dt = FT.STEP;
+    if (p.guardLock && p.gauge >= FT.GAUGE_REARM) p.guardLock = false;
+    p.guard = !!inp.guard && ground && !p.act && p.gauge > 0 && !p.guardLock;
+    if (p.guard) {
+      p.guardIdle = 0;
+      p.gauge -= FT.GAUGE_HOLD * dt;
+      if (p.gauge <= 0) fightBreak(g, p);
+    } else {
+      p.guardIdle += dt;
+      if (p.guardIdle >= FT.GAUGE_WAIT && p.quiet >= FT.GAUGE_WAIT) p.gauge = Math.min(FT.GAUGE_MAX, p.gauge + FT.GAUGE_REGEN * dt);
+    }
+  }
+  function fightBreak(g, p) {
+    p.gauge = 0; p.guard = false; p.guardLock = true; p.stun = FT.BREAK_STUN; p.stunKind = "break"; p.kbv = -p.face * 160;
+    p.aim = [null, null, null]; p.act = null;
+    g.fx.push({ kind: "break", x: p.x, y: FT.CH * 0.55, t: 0, life: 0.7 }); g.events.push({ type: "break", side: p.side });
+  }
+
+  // 出招中：到前搖結束才判定；近戰普攻的判定持續 ACTIVE 秒（打中一次就停）
+  function fightActing(g, p, o) {
+    const a = p.act; a.t += FT.STEP;
+    if (a.t >= a.hitAt && !a.done) {
+      if (a.melee) { if (fightMeleeCheck(g, p, o, a) || a.t >= a.hitAt + FT.ACTIVE) a.done = true; }
+      else { a.done = true; fightRelease(g, p, o, a); }
+    }
+    if (a.t >= a.dur) p.act = null;
+  }
+
+  // 按住中的招式：矩形、拋物線可以拖曳調整距離；放開出招（拖到外圈＝取消）
+  function fightAims(g, p, o, inp) {
+    const fs = g.cfg.fs[p.side];
+    for (const s of [0, 1, 2]) {
+      const aim = p.aim[s], k = fightSlot(fs, s);
+      if (!aim) continue;
+      if (AIM_MODE[k.kind] === "dist" && inp.skAim[s] != null) aim.d = fclamp(aim.d0 + inp.skAim[s], FT.AIM_MIN, k.range);
+      aim.cancel = !!inp.skCancel[s];
+      if (!inp.skUp[s] && !aim.release) continue;
+      p.aim[s] = null;
+      if (aim.cancel || !fFree(p) || (s < 2 && !fOnGround(p))) continue;
+      fightCast(g, p, s, k, aim.d);
+    }
+  }
+  // 出招（放開按住的招式，或按下就放的招式）：設定動作、冷卻；矩形在這一刻放出預告
+  function fightCast(g, p, s, k, d) {
+    const f = g.cfg.f[p.side];
+    const act = { kind: s === 2 ? "atk" : "sk", s, t: 0, dur: k.dur, hitAt: k.hitAt, done: false, clip: k.clip, aimD: d, id: g.nextId++, air: !fOnGround(p), melee: s === 2 && k.kind === "melee" };
+    if (k.kind === "rect") {
+      const delay = fightTeleDelay(g, k, d);
+      g.teles.push({ own: p.side, x: p.x + p.face * (g.cfg.fs[p.side].bw / 2 + d), w: k.width, t: 0, delay, dmg: k.dmg, sv: k.sv, s, bul: k.bul, id: act.id });
+      act.done = true; // 傷害由預告結算
+    }
+    p.act = act;
+    if (s === 2) p.atkCd = k.cd; else p.cd[s] = k.cd;
+    fightAnim(p, k.clip || idleClip(f));
+    if (s < 2) g.events.push({ type: "cast", side: p.side });
+    if (act.melee) { const bw = g.cfg.fs[p.side].bw; g.fx.push({ kind: "reach", own: p.side, x0: p.x + p.face * bw / 2, x1: p.x + p.face * (bw / 2 + k.reach), y: p.y, t: 0, life: FT.ACTIVE + k.hitAt + 0.1 }); }
+    if (k.kind === "buff") g.fx.push({ kind: "selfring", own: p.side, x: p.x, t: 0, life: 0.8 });
+  }
+
+  // 沒在出招：移動、轉身、跳、開始新招（含輸入緩衝）
+  function fightFreeMove(g, p, o, inp, ground) {
+    const dt = FT.STEP, fs = g.cfg.fs[p.side];
+    const aiming = p.aim.some(Boolean);
+    // 按住招式時：預設左右鍵只轉身不走路（設定 holdMove 時照常走路）
+    const mx = p.guard ? 0 : inp.mx;
+    if (mx) p.face = mx > 0 ? 1 : -1;
+    const walk = aiming && !g.cfg.holdMove ? 0 : mx;
+    p.vx = walk * fs.walk * (ground ? 1 : FT.AIR_CTRL);
+    p.x += p.vx * dt;
+    if (inp.jump && ground && !p.guard && !p.aim[0] && !p.aim[1]) p.vy = FT.JUMP_V; // 瞄準技能時不能跳（技能只能在地上放）
+    if (p.guard) return;
+    // 開始新招：普攻（地上、空中都可以），技能（只能在地上；投射物技能每人場上最多一顆）
+    for (const s of [2, 0, 1]) {
+      const b = p.buf[s], k = fightSlot(fs, s);
+      if (!b || !k || p.act || p.aim[s]) continue;
+      if (s === 2 ? p.atkCd > 0 : p.cd[s] > 0 || !ground) continue;
+      if (s < 2 && (k.kind === "line" || k.kind === "lob") && g.projs.some((q) => q.own === p.side && q.skill)) continue;
+      p.buf[s] = null;
+      if (!FT_AIMED[k.kind]) { fightCast(g, p, s, k, 0); continue; } // 近戰普攻、輔助技能：按下就放
+      // 按住才出的招：起點＝按下當下對手的距離（之後不會自己跟著跑）；已經放開了（點一下）就直接出
+      const gap = Math.max(0, Math.abs(o.x - p.x) - (fs.bw + g.cfg.fs[o.side].bw) / 2);
+      const d0 = AIM_MODE[k.kind] === "dist" ? fclamp(gap + g.cfg.fs[o.side].bw / 2, FT.AIM_MIN, k.range) : 0;
+      p.aim[s] = { d0, d: d0, cancel: false, release: b.up };
+    }
+  }
+
+  // 物理：重力、落地；空中普攻還沒結束就落地＝中斷
+  function fightPhysics(g, p) {
+    const dt = FT.STEP;
+    if (p.y > 0 || p.vy > 0) {
+      p.y += p.vy * dt; p.vy -= FT.GRAV * dt;
+      if (p.y <= 0) {
+        p.y = 0; p.vy = 0;
+        if (p.act && p.act.air) { p.act = null; g.fx.push({ kind: "text", text: "落地", x: p.x, y: FT.CH * 1.1, t: 0, life: 0.4 }); }
+      }
+    }
+  }
+  // 兩人不會重疊（用身體寬推開）、不會走出場地
+  function fightSeparate(g) {
+    const [a, b] = g.p, fa = g.cfg.fs[0], fb = g.cfg.fs[1];
+    const minD = (fa.bw + fb.bw) / 2;
+    const dx = b.x - a.x;
+    if (Math.abs(dx) < minD && Math.abs(a.y - b.y) < FT.CH * 0.7) {
+      const push = (minD - Math.abs(dx)) / 2, dir = dx >= 0 ? 1 : -1;
+      a.x -= dir * push; b.x += dir * push;
+    }
+    for (const [p, fs] of [[a, fa], [b, fb]]) p.x = fclamp(p.x, -FT.AW / 2 + fs.bw / 2, FT.AW / 2 - fs.bw / 2);
+  }
+
+  /* ---------- 判定 ----------
+     受傷框：寬 HURT_W、從腳底往上一個身高，置中在角色 x（跟圖片大小無關）。 */
+  const fHurt = (o) => ({ x0: o.x - FT.HURT_W / 2, x1: o.x + FT.HURT_W / 2, y0: o.y, y1: o.y + FT.CH });
+  const fOverlapX = (a0, a1, b0, b1) => Math.max(a0, a1) >= Math.min(b0, b1) && Math.min(a0, a1) <= Math.max(b0, b1);
+  // 近戰普攻：判定框從身體前緣往前 reach，高度跟著出招者當下的位置（空中普攻也是）
+  function fightMeleeCheck(g, p, o, a) {
+    const fs = g.cfg.fs[p.side], k = fs.atk, h = fHurt(o);
+    const x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.reach;
+    if (o.ko || !fOverlapX(x0, x1, h.x0, h.x1) || h.y0 > p.y + FT.CH * 0.8 || h.y1 < p.y) return false;
+    fightHit(g, p, o, k.dmg, k.sv, false, a.id);
+    g.events.push({ type: "swing", side: p.side });
+    return true;
+  }
+  // 射出投射物或使用輔助技能（前搖結束的那一刻）
+  function fightRelease(g, p, o, a) {
+    const fs = g.cfg.fs[p.side], k = fightSlot(fs, a.s);
+    if (k.kind === "buff") {
+      p.buff = FT.BUFF_TIME; p.hp = Math.min(p.maxHp, p.hp + FT.HEAL);
+      g.fx.push({ kind: "buff", x: p.x, y: FT.CH, t: 0, life: 1.0 }); return;
+    }
+    const x = p.x + p.face * fs.bw / 2, base = { own: p.side, x, px: x, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id };
+    if (k.kind === "lob") {
+      // 拋物線：LOB_TIME 秒後落在拖曳的距離（從身體前緣算）；畫面會在落點畫預告
+      const T = FT.LOB_TIME, h0 = FT.CH * 0.6 + p.y, land = x + p.face * a.aimD;
+      g.projs.push(Object.assign(base, { kind: "lob", y: h0, py: h0, vx: (land - x) / T, vy: (0.5 * FT.GRAV * T * T - h0) / T, landX: land }));
+    } else {
+      // 直線（技能與普攻投射物）：朝面向一直飛，飛出場地或打中才消失
+      const y = p.y + FT.CH * (a.s === 2 ? 0.35 : 0.28);
+      g.projs.push(Object.assign(base, { kind: "line", y, py: y, vx: p.face * (k.speed || 560), vy: 0 }));
+    }
+  }
+  // 投射物：用「上一步到這一步的連線」判斷有沒有碰到受傷框（快的投射物也不會穿過去）
+  function fightProjectiles(g) {
+    const dt = FT.STEP;
+    for (const q of g.projs) {
+      q.px = q.x; q.py = q.y; q.t += dt;
+      q.x += q.vx * dt;
+      if (q.kind === "lob") { q.y += q.vy * dt; q.vy -= FT.GRAV * dt; }
+      const o = g.p[1 - q.own], h = fHurt(o), r = q.kind === "lob" ? 26 : 14;
+      const yLo = Math.min(q.y, q.py) - r, yHi = Math.max(q.y, q.py) + r;
+      if (!o.ko && fOverlapX(q.px, q.x, h.x0 - r, h.x1 + r) && yHi > h.y0 && yLo < h.y1) {
+        fightHit(g, g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id); q.dead = true;
+        g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 });
+        continue;
+      }
+      if (q.kind === "lob" && q.y <= 0) {
+        q.dead = true; g.fx.push({ kind: "boom", x: q.x, y: 0, t: 0, life: 0.45 });
+        if (!o.ko && fOverlapX(q.x - FT.LOB_R, q.x + FT.LOB_R, h.x0, h.x1) && o.y < FT.AIR_SAFE) fightHit(g, g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id);
+      }
+      if (Math.abs(q.x) > FT.AW / 2 + 80) q.dead = true; // 飛出場地
+    }
+    g.projs = g.projs.filter((q) => !q.dead);
+  }
+  // 矩形預告：時間到時對手的受傷框還在範圍裡（而且沒跳起來）就命中
+  function fightTeles(g) {
+    for (const t of g.teles) {
+      t.t += FT.STEP;
+      if (t.t < t.delay) continue;
+      t.dead = true;
+      const o = g.p[1 - t.own], h = fHurt(o);
+      g.fx.push({ kind: "impact", x: t.x, w: t.w, t: 0, life: 0.45, bul: t.bul, own: t.own });
+      if (!o.ko && fOverlapX(t.x - t.w / 2, t.x + t.w / 2, h.x0, h.x1) && o.y < FT.AIR_SAFE) fightHit(g, g.p[t.own], o, t.dmg, t.sv, true, t.id);
+    }
+    g.teles = g.teles.filter((t) => !t.dead);
+  }
+
+  /* 結算一次命中
+     無敵 → 沒事；防禦 → 不扣血、扣防禦條、防禦硬直（扣完就破防）；
+     否則 → 傷害 ×（1 − 減傷）× 連段遞減，硬直、往後推，累積硬直值（同一招只算一次），滿了就倒地 */
+  function fightHit(g, a, o, dmg, sv, heavy, id) {
+    if (o.inv > 0 || o.ko) { g.fx.push({ kind: "text", text: "無敵", x: o.x, y: FT.CH * 1.1, t: 0, life: 0.5 }); return; }
+    const dir = o.x >= a.x ? 1 : -1, raw = dmg * (a.buff > 0 ? FT.BUFF_MUL : 1);
+    o.quiet = 0;
+    if (o.guard) {
+      o.gauge -= raw * FT.GAUGE_HIT; o.guardIdle = 0;
+      g.fx.push({ kind: "num", text: "-" + Math.round(raw * FT.GAUGE_HIT), x: o.x, y: FT.CH * 1.05, t: 0, life: 0.7, guard: true });
+      g.events.push({ type: "guard", side: a.side });
+      if (o.gauge <= 0) fightBreak(g, o);
+      else { o.stun = FT.BLOCK_STUN; o.stunKind = "block"; o.kbv = dir * FT.GUARD_PUSH; }
+      return;
+    }
+    const scale = FT.COMBO_SCALE[Math.min(o.combo, FT.COMBO_SCALE.length - 1)];
+    const v = Math.round(raw * (1 - o.dr) * scale);
+    o.combo++;
+    if (id == null || o.lastSvId !== id) { o.sv += sv; o.lastSvId = id; } // 同一招只累積一次
+    o.act = null; o.aim = [null, null, null]; o.guard = false; o.anim = { clip: null, t: 0 };
+    if (o.sv >= FT.SV_MAX) {
+      o.sv = 0; o.stun = FT.DOWN_TIME; o.stunKind = "down"; o.kbv = dir * FT.PUSH_DOWN;
+      g.fx.push({ kind: "text", text: "倒地", x: o.x, y: FT.CH * 1.35, t: 0, life: 0.9 }); g.events.push({ type: "down", side: o.side });
+    } else { o.stun = heavy ? FT.STUN_SK : FT.STUN_ATK; o.stunKind = "hit"; o.kbv = dir * (heavy ? FT.PUSH_SK : FT.PUSH_ATK); }
+    g.fx.push({ kind: "num", text: String(v) + (scale < 1 ? ` ×${scale}` : ""), x: o.x, y: FT.CH * 1.05, t: 0, life: 0.8, heavy });
+    g.fx.push({ kind: "spark", x: o.x - dir * 10, y: FT.CH * 0.55 + o.y, t: 0, life: 0.3 });
+    g.events.push({ type: "hit", side: a.side, heavy, dmg: v, scale });
+    o.hp -= v;
+    if (g.cfg.mode === "dummy" && o.side === 1) {
+      o.hp = Math.max(1, o.hp);
+      const st = g.stats; st.total += v; st.hits++; st.lastCombo = (st.lastCombo || 0) + v; st.lastDmg = v;
+      return;
+    }
+    if (o.hp <= 0) { o.hp = 0; o.ko = true; o.kbv = dir * FT.PUSH_DOWN; o.stun = 0; fightAnim(o, g.cfg.f[o.side].clips.knockback || idleClip(g.cfg.f[o.side])); fightRoundEnd(g, o.side); }
+  }
+
+  /* ---------- 電腦對手 ----------
+     跟玩家用同一套按鍵：每隔「反應時間」想一次要做什麼，中間維持上一次的決定。
+     木樁：standing＝站著不動、guard＝一直防禦（測防禦條與破防）。 */
+  const FIGHT_AI = {
+    easy: { react: 0.45, guard: 0.15, dodge: 0.1, skill: 0.25, err: 0.3 },
+    normal: { react: 0.28, guard: 0.35, dodge: 0.3, skill: 0.5, err: 0.15 },
+    hard: { react: 0.14, guard: 0.6, dodge: 0.55, skill: 0.8, err: 0.05 },
+  };
+  function fightAi(g, side, level, mem) {
+    const inp = fightBlankInput();
+    const p = g.p[side], o = g.p[1 - side], fs = g.cfg.fs[side], ofs = g.cfg.fs[1 - side];
+    if (level === "standing") return inp;
+    if (level === "guard") { inp.guard = true; return inp; }
+    const P = FIGHT_AI[level] || FIGHT_AI.normal, rnd = g.rng;
+    // 按住招式中：不拖（瞄準按下當下的位置），下一次思考時放開
+    mem.think = (mem.think || 0) - FT.STEP;
+    if (mem.think > 0) { inp.mx = mem.mx || 0; inp.guard = !!mem.guard; if (mem.aimS != null) inp.skAim[mem.aimS] = 0; return inp; }
+    mem.think = P.react * (0.7 + rnd() * 0.6);
+    mem.guard = false; mem.mx = 0;
+    if (mem.aimS != null) { inp.skUp[mem.aimS] = true; mem.aimS = null; return inp; }
+    const gap = Math.abs(o.x - p.x) - (fs.bw + ofs.bw) / 2, toward = o.x >= p.x ? 1 : -1;
+    const far = gap + ofs.bw / 2;
+    // 危險：對手正在出招且靠近、腳下有預告、有投射物飛過來 → 跳開或防禦（防禦條太少就不防）
+    const danger = (o.act && gap < (ofs.atk.reach || 100) + 60) ||
+      g.teles.some((t) => t.own !== side && Math.abs(t.x - p.x) < t.w / 2 + FT.HURT_W / 2 + 20) ||
+      g.projs.some((q) => q.own !== side && Math.abs(q.x - p.x) < 260 && Math.sign(p.x - q.x) === Math.sign(q.vx));
+    if (danger && fOnGround(p)) {
+      const r = rnd();
+      if (r < P.dodge) { inp.jump = true; inp.mx = rnd() < 0.5 ? -toward : 0; mem.mx = inp.mx; return inp; }
+      if (r < P.dodge + P.guard && p.gauge > 25) { inp.guard = mem.guard = true; mem.think = 0.35 + rnd() * 0.3; return inp; }
+    }
+    const press = (s) => { inp.skDown[s] = true; if (FT_AIMED[fightSlot(fs, s).kind]) { mem.aimS = s; mem.think = 0.12 + rnd() * 0.2; } return inp; };
+    // 背對對手時先轉身（往對手那邊按一下），下一次思考再出手
+    if (p.face !== toward && !p.act) { inp.mx = toward; mem.mx = 0; mem.think = 0.05; return inp; }
+    // 技能
+    for (const s of [1, 0]) {
+      const k = fs.sk[s];
+      if (!k || p.cd[s] > 0 || rnd() > P.skill) continue;
+      if (k.kind === "buff") { if (p.hp < p.maxHp * 0.7) return press(s); continue; }
+      if (k.kind === "line" || far <= k.range) return press(s);
+    }
+    // 普攻與走位
+    const a = fs.atk, reach = a.kind === "melee" ? a.reach : 420, want = a.kind === "melee" ? a.reach * 0.8 : 260;
+    if (gap <= reach && p.atkCd <= 0 && rnd() > P.err) { if (a.kind === "melee") inp.atk = true; else return press(2); }
+    if (gap > want + 10) inp.mx = toward;
+    else if (a.kind !== "melee" && gap < want * 0.5) inp.mx = -toward;
+    mem.mx = inp.mx;
+    return inp;
+  }
+  /* ---------- 格鬥場（v5.0 測試版）：選角、畫面、觸控、回合 ----------
+     畫布寬 720、高度隨手機比例（直拿）。一人：上面血條、中間場地、下面按鈕。
+     兩人：上下各半畫同一場（上半轉 180 度給對面的人看），中央共用血條；每人在自己那半邊操作。 */
+  const fcv = $("fcv"), fctx = fcv.getContext("2d");
+  // 畫布寬固定 720，高度跟著手機螢幕比例（16:9～21:9），整個螢幕都用上
+  const FW = 720;
+  let FH = 1280;
+  const FG = {
+    g: null, f: [null, null], fs: [null, null], acc: 0, cache: new Map(), ai: [{}, {}], running: false,
+    set: Object.assign({ mode: "dummy", level: "normal", dummy: "standing", c0: "x001-cube", c1: "x002-orb", rounds: 3, secs: 60, showRange: true, showBox: true, holdMove: false, teleMode: "dist" }, store.get("fight", {})),
+    ctl: [null, null], keys: new Set(),
+    // 測試用：網址加 ?fightbot=normal 讓左方也由電腦操作（看電腦互打）
+    bots: [["easy", "normal", "hard"].includes(new URLSearchParams(location.search).get("fightbot")) ? new URLSearchParams(location.search).get("fightbot") : null, null],
+  };
+  const fightSave = () => store.set("fight", FG.set);
+
+  /* 版面：一人／兩人；兩人時每個人用「自己的座標」（下半部），上半部那位畫的時候整個轉 180 度 */
+  function fightLayout() {
+    if (FG.set.mode === "pvp") { const m = FH / 2, ch = 274; return { pvp: true, view: { y: m + 36, h: FH - ch - m - 36, ground: 52 }, ctrl: { y: FH - ch, h: ch }, hud: { y: m - 36, h: 72 } }; }
+    const ch = 410; return { pvp: false, view: { y: 150, h: FH - ch - 150, ground: 110 }, ctrl: { y: FH - ch, h: ch }, hud: { y: 0, h: 150 } };
+  }
+  const fScale = FW / FT.AW;
+  function fightButtons(L) {
+    const c = L.ctrl, k = c.h / 410;
+    return {
+      // 方向鍵：上＝跳、下＝防禦、左右＝移動（r＝按鈕半徑）
+      up: { x: 160, y: c.y + c.h * 0.55 - 92 * Math.min(1, k + 0.2), r: 46 * Math.min(1, k + 0.2) },
+      down: { x: 160, y: c.y + c.h * 0.55 + 92 * Math.min(1, k + 0.2), r: 46 * Math.min(1, k + 0.2) },
+      left: { x: 160 - 92 * Math.min(1, k + 0.2), y: c.y + c.h * 0.55, r: 46 * Math.min(1, k + 0.2) },
+      right: { x: 160 + 92 * Math.min(1, k + 0.2), y: c.y + c.h * 0.55, r: 46 * Math.min(1, k + 0.2) },
+      atk: { x: 600, y: c.y + c.h * 0.6, r: 80 * Math.min(1, k + 0.15) },
+      sk0: { x: 440, y: c.y + c.h * 0.8, r: 56 * Math.min(1, k + 0.2) },
+      sk1: { x: 455, y: c.y + c.h * 0.3, r: 56 * Math.min(1, k + 0.2) },
+    };
+  }
+
+  /* ---------- 選角畫面 ---------- */
+  function fightCharOptions(sel, want) {
+    sel.textContent = "";
+    const have = (id) => S.index.some((r) => r.id === id);
+    for (const [id, note] of FIGHT_ROSTER) {
+      if (!have(id)) continue;
+      const r = S.index.find((x) => x.id === id), o = document.createElement("option");
+      o.value = id; o.textContent = `${r.name}（${note}）`; sel.appendChild(o);
+    }
+    if (want && !FIGHT_ROSTER.some(([id]) => id === want) && have(want)) {
+      const r = S.index.find((x) => x.id === want), o = document.createElement("option");
+      o.value = want; o.textContent = `${r.name}（${want}）`; sel.appendChild(o);
+    }
+    sel.value = want && [...sel.options].some((o) => o.value === want) ? want : sel.options[0] ? sel.options[0].value : "";
+  }
+  async function fightLoad(id) {
+    if (FG.cache.has(id)) return FG.cache.get(id);
+    const r = S.index.find((x) => x.id === id);
+    if (!r) throw new Error("找不到角色 " + id);
+    const f = await loadFighter(r);
+    FG.cache.set(id, f);
+    return f;
+  }
+  async function fightInfo(i) {
+    const id = $(`fChar${i}`).value, box = $(`fInfo${i}`);
+    box.textContent = "讀取中…";
+    try { const f = await fightLoad(id); box.textContent = fightSummary(fightStats(f)); }
+    catch (e) { box.textContent = "讀取失敗：" + (e.message || e); }
+  }
+  function fightSetupUi() {
+    const st = FG.set;
+    document.querySelectorAll("#fMode .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.fmode === st.mode)));
+    document.querySelectorAll("#fLevel .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.flevel === st.level)));
+    document.querySelectorAll("#fDummy .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.fdummy === st.dummy)));
+    document.querySelectorAll("#fHoldMove .chip").forEach((c) => c.setAttribute("aria-pressed", String((c.dataset.fhold === "move") === !!st.holdMove)));
+    document.querySelectorAll("#fTeleMode .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.ftele === (st.teleMode === "sync" ? "sync" : "dist"))));
+    $("fCpuBox").hidden = st.mode !== "cpu"; $("fDummyBox").hidden = st.mode !== "dummy";
+    $("fRoundBox").hidden = st.mode === "dummy";
+    $("fRight").textContent = st.mode === "pvp" ? "右方（玩家 2）" : st.mode === "cpu" ? "右方（電腦）" : "右方（木樁）";
+    $("fRounds").value = String(st.rounds); $("fSecs").value = String(st.secs); $("fShowRange").checked = st.showRange !== false; $("fShowBox").checked = st.showBox !== false;
+  }
+  async function initFight() {
+    if (FG.inited) return; FG.inited = true;
+    await ensureStats();
+    fightCharOptions($("fChar0"), FG.set.c0); fightCharOptions($("fChar1"), FG.set.c1);
+    fightSetupUi(); fightInfo(0); fightInfo(1);
+  }
+  document.querySelectorAll("#fMode .chip").forEach((c) => (c.onclick = () => { FG.set.mode = c.dataset.fmode; fightSave(); fightSetupUi(); }));
+  document.querySelectorAll("#fLevel .chip").forEach((c) => (c.onclick = () => { FG.set.level = c.dataset.flevel; fightSave(); fightSetupUi(); }));
+  document.querySelectorAll("#fDummy .chip").forEach((c) => (c.onclick = () => { FG.set.dummy = c.dataset.fdummy; fightSave(); fightSetupUi(); }));
+  document.querySelectorAll("#fHoldMove .chip").forEach((c) => (c.onclick = () => { FG.set.holdMove = c.dataset.fhold === "move"; fightSave(); fightSetupUi(); }));
+  document.querySelectorAll("#fTeleMode .chip").forEach((c) => (c.onclick = () => { FG.set.teleMode = c.dataset.ftele; fightSave(); fightSetupUi(); }));
+  for (const i of [0, 1]) $(`fChar${i}`).onchange = () => { FG.set["c" + i] = $(`fChar${i}`).value; fightSave(); fightInfo(i); };
+  $("fShowRange").onchange = () => { FG.set.showRange = $("fShowRange").checked; fightSave(); };
+  $("fShowBox").onchange = () => { FG.set.showBox = $("fShowBox").checked; fightSave(); };
+  $("fRounds").onchange = () => { FG.set.rounds = Math.max(1, Math.min(9, +$("fRounds").value || 3)); fightSave(); };
+  $("fSecs").onchange = () => { FG.set.secs = Math.max(20, Math.min(300, Math.round(+$("fSecs").value || 60))); $("fSecs").value = FG.set.secs; fightSave(); };
+  $("fOtherGo").onclick = () => {
+    const q = $("fOther").value.trim(); if (!q) return;
+    const r = S.index.find((x) => x.id === q) || S.index.find((x) => x.name === q) || S.index.find((x) => (x.name || "").includes(q));
+    if (!r) { $("fOtherMsg").textContent = `找不到「${q}」`; return; }
+    const side = +$("fOtherSide").value;
+    FG.set["c" + side] = r.id; fightSave(); fightCharOptions($(`fChar${side}`), r.id); fightInfo(side);
+    $("fOtherMsg").textContent = `已放到${side ? "右方" : "左方"}：${r.name}`;
+  };
+
+  /* ---------- 開始／結束 ---------- */
+  async function fightStart() {
+    $("fStart").disabled = true; $("fStartMsg").textContent = "載入角色中…";
+    try {
+      const f = await Promise.all([fightLoad(FG.set.c0), fightLoad(FG.set.c1)]);
+      FG.f = f; FG.fs = f.map(fightStats);
+      const mode = FG.set.mode;
+      FG.g = fightNew({ f, fs: FG.fs, rounds: mode === "dummy" ? 1 : FG.set.rounds, secs: mode === "dummy" ? 0 : FG.set.secs, mode, seed: newSeed(100000),
+        holdMove: !!FG.set.holdMove, teleMode: FG.set.teleMode === "sync" ? "sync" : "dist" });
+      FG.ai = [{}, {}]; FG.acc = 0; FG.ctl = [fightCtl(), fightCtl()];
+      $("fStage").hidden = false; $("fOver").hidden = true; $("fStage").classList.toggle("pvp", mode === "pvp");
+      $("fExit").textContent = mode === "pvp" ? "✕" : "✕ 離開";
+      document.body.classList.add("fight-on");
+      FG.running = true; sfxUnlock(); fightResize();
+      $("fStartMsg").textContent = "";
+    } catch (e) { $("fStartMsg").textContent = "載入失敗：" + (e.message || e); }
+    $("fStart").disabled = false;
+  }
+  function fightStop() {
+    FG.running = false; $("fStage").hidden = true; document.body.classList.remove("fight-on");
+  }
+  $("fStart").onclick = fightStart;
+  $("fExit").onclick = fightStop;
+  $("fBack").onclick = fightStop;
+  $("fAgain").onclick = () => { fightStart(); };
+  function fightResize() {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    FH = Math.round(fclamp(FW * vh / Math.max(1, vw), 1280, 1560));
+    if (fcv.height !== FH) fcv.height = FH;
+    const w = Math.min(vw, vh * FW / FH);
+    fcv.style.width = w + "px"; fcv.style.height = (w * FH / FW) + "px";
+  }
+  window.addEventListener("resize", () => { if (FG.running) fightResize(); });
+
+  /* ---------- 觸控 ----------
+     每一根手指記住它屬於哪位玩家、按的是什麼（搖桿／普攻／技能）。座標一律換成「該玩家自己的座標」：
+     上半部那位（兩人模式的玩家 2）把畫布轉 180 度來看。 */
+  // 每位玩家的觸控狀態：pads＝方向鍵（手指 → 哪一顆），btn＝按住中的普攻／技能（手指位置），以及這一步要送出的「按下／放開」
+  const fightCtl = () => ({ pads: new Map(), btn: {}, jump: false, atk: false, skDown: [false, false, false], skUp: [false, false, false], skCancelAt: [false, false, false] });
+  const SLOT_OF = { sk0: 0, sk1: 1, atk: 2 };
+  const PADS = ["up", "down", "left", "right"];
+  const atkIsShot = (who) => !!(FG.fs[who] && FG.fs[who].atk.kind === "shot");
+  function fightLocal(ev) {
+    const r = fcv.getBoundingClientRect();
+    let x = (ev.clientX - r.left) / r.width * FW, y = (ev.clientY - r.top) / r.height * FH;
+    const L = fightLayout();
+    let who = 0;
+    if (L.pvp && y < FH / 2) { who = 1; x = FW - x; y = FH - y; }
+    return { who, x, y };
+  }
+  // 手指在哪一顆方向鍵上（左半邊才算；離按鈕稍遠也算，方便滑過去換方向）
+  function padAt(B, x, y) {
+    let best = null, bd = 1e9;
+    for (const k of PADS) { const b = B[k], d = Math.hypot(x - b.x, y - b.y); if (d < b.r * 1.6 && d < bd) { best = k; bd = d; } }
+    return best;
+  }
+  const fTouches = new Map();
+  fcv.addEventListener("pointerdown", (ev) => {
+    if (!FG.g) return;
+    ev.preventDefault(); sfxUnlock();
+    try { fcv.setPointerCapture(ev.pointerId); } catch {}
+    const { who, x, y } = fightLocal(ev), L = fightLayout(), B = fightButtons(L), c = FG.ctl[who];
+    if (!c || (FG.set.mode !== "pvp" && who !== 0)) return;
+    if (y < L.ctrl.y - 60) return;
+    if (x < 330) {
+      const k = padAt(B, x, y); if (!k) return;
+      c.pads.set(ev.pointerId, k); if (k === "up") c.jump = true;
+      fTouches.set(ev.pointerId, { who, kind: "pad" }); return;
+    }
+    let best = null, bd = 1e9;
+    for (const k of ["atk", "sk0", "sk1"]) { const b = B[k], d = Math.hypot(x - b.x, y - b.y); if (d < b.r * 1.35 && d < bd) { best = k; bd = d; } }
+    if (!best) return;
+    c.btn[best] = { id: ev.pointerId, x0: x, y0: y, x, y };
+    if (best === "atk" && !atkIsShot(who)) c.atk = true; else c.skDown[SLOT_OF[best]] = true;
+    fTouches.set(ev.pointerId, { who, kind: best });
+  });
+  fcv.addEventListener("pointermove", (ev) => {
+    const t = fTouches.get(ev.pointerId); if (!t) return;
+    ev.preventDefault();
+    const { x, y } = fightLocal(ev), c = FG.ctl[t.who];
+    if (t.kind === "pad") {
+      const k = padAt(fightButtons(fightLayout()), x, y), prev = c.pads.get(ev.pointerId);
+      if (k && k !== prev) { c.pads.set(ev.pointerId, k); if (k === "up") c.jump = true; }
+      return;
+    }
+    const o = c.btn[t.kind]; if (o) { o.x = x; o.y = y; }
+  });
+  const fUp = (ev) => {
+    const t = fTouches.get(ev.pointerId); if (!t) return;
+    fTouches.delete(ev.pointerId);
+    const c = FG.ctl[t.who]; if (!c) return;
+    if (t.kind === "pad") { c.pads.delete(ev.pointerId); return; }
+    const s = SLOT_OF[t.kind], b = c.btn[t.kind], B = fightButtons(fightLayout())[t.kind];
+    if (s < 2 || atkIsShot(t.who)) { c.skCancelAt[s] = !!b && Math.hypot(b.x - B.x, b.y - B.y) > B.r * 2.3; c.skUp[s] = true; }
+    delete c.btn[t.kind];
+  };
+  fcv.addEventListener("pointerup", fUp); fcv.addEventListener("pointercancel", fUp);
+  // 鍵盤（電腦上測試用）：左方 A D 移動、W 跳、S 防禦、J 普攻、K L 技能；兩人模式右方用方向鍵、1 2 3
+  const FKEYS = [{ l: "a", r: "d", u: "w", d: "s", atk: "j", s0: "k", s1: "l" }, { l: "arrowleft", r: "arrowright", u: "arrowup", d: "arrowdown", atk: "1", s0: "2", s1: "3" }];
+  window.addEventListener("keydown", (e) => {
+    if (!FG.running || e.repeat) return;
+    const k = e.key.toLowerCase(); FG.keys.add(k);
+    FKEYS.forEach((m, i) => { const c = FG.ctl[i]; if (!c) return; if (k === m.atk) { if (atkIsShot(i)) c.skDown[2] = true; else c.atk = true; } if (k === m.s0) c.skDown[0] = true; if (k === m.s1) c.skDown[1] = true; if (k === m.u) c.jump = true; });
+  });
+  window.addEventListener("keyup", (e) => {
+    if (!FG.running) return;
+    const k = e.key.toLowerCase(); FG.keys.delete(k);
+    FKEYS.forEach((m, i) => { const c = FG.ctl[i]; if (!c) return; if (k === m.s0) c.skUp[0] = true; if (k === m.s1) c.skUp[1] = true; if (k === m.atk && atkIsShot(i)) c.skUp[2] = true; });
+  });
+
+  // 觸控狀態 → 這一步的按鍵（引擎格式）
+  function fightInput(i) {
+    const c = FG.ctl[i], g = FG.g, inp = fightBlankInput();
+    if (!c) return inp;
+    const flip = FG.set.mode === "pvp" && i === 1 ? -1 : 1; // 上半部的人看到的畫面是轉過來的
+    const held = new Set(c.pads.values());
+    let lx = held.has("right") ? 1 : held.has("left") ? -1 : 0;
+    if (held.has("down")) inp.guard = true;
+    const m = FKEYS[i], K = FG.keys;
+    if (K.has(m.l)) lx = -1; if (K.has(m.r)) lx = 1; if (K.has(m.d)) inp.guard = true;
+    inp.mx = lx * flip;
+    inp.jump = c.jump; inp.atk = c.atk; inp.skDown = c.skDown.slice(); inp.skUp = c.skUp.slice(); inp.skCancel = c.skCancelAt.slice();
+    const face = g ? g.p[i].face : 1, B = fightButtons(fightLayout());
+    for (const [key, s] of Object.entries(SLOT_OF)) {
+      const b = c.btn[key]; if (!b || (s === 2 && !atkIsShot(i))) continue;
+      inp.skAim[s] = ((b.x - b.x0) * flip / fScale) * 1.6 * face; // 往自己看到的「前方」拖＝打更遠
+      inp.skCancel[s] = Math.hypot(b.x - B[key].x, b.y - B[key].y) > B[key].r * 2.3;
+    }
+    c.jump = false; c.atk = false; c.skDown = [false, false, false]; c.skUp = [false, false, false]; c.skCancelAt = [false, false, false];
+    return inp;
+  }
+
+  /* ---------- 每一格 ---------- */
+  function fightTick(dt) {
+    if (!FG.running || !FG.g) return;
+    const g = FG.g;
+    FG.acc = Math.min(FG.acc + dt, 0.25);
+    while (FG.acc >= FT.STEP) {
+      const mode = FG.set.mode;
+      const inputs = [FG.bots[0] ? fightAi(g, 0, FG.bots[0], FG.ai[0]) : fightInput(0),
+        mode === "pvp" ? fightInput(1) : fightAi(g, 1, mode === "dummy" ? FG.set.dummy : FG.set.level, FG.ai[1])];
+      fightStep(g, inputs);
+      for (const e of g.events) fightSound(e);
+      FG.acc -= FT.STEP;
+    }
+    if (g.phase === "over" && $("fOver").hidden) {
+      $("fOver").hidden = false;
+      $("fOverText").textContent = g.winner === -1 ? "平手" : `${g.winner ? "右方" : "左方"}・${FG.f[g.winner].r.name} 獲勝（${g.wins[0]}：${g.wins[1]}）`;
+    }
+    fightDraw();
+  }
+  function fightSound(e) {
+    const cfg = (s) => SFX.cfg.duel[s] || {};
+    if (e.type === "beep") sfxPlay("cdBeep"); else if (e.type === "go") sfxPlay("cdGo");
+    else if (e.type === "ko") sfxPlay("ko"); else if (e.type === "timeup") sfxPlay("cdGo");
+    else if (e.type === "hit") sfxPlay(cfg(e.side)[e.heavy ? "hit" : "atk"], `duel${e.side}-${e.heavy ? "hit" : "atk"}`);
+    else if (e.type === "cast") sfxPlay(cfg(e.side).skill, `duel${e.side}-skill`);
+    else if (e.type === "guard") sfxPlay("punch", null, { rate: 1.6 });
+    else if (e.type === "break") sfxPlay("thunder");
+  }
+
+  /* ---------- 繪製 ---------- */
+  function fightDraw() {
+    const c = fctx, g = FG.g, L = fightLayout();
+    c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1;
+    c.fillStyle = "#14182b"; c.fillRect(0, 0, FW, FH);
+    if (L.pvp) {
+      fightDrawPlayer(c, g, L, 0);
+      c.save(); c.translate(FW, FH); c.rotate(Math.PI); fightDrawPlayer(c, g, L, 1); c.restore();
+      fightHudBar(c, g, L.hud.y, L.hud.h, true);
+    } else {
+      fightDrawPlayer(c, g, L, 0);
+      fightHudBar(c, g, 18, 110, false);
+      if (g.cfg.mode === "dummy") {
+        const st = g.stats;
+        c.fillStyle = "#cfd6ff"; c.font = canvasFont(700, 24); c.textAlign = "left"; c.textBaseline = "top";
+        c.fillText(`木樁・這一串 ${st.lastCombo || 0}　最後一下 ${st.lastDmg || 0}　總共 ${st.total}（${st.hits} 下）`, 20, L.view.y + 10);
+      }
+    }
+  }
+  // 一位玩家看到的畫面（自己的座標：場地＋按鈕）
+  function fightDrawPlayer(c, g, L, who) {
+    const v = L.view, gy = v.y + v.h - v.ground;
+    c.save();
+    c.beginPath(); c.rect(0, v.y, FW, v.h); c.clip();
+    const sky = c.createLinearGradient(0, v.y, 0, gy); sky.addColorStop(0, "#2a3363"); sky.addColorStop(1, "#5b6aa8");
+    c.fillStyle = sky; c.fillRect(0, v.y, FW, v.h);
+    c.fillStyle = "#3d3a52"; c.fillRect(0, gy, FW, v.ground);
+    c.fillStyle = "#8f8bb0"; c.fillRect(0, gy, FW, 4);
+    const X = (x) => FW / 2 + x * fScale, Y = (y) => gy - y * fScale;
+    // 矩形預告（雙方都看得到）
+    for (const t of g.teles) {
+      const pr = Math.min(1, t.t / t.delay), x0 = X(t.x - t.w / 2), w = t.w * fScale, h = FT.CH * 0.95 * fScale;
+      c.fillStyle = `rgba(255,60,60,${0.12 + 0.25 * pr})`; c.fillRect(x0, gy - h, w, h);
+      c.fillStyle = "rgba(255,60,60,0.45)"; c.fillRect(x0, gy - h * pr, w, h * pr);
+      c.strokeStyle = Math.floor(t.t * 12) % 2 ? "#ff4050" : "#ffd0d0"; c.lineWidth = 3; c.strokeRect(x0, gy - h, w, h);
+      fightLabel(c, Math.max(0, t.delay - t.t).toFixed(2) + " 秒", x0 + w / 2, gy - h - 16, 22, "#ffd0d0");
+    }
+    // 拖曳瞄準：綠色＝這招能打到的全部範圍，白色＝目前拖到的位置（自己的一定畫；勾選「顯示判定範圍」時也畫對手的）
+    for (const i of [0, 1]) if (i === who || FG.set.showRange) fightDrawAims(c, g, i, X, Y, gy);
+    // 角色
+    for (const i of [0, 1]) fightDrawFighter(c, g, i, X, Y);
+    // 拋物線落點（飛行中；畫在角色前面才不會被擋住）
+    for (const q of g.projs) if (q.kind === "lob") {
+      c.save(); c.strokeStyle = "#ff8a3d"; c.fillStyle = "rgba(255,138,61,0.28)"; c.lineWidth = 4; c.setLineDash([8, 6]);
+      c.beginPath(); c.ellipse(X(q.landX), gy - 2, FT.LOB_R * fScale, 14, 0, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore();
+    }
+    // 碰撞箱（受傷判定）：角色＝黃色框（寬 HURT_W、高一個身高），投射物＝黃色圓（命中半徑）；頭上＝目前狀態
+    if (FG.set.showBox) {
+      c.save(); c.strokeStyle = "#ffd84a"; c.lineWidth = 2; c.setLineDash([6, 4]);
+      const hw = FT.HURT_W / 2;
+      for (const i of [0, 1]) {
+        const p = g.p[i];
+        c.strokeRect(X(p.x - hw), Y(p.y + FT.CH), FT.HURT_W * fScale, FT.CH * fScale);
+        c.beginPath(); c.moveTo(X(p.x + p.face * hw), Y(p.y + FT.CH * 0.5)); c.lineTo(X(p.x + p.face * (hw + 18)), Y(p.y + FT.CH * 0.5)); c.stroke(); // 面向
+        fightLabel(c, FT_STATE_LABEL[p.state] || p.state, X(p.x), Y(p.y + FT.CH * 1.32), 22, "#ffd84a");
+      }
+      for (const q of g.projs) { c.beginPath(); c.arc(X(q.x), Y(q.y), (q.kind === "lob" ? 26 : 14) * fScale, 0, Math.PI * 2); c.stroke(); }
+      c.restore();
+    }
+    // 投射物
+    for (const q of g.projs) {
+      const f = g.cfg.f[q.own], dr = q.bul && f.bul[q.bul.p], k = fScale * FT.CH / f.h;
+      if (dr) {
+        const anim = pickAnim(dr.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
+        if (anim) {
+          const n = dr.part.animations[anim].frame_count, idx = Math.floor(q.t * (dr.part.anim_rate || 24)) % Math.max(1, n);
+          const rot = q.kind === "lob" && q.bul.r ? Math.atan2(-q.vy, Math.abs(q.vx)) * 180 / Math.PI * -1 : 0;
+          c.save(); c.translate(X(q.x), Y(q.y)); c.scale(k, k); drawPartCtx(c, dr, anim, idx, 0, 0, q.face < 0, rot); c.restore();
+          continue;
+        }
+      }
+      c.fillStyle = q.own ? "#59a7ff" : "#ff6b6b";
+      c.beginPath(); c.arc(X(q.x), Y(q.y), q.kind === "lob" ? 16 : 12, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = "#fff"; c.lineWidth = 3; c.stroke();
+    }
+    // 特效
+    for (const e of g.fx) fightDrawFx(c, g, e, X, Y, gy);
+    // 回合訊息
+    fightBanner(c, g, v.y + v.h * 0.38);
+    c.restore();
+    fightDrawControls(c, g, L, who);
+  }
+  /* 按住中的招式預覽（依 AIM_MODE）
+     dist（矩形、拋物線）：綠色＝能拖到的全部範圍、白色虛線＝目前位置；矩形旁邊寫預告秒數
+     dir（直線、普攻投射物）：綠色＝從身體前緣一路到場地邊的路徑（跟著面向翻轉） */
+  function fightDrawAims(c, g, i, X, Y, gy) {
+    const me = g.p[i], fs = g.cfg.fs[i], front = me.x + me.face * fs.bw / 2, H = FT.CH * 0.95 * fScale;
+    const green = (x0, x1, y0, y1) => { c.fillStyle = "rgba(60,220,110,0.18)"; c.strokeStyle = "rgba(60,220,110,0.85)"; c.lineWidth = 2; const a = Math.min(x0, x1), b = Math.max(x0, x1); c.fillRect(a, y0, b - a, y1 - y0); c.strokeRect(a, y0, b - a, y1 - y0); };
+    const at = (d) => X(front + me.face * d);
+    for (const s of [0, 1, 2]) {
+      const a = me.aim[s]; if (!a) continue;
+      const k = fightSlot(fs, s), mode = AIM_MODE[k.kind];
+      c.save();
+      c.setLineDash([10, 8]); c.lineWidth = 4; c.strokeStyle = a.cancel ? "#888" : "#ffffff";
+      if (mode === "dir") {
+        const py = Y(me.y + FT.CH * (s === 2 ? 0.35 : 0.28)), edge = X(me.face * (FT.AW / 2 + 80));
+        if (FG.set.showRange) green(at(0), edge, py - 16, py + 16);
+        c.beginPath(); c.moveTo(at(0), py); c.lineTo(at(70), py); c.stroke();
+        c.setLineDash([]); c.fillStyle = a.cancel ? "#888" : "#fff"; // 箭頭＝方向
+        c.beginPath(); c.moveTo(at(95), py); c.lineTo(at(65), py - 16); c.lineTo(at(65), py + 16); c.closePath(); c.fill();
+      } else if (k.kind === "rect") {
+        if (FG.set.showRange) green(at(FT.AIM_MIN - k.width / 2), at(k.range + k.width / 2), gy - H, gy);
+        const x0 = at(a.d - k.width / 2), x1 = at(a.d + k.width / 2), lo = Math.min(x0, x1);
+        c.fillStyle = a.cancel ? "rgba(120,120,120,0.18)" : "rgba(255,255,255,0.16)"; c.fillRect(lo, gy - H, Math.abs(x1 - x0), H); c.strokeRect(lo, gy - H, Math.abs(x1 - x0), H);
+        fightLabel(c, "預告 " + fightTeleDelay(g, k, a.d).toFixed(2) + " 秒", at(a.d), gy - H - 16, 22, "#ffffff");
+      } else if (k.kind === "lob") {
+        if (FG.set.showRange) green(at(FT.AIM_MIN - FT.LOB_R), at(k.range + FT.LOB_R), gy - 24, gy);
+        const sx = at(0), ex = at(a.d), sy = Y(me.y + FT.CH * 0.6), top = Math.min(sy, gy) - 120;
+        c.beginPath(); c.moveTo(sx, sy); c.quadraticCurveTo((sx + ex) / 2, top, ex, gy); c.stroke();
+        c.setLineDash([]); c.beginPath(); c.ellipse(ex, gy - 4, FT.LOB_R * fScale, 12, 0, 0, Math.PI * 2); c.stroke();
+      }
+      if (a.cancel) { c.fillStyle = "#fff"; c.font = canvasFont(900, 30); c.textAlign = "center"; c.fillText("取消", mode === "dir" ? at(70) : at(a.d), gy - H - 46); }
+      c.restore();
+    }
+  }
+  // 有外框的小字（預告秒數、狀態）
+  function fightLabel(c, text, x, y, size, color) {
+    c.save(); c.font = canvasFont(900, size); c.textAlign = "center"; c.textBaseline = "middle"; c.setLineDash([]);
+    c.lineWidth = 5; c.strokeStyle = "#1b2038"; c.strokeText(text, x, y); c.fillStyle = color; c.fillText(text, x, y); c.restore();
+  }
+  function fightDrawFighter(c, g, i, X, Y) {
+    const p = g.p[i], f = g.cfg.f[i];
+    let clip = p.act ? p.act.clip : p.anim.clip;
+    if (!clip || !f.part.animations[clip]) clip = idleClip(f);
+    const A = f.part.animations[clip], n = A.frame_count;
+    let idx;
+    if (p.act) idx = Math.min(n - 1, Math.floor(p.act.t / p.act.dur * n));
+    else if (p.stun > 0 || p.ko) idx = Math.min(n - 1, Math.floor(p.anim.t * (f.part.anim_rate || 24)));
+    else idx = Math.floor(p.anim.t * (f.part.anim_rate || 24)) % Math.max(1, n);
+    const k = fScale * FT.CH / f.h;
+    let alpha = 1;
+    if (p.inv > 0 && Math.floor(p.inv * 12) % 2) alpha = 0.3;
+    // 陰影
+    c.fillStyle = "rgba(0,0,0,0.25)"; c.beginPath(); c.ellipse(X(p.x), Y(0), g.cfg.fs[i].bw * fScale * 0.6, 8, 0, 0, Math.PI * 2); c.fill();
+    c.save(); c.translate(X(p.x), Y(p.y)); c.scale(k, k);
+    drawFighterCtx(c, f, clip, idx, 0, p.face < 0, p.quiet < 0.08 && !p.guard && p.stunKind !== "block", alpha);
+    c.restore();
+    // 防護罩：防禦條越少越紅
+    if (p.guard) {
+      const r = 1 - Math.max(0, p.gauge) / FT.GAUGE_MAX;
+      c.strokeStyle = `rgb(${Math.round(90 + 165 * r)},${Math.round(180 - 140 * r)},${Math.round(255 - 205 * r)})`; c.lineWidth = 6;
+      c.fillStyle = `rgba(${Math.round(90 + 165 * r)},${Math.round(180 - 140 * r)},${Math.round(255 - 205 * r)},0.18)`;
+      c.beginPath(); c.ellipse(X(p.x), Y(p.y + FT.CH * 0.5), g.cfg.fs[i].bw * fScale * 0.85, FT.CH * fScale * 0.62, 0, 0, Math.PI * 2); c.fill(); c.stroke();
+    }
+    if (p.buff > 0) { c.fillStyle = "#ffd84a"; c.font = canvasFont(900, 22); c.textAlign = "center"; c.fillText("▲ 攻擊", X(p.x), Y(p.y + FT.CH * 1.18)); }
+  }
+  function fightDrawFx(c, g, e, X, Y, gy) {
+    const pr = e.t / (e.life || 0.6);
+    c.save(); c.globalAlpha = Math.max(0, 1 - pr);
+    if (e.kind === "reach" || e.kind === "selfring") {
+      if (FG.set.showRange) {
+        c.globalAlpha = Math.max(0, 1 - pr) * 0.9; c.fillStyle = "rgba(60,220,110,0.22)"; c.strokeStyle = "rgba(60,220,110,0.9)"; c.lineWidth = 3;
+        if (e.kind === "reach") { const a = Math.min(X(e.x0), X(e.x1)), b = Math.max(X(e.x0), X(e.x1)); c.fillRect(a, Y(e.y + FT.CH * 0.8), b - a, FT.CH * 0.8 * fScale); c.strokeRect(a, Y(e.y + FT.CH * 0.8), b - a, FT.CH * 0.8 * fScale); }
+        else { c.beginPath(); c.arc(X(g.p[e.own].x), Y(g.p[e.own].y + FT.CH * 0.5), FT.CH * 0.75 * fScale, 0, Math.PI * 2); c.fill(); c.stroke(); }
+      }
+    } else if (e.kind === "spark") { c.strokeStyle = "#fff6a8"; c.lineWidth = 5; c.beginPath(); c.arc(X(e.x), Y(e.y), 10 + 40 * pr, 0, Math.PI * 2); c.stroke(); }
+    else if (e.kind === "boom") { c.fillStyle = "#ffb14a"; c.beginPath(); c.arc(X(e.x), Y(20), 20 + 60 * pr, 0, Math.PI * 2); c.fill(); }
+    else if (e.kind === "impact") {
+      const h = FT.CH * 0.95 * fScale, f = g.cfg.f[e.own], dr = e.bul && f.bul[e.bul.p];
+      c.fillStyle = "rgba(255,240,200,0.6)"; c.fillRect(X(e.x - e.w / 2), gy - h, e.w * fScale, h);
+      if (dr) {
+        const anim = pickAnim(dr.part, ["finish", "hit", "end", "normal", "idle"]);
+        if (anim) { const n = dr.part.animations[anim].frame_count; c.globalAlpha = 1; c.translate(X(e.x), gy); const k = fScale * FT.CH / f.h; c.scale(k, k); drawPartCtx(c, dr, anim, Math.min(n - 1, Math.floor(pr * n)), 0, 0, false, 0); }
+      }
+    } else if (e.kind === "num" || e.kind === "text") {
+      c.font = canvasFont(900, e.kind === "num" ? (e.heavy ? 40 : 32) : 26); c.textAlign = "center"; c.lineWidth = 6; c.strokeStyle = "#1b2038";
+      c.fillStyle = e.guard ? "#9fd0ff" : e.kind === "text" ? "#ffd84a" : "#ffffff";
+      const y = Y(e.y + 60 * pr); c.strokeText(e.text, X(e.x), y); c.fillText(e.text, X(e.x), y);
+    } else if (e.kind === "buff") { c.strokeStyle = "#7dff9a"; c.lineWidth = 6; c.beginPath(); c.arc(X(e.x), Y(FT.CH * 0.5), 40 + 50 * pr, 0, Math.PI * 2); c.stroke(); }
+    else if (e.kind === "break") { c.font = canvasFont(900, 40); c.textAlign = "center"; c.fillStyle = "#ff5060"; c.lineWidth = 6; c.strokeStyle = "#1b2038"; c.strokeText("破防！", X(e.x), Y(e.y + 70 + 40 * pr)); c.fillText("破防！", X(e.x), Y(e.y + 70 + 40 * pr)); }
+    c.restore();
+  }
+  function fightBanner(c, g, y) {
+    let txt = "", sub = "";
+    if (g.phase === "intro") txt = g.cfg.mode === "dummy" ? "練習" : `第 ${g.round} 回合`;
+    else if (g.phase === "count") txt = String(3 - Math.floor(g.phaseT));
+    else if (g.phase === "fight" && g.phaseT < 0.6) txt = "開打！";
+    else if (g.phase === "end") { txt = g.endKind === "ko" ? "K.O." : "時間到"; sub = g.roundWinner === -1 ? "平手" : `${g.roundWinner ? "右方" : "左方"}拿下這回合`; }
+    else if (g.phase === "over") txt = g.winner === -1 ? "平手" : `${g.winner ? "右方" : "左方"}獲勝`;
+    if (!txt) return;
+    c.textAlign = "center"; c.textBaseline = "middle"; c.lineWidth = 10; c.strokeStyle = "#1b2038"; c.fillStyle = "#ffffff";
+    c.font = canvasFont(900, 84, true); c.strokeText(txt, FW / 2, y); c.fillText(txt, FW / 2, y);
+    if (sub) { c.font = canvasFont(900, 34); c.lineWidth = 7; c.strokeText(sub, FW / 2, y + 70); c.fillText(sub, FW / 2, y + 70); }
+  }
+  // 血條＋秒數＋回合（一人：最上面；兩人：中間，紅左藍右）
+  function fightHudBar(c, g, y, h, pvp) {
+    c.save();
+    c.fillStyle = "#0e1122"; c.fillRect(0, y - (pvp ? 0 : 18), FW, h + (pvp ? 0 : 18));
+    // 兩人模式左邊留位置給「離開」按鈕，兩條血條對稱縮短
+    const cy = y + h / 2, bw = pvp ? 215 : 270, bh = pvp ? 24 : 30, edge = pvp ? 110 : 20;
+    const bar = (i) => {
+      const p = g.p[i], r = Math.max(0, p.hp / p.maxHp), x0 = i ? FW - edge - bw : edge;
+      // 從中間往外縮的橫條（左方靠右對齊、右方靠左對齊）
+      const fill = (y, h, ratio, color) => { c.fillStyle = color; if (i) c.fillRect(x0, y, bw * ratio, h); else c.fillRect(x0 + bw * (1 - ratio), y, bw * ratio, h); };
+      c.fillStyle = "#333a5c"; c.fillRect(x0, cy - bh / 2, bw, bh);
+      fill(cy - bh / 2, bh, r, i ? "#2f6fe0" : "#e0323f");
+      c.strokeStyle = "#fff"; c.lineWidth = 2; c.strokeRect(x0, cy - bh / 2, bw, bh);
+      // 硬直累積值（滿了倒地）
+      const sh = pvp ? 5 : 7;
+      c.fillStyle = "#262b48"; c.fillRect(x0, cy + bh / 2 + 3, bw, sh);
+      fill(cy + bh / 2 + 3, sh, Math.min(1, p.sv / FT.SV_MAX), p.sv / FT.SV_MAX > 0.7 ? "#ff8a3d" : "#ffd84a");
+      if (!pvp) { c.fillStyle = "#e8ebff"; c.font = canvasFont(700, 20); c.textAlign = i ? "right" : "left"; c.textBaseline = "top"; c.fillText(`${g.cfg.f[i].r.name}　${Math.max(0, Math.ceil(p.hp))}／${p.maxHp}`, i ? FW - 20 : 20, cy + bh / 2 + 14); }
+      if (g.cfg.mode !== "dummy") for (let n = 0; n < Math.ceil(g.cfg.rounds / 2); n++) {
+        c.fillStyle = n < g.wins[i] ? "#ffd84a" : "#444a6e"; c.beginPath(); c.arc(i ? FW - edge - 10 - n * 18 : edge + 10 + n * 18, cy - bh / 2 - 10, 6, 0, Math.PI * 2); c.fill();
+      }
+    };
+    bar(0); bar(1);
+    c.fillStyle = "#1b2038"; c.strokeStyle = "#fff"; c.lineWidth = 3; c.beginPath(); c.arc(FW / 2, cy, pvp ? 30 : 38, 0, Math.PI * 2); c.fill(); c.stroke();
+    c.fillStyle = "#fff"; c.font = canvasFont(900, pvp ? 28 : 34); c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillText(g.cfg.secs > 0 && g.cfg.mode !== "dummy" ? String(Math.ceil(g.timeLeft)) : "∞", FW / 2, cy + 2);
+    c.restore();
+  }
+  // 按鈕：搖桿、普攻、技能（冷卻轉圈；矩形技能按住時顯示取消圈）
+  function fightDrawControls(c, g, L, who) {
+    const B = fightButtons(L), ctl = FG.ctl[who], p = g.p[who], fs = g.cfg.fs[who];
+    const human = FG.set.mode === "pvp" || who === 0;
+    c.save();
+    c.fillStyle = "#1a1e36"; c.fillRect(0, L.ctrl.y, FW, L.ctrl.h);
+    if (!human) { c.restore(); return; }
+    const held = new Set(ctl ? ctl.pads.values() : []);
+    const pad = (key, label) => {
+      const b = B[key], on = held.has(key);
+      c.fillStyle = on ? "#ffd84a" : "rgba(255,255,255,0.12)"; c.strokeStyle = "rgba(255,255,255,0.55)"; c.lineWidth = 3;
+      c.beginPath(); if (c.roundRect) c.roundRect(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2, 14); else c.rect(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2); c.fill(); c.stroke();
+      c.fillStyle = on ? "#1b2038" : "#fff"; c.font = canvasFont(900, 26); c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(label, b.x, b.y);
+    };
+    pad("up", "跳"); pad("down", "防"); pad("left", "◀"); pad("right", "▶");
+    { // 防禦條（破防後要回到 GAUGE_REARM 才能再防：這段期間顯示灰色）
+      const r = Math.max(0, p.gauge) / FT.GAUGE_MAX, b = B.down;
+      // 放在「防」下面；兩人模式下面沒空間時改放右邊
+      const below = b.y + b.r + 22 <= L.ctrl.y + L.ctrl.h;
+      const gx = below ? b.x - 70 : b.x + b.r + 12, gy = below ? b.y + b.r + 8 : b.y - 6, gw = below ? 140 : 96;
+      c.fillStyle = "#333a5c"; c.fillRect(gx, gy, gw, 12);
+      c.fillStyle = p.guardLock ? "#777c99" : r < 0.3 ? "#ff5060" : "#59a7ff"; c.fillRect(gx, gy, gw * r, 12);
+      c.strokeStyle = "rgba(255,255,255,0.6)"; c.lineWidth = 1; c.strokeRect(gx, gy, gw, 12);
+    }
+    const btn = (key, label, cdLeft, cdMax, off) => {
+      const b = B[key], held = ctl && ctl.btn[key];
+      const slot = fightSlot(fs, SLOT_OF[key]);
+      if (held && slot && FT_AIMED[slot.kind]) { // 拖曳中：外圈是取消區
+        c.strokeStyle = "rgba(255,90,90,0.5)"; c.setLineDash([8, 8]); c.lineWidth = 3; c.beginPath(); c.arc(b.x, b.y, b.r * 2.3, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+      }
+      c.fillStyle = off ? "#3a3f5c" : held ? "#ffd84a" : key === "atk" ? "#e0323f" : "#7c5cff";
+      c.beginPath(); c.arc(b.x, b.y, b.r, 0, Math.PI * 2); c.fill();
+      if (cdLeft > 0) { c.fillStyle = "rgba(0,0,0,0.55)"; c.beginPath(); c.moveTo(b.x, b.y); c.arc(b.x, b.y, b.r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (cdLeft / cdMax)); c.closePath(); c.fill(); }
+      c.strokeStyle = "#fff"; c.lineWidth = 3; c.beginPath(); c.arc(b.x, b.y, b.r, 0, Math.PI * 2); c.stroke();
+      c.fillStyle = "#fff"; c.font = canvasFont(900, key === "atk" ? 30 : 22); c.textAlign = "center"; c.textBaseline = "middle";
+      c.fillText(label, b.x, b.y - (cdLeft > 0 ? 10 : 0));
+      if (cdLeft > 0) { c.font = canvasFont(900, 22); c.fillText(cdLeft.toFixed(1), b.x, b.y + 16); }
+    };
+    btn("atk", fs.atk.kind === "shot" ? "普攻↔" : "普攻", p.atkCd, fs.atk.cd, false);
+    for (const s of [0, 1]) {
+      const k = fs.sk[s];
+      const lab = k ? ({ rect: "矩形", line: "直線", lob: "拋物", buff: "輔助" }[k.kind] + (s + 1)) : "—";
+      btn("sk" + s, lab, k ? p.cd[s] : 0, k ? k.cd : 1, !k);
+    }
+    c.restore();
+  }
 })();
 </script>
 

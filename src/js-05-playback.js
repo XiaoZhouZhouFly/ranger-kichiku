@@ -77,6 +77,7 @@
     const dt = Math.min(0.1, (ts - S.lastTs) / 1000);
     S.lastTs = ts;
     if (S.app === "duel") { duelTick(dt); return; }
+    if (S.app === "fight") { fightTick(dt); return; }
     if (!S.part || S.recording) return;
     if (S.playing) {
       const len = totalLen();

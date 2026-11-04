@@ -43,25 +43,27 @@
     if (!isFinite(x0)) return { x0: -40, x1: 40, y0: -100, y1: 0 };
     return { x0, x1, y0, y1 };
   }
-  function drawFighter(f, anim, idx, x, faceLeft, flash, mul = 1) {
+  function drawFighter(f, anim, idx, x, faceLeft, flash, mul = 1) { drawFighterCtx(dctx, f, anim, idx, x, faceLeft, flash, mul); }
+  // 畫一個角色（腳底中央在 x、地面 0）；c＝要畫在哪個畫布（雙人對戰、格鬥場共用）
+  function drawFighterCtx(c, f, anim, idx, x, faceLeft, flash, mul = 1) {
     const a = f.part.animations[anim];
     if (!a) return;
     const frame = a.frames[Math.max(0, Math.min(a.frames.length - 1, idx))];
-    dctx.save();
-    dctx.translate(x, 0);
-    if (faceLeft) dctx.scale(-1, 1);
-    dctx.translate(f.ox, f.oy);
+    c.save();
+    c.translate(x, 0);
+    if (faceLeft) c.scale(-1, 1);
+    c.translate(f.ox, f.oy);
     for (const t of fItems(f, frame)) {
       const img = fSprite(f, t.name);
       if (!img) continue;
-      dctx.save();
-      dctx.globalAlpha = Math.min(1, t.alpha) * mul;
-      dctx.transform(t.A, t.D, t.B, t.E, t.C, t.F);
-      dctx.drawImage(img, 0, 0);
-      if (flash) { dctx.globalCompositeOperation = "lighter"; dctx.globalAlpha = Math.min(1, t.alpha) * 0.7; dctx.drawImage(img, 0, 0); }
-      dctx.restore();
+      c.save();
+      c.globalAlpha = Math.min(1, t.alpha) * mul;
+      c.transform(t.A, t.D, t.B, t.E, t.C, t.F);
+      c.drawImage(img, 0, 0);
+      if (flash) { c.globalCompositeOperation = "lighter"; c.globalAlpha = Math.min(1, t.alpha) * 0.7; c.drawImage(img, 0, 0); }
+      c.restore();
     }
-    dctx.restore();
+    c.restore();
   }
 
   function drawPartAt(dr, anim, idx, x, y, faceLeft, rotDeg) { drawPartCtx(dctx, dr, anim, idx, x, y, faceLeft, rotDeg); }

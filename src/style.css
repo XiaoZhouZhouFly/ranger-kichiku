@@ -304,3 +304,19 @@ footer p { margin: 0 0 6px; line-height: 1.6; }
 .report-text { width: 100%; min-height: 220px; box-sizing: border-box; font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; padding: 8px; border: 2px solid var(--line, #ccd); border-radius: 10px; background: var(--paper); color: var(--ink); resize: vertical; }
 footer a { color: inherit; }
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+
+/* 格鬥場 */
+.app-mode small { font-size: 10px; margin-left: 3px; opacity: .7; }
+.fight-setup { display: grid; gap: 12px; max-width: 720px; padding: 16px; }
+.fight-pick .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.fight-pick .row input, .fight-pick .row select { padding: 8px 10px; border: 2px solid var(--ink); border-radius: 10px; font: inherit; background: var(--panel, #fff); }
+.fight-pick select, .fight-pick input { width: 100%; }
+.fight-pick .row input { flex: 1 1 160px; width: auto; }
+.fight-stage { position: fixed; inset: 0; z-index: 60; background: #0b0d18; display: grid; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
+.fight-stage[hidden] { display: none; }
+.fight-stage canvas { display: block; touch-action: none; }
+.fight-exit { position: absolute; top: 8px; right: 8px; z-index: 2; opacity: .85; }
+.fight-stage.pvp .fight-exit { top: 50%; right: auto; left: 6px; transform: translateY(-50%); }
+.fight-over { position: absolute; inset: auto 16px 50% 16px; transform: translateY(50%); z-index: 3; display: grid; gap: 12px; justify-items: center; padding: 18px; border: 2px solid var(--ink); border-radius: 14px; background: var(--panel, #fff); box-shadow: 4px 4px 0 var(--shadow); text-align: center; }
+.fight-over[hidden] { display: none; }
+body.fight-on { overflow: hidden; }

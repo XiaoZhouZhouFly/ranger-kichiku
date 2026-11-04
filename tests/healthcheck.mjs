@@ -367,6 +367,43 @@ await test("雙人播放：不自動播放、3 2 1 倒數、播完停住", async
   return `K.O. 音效 ${d.sysSfx}`;
 });
 
+await test("格鬥場（測試版）：矩形、防禦條、硬直值倒地、連段遞減、直線方向、緩衝、決定性", async (open) => {
+  const p = await open(); await p.goto(BASE + "?app=fight");
+  await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
+  const R = (spec) => p.evaluate((s) => window.__rk.fightRun(s), spec);
+  const walkIn = [{ side: 0, from: 0, to: 60, mx: 1 }];
+  // 矩形：放在對手位置命中；預告期間跳起來躲掉；兩種預告時間都能用
+  for (const teleMode of ["dist", "sync"]) {
+    const rect = await R({ c0: "x001-cube", c1: "x002-orb", steps: 120, teleMode, script: [{ side: 0, sk: [1, 5, 20, 0] }] });
+    check(rect.log.hits === 1, `矩形技能（預告 ${teleMode}）放在對手位置應該命中 1 次，實際 ${rect.log.hits}`);
+  }
+  const dodge = await R({ c0: "x001-cube", c1: "x002-orb", steps: 120, script: [{ side: 0, sk: [1, 5, 20, 0] }, { side: 1, from: 40, jump: true }] });
+  check(dodge.log.hits === 0, "對手在預告期間跳起來，矩形不該打到");
+  // 防禦條：一直按著 5 秒破防；擋下攻擊不扣血
+  const hold = await R({ c0: "x001-cube", c1: "x002-orb", steps: 320, script: [{ side: 1, from: 0, guard: true }] });
+  check(hold.log.breaks === 1, `按住防禦 5 秒應該破防一次：${JSON.stringify(hold.log)}`);
+  const block = await R({ c0: "x001-cube", c1: "x002-orb", steps: 150, script: [...walkIn, { side: 0, from: 70, atk: 30 }, { side: 1, from: 0, guard: true }] });
+  check(block.log.guards > 0 && block.hp[1] === block.maxHp[1], `擋下攻擊不該扣血：${JSON.stringify(block.log)} 血 ${block.hp[1]}`);
+  // 連打：傷害遞減（100、90、80…），硬直值滿了倒地、起身無敵
+  const combo = await R({ c0: "x001-cube", c1: "x002-orb", steps: 400, script: [...walkIn, { side: 0, from: 60, to: 400, atk: 28, mx: 1 }] });
+  check(combo.log.scale.slice(0, 3).join() === "1,0.9,0.8", `連段傷害應該遞減：${combo.log.scale.join()}`);
+  check(combo.log.downs >= 1 && combo.log.inv >= 1, `硬直值滿了應該倒地、起身無敵：${JSON.stringify(combo.log)}`);
+  // 直線：點一下朝面向射出、一路飛到打中；按住時轉身再放開就往反方向
+  const shot = await R({ c0: "x002-orb", c1: "x001-cube", steps: 120, script: [{ side: 0, sk: [2, 5, 6, 0] }] });
+  check(shot.log.hits === 1, `投射物普攻點一下應該命中：${JSON.stringify(shot.log)}`);
+  const line = await R({ c0: "x002-orb", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 6, 0] }] });
+  check(line.log.hits === 1, "直線技能點一下應該飛到對手身上");
+  const turned = await R({ c0: "x002-orb", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 40, 0] }, { side: 0, from: 10, to: 20, mx: -1 }] });
+  check(turned.log.hits === 0 && turned.face[0] === -1 && turned.x[0] === -220, `按住直線技能時 ◀ 只轉身不走路，放開往反方向射：命中 ${turned.log.hits}、x ${turned.x[0]}`);
+  // 輸入緩衝：普攻快結束時按技能，結束後自動接上
+  const buf = await R({ c0: "x001-cube", c1: "x002-orb", steps: 40, trace: true, script: [{ side: 0, from: 0, to: 1, atk: 1 }, { side: 0, sk: [0, 30, 31, 0] }] });
+  check(buf.trace[36][0][3] === "aim", `緩衝：普攻結束時應該接上技能，實際狀態 ${buf.trace[36][0][3]}`);
+  const spec = { c0: "x001-cube", c1: "x002-orb", mode: "cpu", rounds: 3, secs: 30, steps: 4000, seed: 5, ai: ["hard", "normal"] };
+  const a = await R(spec), b = await R(spec);
+  check(JSON.stringify(a) === JSON.stringify(b), "同樣的輸入與種子，結果應該完全一樣");
+  return `電腦對打 ${a.wins.join("：")}、命中 ${a.log.hits}、防禦 ${a.log.guards}、倒地 ${a.log.downs}`;
+});
+
 await test("官方角色對戰可執行", async (open) => {
   const p = await open(); await p.goto(BASE + "?app=duel&type=raw"); await waitDuel(p);
   const d = await p.evaluate(() => window.__rk.duel());

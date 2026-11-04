@@ -227,14 +227,17 @@
     S.app = mode;
     $("appSingle").setAttribute("aria-pressed", String(mode === "single"));
     $("appDuel").setAttribute("aria-pressed", String(mode === "duel"));
+    $("appFight").setAttribute("aria-pressed", String(mode === "fight"));
     document.querySelectorAll("[data-app]").forEach((el) => (el.hidden = el.dataset.app !== mode));
     store.set("app", mode);
     syncUrl();
     if (mode === "duel") initDuel();
+    if (mode === "fight") initFight();
   }
 
   $("appSingle").onclick = () => setApp("single");
   $("appDuel").onclick = () => setApp("duel");
+  $("appFight").onclick = () => setApp("fight");
   [0, 1].forEach((i) => {
     let t; $(`dq${i}`).addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => renderDuelResults(i), 250); });
     $(`dq${i}`).addEventListener("keydown", (e) => { if (e.key === "Enter") renderDuelResults(i); });

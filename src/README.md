@@ -38,6 +38,9 @@ python build.py --check    # 檢查 index.html 是否由目前的 src/ 產生（
 | `js-15-duel-panel.js` | 雙人：真距離／原始數值設定面板、金手指、重新對戰、全部恢復預設 |
 | `js-16-share.js` | 分享連結、專案檔（`PROJECT_VER`、`migrateProject`） |
 | `js-17-boot.js` | 回報資訊、唯讀測試介面 `window.__rk`、啟動 |
+| `js-18-fight-data.js` | 格鬥場（測試版）：**全部數值 `FT`**、招式操作方式 `AIM_MODE`、自製角色手寫數值、角色名單、官方角色換算 `fightStats` |
+| `js-18-fight-engine.js` | 格鬥場：規則引擎 `fightStep`（每步 1/60 秒、只吃按鍵＋固定亂數，同樣輸入＝同樣結果）、電腦對手 `fightAi` |
+| `js-19-fight-ui.js` | 格鬥場：選角、觸控與鍵盤 → 按鍵、畫面、回合流程 |
 
 ## 雙人對戰的資料流
 
@@ -63,4 +66,6 @@ python build.py --check    # 檢查 index.html 是否由目前的 src/ 產生（
   存檔、專案檔、分享連結、交換左右都不用另外改。網址代號不能跟現有的重複，並記得在 CHANGELOG 的規格小抄寫上。
 - **對戰計算改變**：改 `js-11`／`js-12`。刻意改變結果時，用 `node tests/healthcheck.mjs <網站資料夾> --update-baseline` 重記標準答案。
 - **新增錄影的地方**：呼叫 `recordCanvas`，不要再寫一份錄影流程。
+- **格鬥場調平衡**：只改 `js-18-fight-data.js`（`FT` 是全體規則、`FIGHT_PRESET` 是自製角色）。改規則時每個機制在 engine 裡各有一個函式（`fightGuard`、`fightHit`、`fightAims`…），
+  用 `window.__rk.fightRun(spec)` 跑固定輸入確認（健檢也用它）。
 - **召喚物系列對應**（資料命名對不上時）：改 repo 根目錄的 `sync_overrides.json`，不用改 `sync.py`。

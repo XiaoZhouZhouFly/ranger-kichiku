@@ -7,6 +7,7 @@
       <div class="seg-mode app-mode" role="group" aria-label="模式">
         <button id="appSingle" aria-pressed="true">單人</button>
         <button id="appDuel" aria-pressed="false">雙人對打</button>
+        <button id="appFight" aria-pressed="false">格鬥場<small>測試</small></button>
       </div>
     </div>
     <span class="mode-note" id="modeNote">正在連線資料庫…</span>
@@ -227,6 +228,88 @@
       <div class="status" id="importStatus"></div>
     </div>
   </div>
+
+  <section class="fight" data-app="fight" hidden aria-label="格鬥場">
+    <div class="panel fight-setup">
+      <p class="hint warn">格鬥場測試版：用手指操作的一對一格鬥。手感還在調整；官方角色的招式與數值目前是暫時的自動換算，之後會大改（例如遠程角色的普攻、技能的暈眩擊退等效果、新舊角色強度拉平），歡迎回報感想。</p>
+      <div class="group">
+        <span class="lbl">模式</span>
+        <div class="chips" id="fMode">
+          <button class="chip" data-fmode="dummy" aria-pressed="true">打木樁</button>
+          <button class="chip" data-fmode="cpu" aria-pressed="false">打電腦</button>
+          <button class="chip" data-fmode="pvp" aria-pressed="false">兩人同機</button>
+        </div>
+      </div>
+      <div class="group" id="fDummyBox">
+        <span class="lbl">木樁</span>
+        <div class="chips" id="fDummy">
+          <button class="chip" data-fdummy="standing" aria-pressed="true">站著不動</button>
+          <button class="chip" data-fdummy="guard" aria-pressed="false">一直防禦（測破防）</button>
+        </div>
+        <p class="hint">木樁不會倒，2 秒沒挨打就回滿血；上方會顯示這一串的傷害。</p>
+      </div>
+      <div class="group" id="fCpuBox" hidden>
+        <span class="lbl">電腦難度</span>
+        <div class="chips" id="fLevel">
+          <button class="chip" data-flevel="easy" aria-pressed="false">簡單</button>
+          <button class="chip" data-flevel="normal" aria-pressed="true">普通</button>
+          <button class="chip" data-flevel="hard" aria-pressed="false">困難</button>
+        </div>
+      </div>
+      <div class="group fight-pick">
+        <label class="field">左方（玩家 1）<select id="fChar0"></select></label>
+        <p class="hint" id="fInfo0"></p>
+        <label class="field"><span id="fRight">右方</span><select id="fChar1"></select></label>
+        <p class="hint" id="fInfo1"></p>
+        <div class="row">
+          <input id="fOther" type="search" placeholder="其他角色：輸入名稱或 id" autocomplete="off">
+          <select id="fOtherSide" aria-label="放到哪一邊"><option value="0">左方</option><option value="1">右方</option></select>
+          <button class="btn small" id="fOtherGo" type="button">換上</button>
+        </div>
+        <p class="hint" id="fOtherMsg"></p>
+      </div>
+      <div class="group" id="fRoundBox">
+        <div class="row">
+          <label class="field">回合數<select id="fRounds"><option value="1">1（一回合）</option><option value="3">3（三戰兩勝）</option><option value="5">5（五戰三勝）</option></select></label>
+          <label class="field">每回合秒數<input type="number" id="fSecs" min="20" max="300" step="10" value="60"></label>
+        </div>
+      </div>
+      <div class="group">
+        <span class="lbl">按住招式時 ◀ ▶</span>
+        <div class="chips" id="fHoldMove">
+          <button class="chip" data-fhold="turn" aria-pressed="true">只轉身</button>
+          <button class="chip" data-fhold="move" aria-pressed="false">可移動</button>
+        </div>
+        <span class="lbl">矩形預告時間</span>
+        <div class="chips" id="fTeleMode">
+          <button class="chip" data-ftele="dist" aria-pressed="true">依距離（0.3～0.8 秒）</button>
+          <button class="chip" data-ftele="sync" aria-pressed="false">跟前搖同步</button>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="fShowBox" checked> 顯示碰撞箱（黃色虛線＝受傷判定框：寬 60、一個身高，跟圖片大小無關；黃圈＝投射物的命中範圍；短線＝面朝方向；頭上＝目前狀態）</label>
+      <label class="check"><input type="checkbox" id="fShowRange" checked> 顯示判定範圍（綠色＝這招最遠打得到的範圍，白色虛線＝目前拖曳的位置）</label>
+      <div class="row"><button class="btn primary" id="fStart" type="button">開始</button><span class="hint" id="fStartMsg"></span></div>
+      <details class="more">
+        <summary>操作說明</summary>
+        <p class="hint">左下方向鍵：◀ ▶ 移動、跳、防。防禦條在「防」下面：按住每秒扣 20，擋下攻擊不扣血但扣防禦條，扣完＝破防（1 秒不能動）；放開 0.5 秒後慢慢回。<br>
+        右下：紅色＝普攻；紫色＝技能，按鈕上寫著種類。
+        矩形、拋物線：按住拖曳，從按下當下對手的距離開始，左右拖曳調整遠近，放開出招。
+        直線（技能與「普攻↔」）：只決定方向，點一下就朝面向射出、一直飛到場地外或打中；按住會顯示路徑，可以用 ◀ ▶ 轉向，放開才射。
+        按住任何招式時拖到外面的虛線圈再放開＝取消；按住時 ◀ ▶ 預設只轉身（可在上面切換成可移動）。
+        矩形會先預告再打下來（預告秒數顯示在預覽旁邊）；拋物線落點會先標出來。近戰普攻與輔助技能按下就放。<br>
+        被打中會累積硬直值（血條下的黃條），滿了就倒地，起身後 1 秒無敵（角色閃爍）；同一串連續被打，傷害會遞減（100／90／80／70／60%）。
+        出招中、冷卻中提早按，0.15 秒內會自動接上。電腦上也可以用鍵盤：A D 移動、W 跳、S 防禦、J 普攻、K L 技能（兩人模式右方用方向鍵與 1 2 3）。</p>
+      </details>
+    </div>
+    <div class="fight-stage" id="fStage" hidden>
+      <canvas id="fcv" width="720" height="1280" aria-label="格鬥場"></canvas>
+      <button class="btn small fight-exit" id="fExit" type="button">✕ 離開</button>
+      <div class="fight-over" id="fOver" hidden>
+        <strong id="fOverText"></strong>
+        <div class="row"><button class="btn primary" id="fAgain" type="button">再來一場</button><button class="btn" id="fBack" type="button">返回選角</button></div>
+      </div>
+    </div>
+  </section>
 
   <section class="duel" data-app="duel" hidden aria-label="雙人對打">
     <div class="fighters">

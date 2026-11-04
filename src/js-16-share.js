@@ -61,6 +61,8 @@
       p.set("app", "duel"); p.set("l", D.f[0].r.id); p.set("r", D.f[1].r.id);
       if (D.mode !== "trade" && D.moves.length) d.mv = encMoves(D.moves);
       settingsToUrl(p, d); // 其他設定：見 js-10 的 DUEL_SETTINGS
+    } else if (S.app === "fight") {
+      p.set("app", "fight");
     } else if (S.unit) {
       p.set("app", "single"); p.set("u", S.unit.id);
       const ck = currentClipKey(); if (ck) p.set("clip", ck);
