@@ -406,7 +406,23 @@
       c.fillStyle = `rgba(${Math.round(90 + 165 * r)},${Math.round(180 - 140 * r)},${Math.round(255 - 205 * r)},0.18)`;
       c.beginPath(); c.ellipse(X(p.x), Y(p.y + FT.CH * 0.5), g.cfg.fs[i].bw * fScale * 0.85, FT.CH * fScale * 0.62, 0, 0, Math.PI * 2); c.fill(); c.stroke();
     }
-    if (p.buff > 0) { c.fillStyle = "#ffd84a"; c.font = canvasFont(900, 22); c.textAlign = "center"; c.fillText("▲ 攻擊", X(p.x), Y(p.y + FT.CH * 1.18)); }
+    // 護盾：藍色外框，越少越淡
+    if (p.st.shield) {
+      const r = Math.min(1, p.st.shield.v / (p.maxHp * FX_NUM.SHIELD));
+      c.strokeStyle = `rgba(125,211,255,${0.35 + 0.6 * r})`; c.lineWidth = 5; c.setLineDash([]);
+      c.beginPath(); c.ellipse(X(p.x), Y(p.y + FT.CH * 0.5), g.cfg.fs[i].bw * fScale * 0.95, FT.CH * fScale * 0.68, 0, 0, Math.PI * 2); c.stroke();
+    }
+    // 狀態標籤（暈眩、沉默、攻↑…）排在頭上
+    const tags = [];
+    if (p.stunKind === "stunfx" && p.stun > 0) tags.push(["暈", "#ffd84a", p.stun]);
+    if (p.buff > 0) tags.push(["▲攻", "#ffd84a", p.buff]);
+    for (const [name, st] of Object.entries(p.st)) if (FX_STATUS_TAG[name]) tags.push([...FX_STATUS_TAG[name], st.t]);
+    tags.forEach(([txt, color, t], n) => {
+      const x = X(p.x) + (n - (tags.length - 1) / 2) * 58, y = Y(p.y + FT.CH * 1.15);
+      c.fillStyle = "rgba(14,17,34,0.8)"; c.beginPath(); if (c.roundRect) c.roundRect(x - 27, y - 16, 54, 32, 8); else c.rect(x - 27, y - 16, 54, 32); c.fill();
+      c.fillStyle = color; c.font = canvasFont(900, 18); c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(txt, x, y - 3);
+      c.fillStyle = "#cfd6ff"; c.font = canvasFont(700, 11); c.fillText(t.toFixed(1), x, y + 10);
+    });
   }
   function fightDrawFx(c, g, e, X, Y, gy) {
     const pr = e.t / (e.life || 0.6);
@@ -433,7 +449,7 @@
       }
     } else if (e.kind === "num" || e.kind === "text") {
       c.font = canvasFont(900, e.kind === "num" ? (e.heavy ? 40 : 32) : 26); c.textAlign = "center"; c.lineWidth = 6; c.strokeStyle = "#1b2038";
-      c.fillStyle = e.guard ? "#9fd0ff" : e.kind === "text" ? "#ffd84a" : "#ffffff";
+      c.fillStyle = e.color || (e.guard ? "#9fd0ff" : e.heal ? "#7dff9a" : e.dot ? "#d7a6ff" : e.kind === "text" ? "#ffd84a" : "#ffffff");
       const y = Y(e.y + 60 * pr); c.strokeText(e.text, X(e.x), y); c.fillText(e.text, X(e.x), y);
     } else if (e.kind === "buff") { c.strokeStyle = "#7dff9a"; c.lineWidth = 6; c.beginPath(); c.arc(X(e.x), Y(FT.CH * 0.5), 40 + 50 * pr, 0, Math.PI * 2); c.stroke(); }
     else if (e.kind === "break") { c.font = canvasFont(900, 40); c.textAlign = "center"; c.fillStyle = "#ff5060"; c.lineWidth = 6; c.strokeStyle = "#1b2038"; c.strokeText("破防！", X(e.x), Y(e.y + 70 + 40 * pr)); c.fillText("破防！", X(e.x), Y(e.y + 70 + 40 * pr)); }
@@ -520,7 +536,7 @@
     btn("atk", { shot: "普攻↔", lob: "普攻⌒", dline: "普攻→" }[fs.atk.kind] || "普攻", p.atkCd, fs.atk.cd, false);
     for (const s of [0, 1]) {
       const k = fs.sk[s];
-      const lab = k ? ({ rect: "定點", line: "直線", lob: "拋物", buff: "輔助" }[k.kind] + (s + 1)) : "—";
+      const lab = k ? ({ rect: "定點", line: "直線", lob: "拋物", self: "自身", buff: "輔助" }[k.kind] + (s + 1)) : "—";
       btn("sk" + s, lab, k ? p.cd[s] : 0, k ? k.cd : 1, !k);
     }
     c.restore();

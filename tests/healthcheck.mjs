@@ -436,6 +436,34 @@ await test("格鬥場：角色資料解讀（攻擊形式、缺資料、不支�
   return `莎莉 瞬間直線、兔兔 拋物線、詹姆士 沒有技能`;
 });
 
+await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害、護盾與穿透、回血、增減益）", async (open) => {
+  const p = await open(); await p.goto(BASE + "?app=fight");
+  await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
+  const R = (spec) => p.evaluate((s) => window.__rk.fightRun(s), { trace: true, ...spec });
+  const W = [{ side: 0, from: 0, to: 40, mx: 1 }], sk = (slot, at, side = 0) => ({ side, sk: [slot, at, at + 1, 0] });
+  const has = (r, side, name) => r.trace.some((t) => t[side][7].split(",").includes(name));
+  const st = (r, side, s) => r.trace.some((t) => t[side][3] === s);
+  // 沒有效果資料（skill_fx.json 還沒同步）時，第一項檢查會看不到暈眩 → 跳過
+  const stun = await R({ c0: "u006e-clark", c1: "x001-cube", steps: 300, script: [...W, sk(0, 50)] });
+  if (!st(stun, 1, "stunfx")) return "skip:沒有技能效果資料（skill_fx.json 還沒同步）";
+  const kb = await R({ c0: "u1003e-jessica", c1: "x001-cube", steps: 300, script: [...W, sk(0, 50)] });
+  check(kb.log.downs >= 1, "擊退應該讓對手倒地");
+  const si = await R({ c0: "u023e-sindy", c1: "x001-cube", steps: 260, script: [...W, sk(0, 50), sk(0, 165, 1), sk(0, 200, 1)] });
+  check(has(si, 1, "silence") && si.trace[170][1][3] === "idle" && ["aim", "skill"].includes(si.trace[203][1][3]), "沉默期間不能用技能，結束後可以");
+  const dot = await R({ c0: "u010e-clara", c1: "x001-cube", steps: 400, script: [sk(0, 50)] });
+  const hp = dot.trace.map((t) => t[1][2]), drops = hp.filter((v, i) => i && v < hp[i - 1]).length;
+  check(drops >= 5, `持續傷害應該分好幾次扣血，實際 ${drops} 次`);
+  const sh = await R({ c0: "x001-cube", c1: "u003e-bella", steps: 200, script: [sk(0, 2, 1), { side: 0, from: 0, to: 60, mx: 1 }, { side: 0, from: 70, to: 200, atk: 30 }] });
+  check(sh.hp[1] === sh.maxHp[1] && sh.trace.some((t) => t[1][8] > 0), "護盾應該先吸收傷害");
+  const pierce = await R({ c0: "u1008h-brown", c1: "u003e-bella", steps: 200, script: [sk(0, 2, 1), { side: 0, from: 0, to: 40, mx: 1 }, sk(1, 62)] });
+  check(pierce.hp[1] < pierce.maxHp[1], "解除無敵的技能傷害應該穿透護盾");
+  const heal = await R({ c0: "x001-cube", c1: "u017e-james", steps: 200, script: [{ side: 0, from: 0, to: 60, mx: 1 }, { side: 0, from: 70, to: 71, atk: 1 }, sk(0, 150, 1)] });
+  check(heal.trace[160][1][2] > heal.trace[149][1][2], "回血技能應該回血");
+  const buff = await R({ c0: "u023u-sindy", c1: "x001-cube", steps: 60, script: [sk(1, 5)] });
+  check(has(buff, 0, "atkUp") && has(buff, 0, "spdUp"), "增益技能應該加上攻擊、移速增加");
+  return "8 種效果都有作用";
+});
+
 await test("官方角色對戰可執行", async (open) => {
   const p = await open(); await p.goto(BASE + "?app=duel&type=raw"); await waitDuel(p);
   const d = await p.evaluate(() => window.__rk.duel());

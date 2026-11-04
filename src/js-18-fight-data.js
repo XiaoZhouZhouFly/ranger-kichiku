@@ -47,8 +47,8 @@
 
   /* 招式的操作方式：dist＝按住拖曳決定位置（矩形、拋物線），dir＝只決定方向、點一下就放（直線、普攻投射物），
      tap＝按下就放（近戰普攻、輔助技能） */
-  const AIM_MODE = { rect: "dist", lob: "dist", line: "dir", shot: "dir", melee: "tap", dline: "tap", buff: "tap" };
-  const SK_KIND_LABEL = { rect: "指定位置打擊（矩形預告）", line: "直線投射物", lob: "拋物線", buff: "輔助（加攻＋回血）" };
+  const AIM_MODE = { rect: "dist", lob: "dist", line: "dir", shot: "dir", melee: "tap", dline: "tap", self: "tap", buff: "tap" };
+  const SK_KIND_LABEL = { rect: "指定位置打擊（矩形預告）", line: "直線投射物", lob: "拋物線", self: "自身", buff: "輔助（暫時用加攻＋回血代替）" };
   const ATK_KIND_LABEL = { melee: "近戰", dline: "瞬間直線", shot: "直線投射物", lob: "拋物線" };
 
   /* 自製角色的手寫數值（官方角色由 fightStats 從資料換算）；沒寫的欄位用換算值 */
@@ -68,8 +68,14 @@
     ["u1015h-sally", "拋物線＋直線投射物技能"],
     ["u013e-moon", "近戰＋輔助技能"],
     ["u1028e-sally", "普攻瞬間直線（射程 800）"],
-    ["u014e-cony", "普攻拋物線＋技能有減速效果"],
-    ["u021u-brown", "技能有暈眩效果（未支援的效果示範）"],
+    ["u014e-cony", "普攻拋物線＋技能減速"],
+    ["u021u-brown", "技能 2 擊暈"],
+    ["u006e-clark", "效果：暈眩"],
+    ["u1003e-jessica", "效果：擊退（倒地）"],
+    ["u003e-bella", "效果：護盾（原無敵）"],
+    ["u1008h-brown", "效果：攻擊降低、穿透護盾＋擊退"],
+    ["u023u-sindy", "效果：沉默、攻擊與移速增加"],
+    ["u010e-clara", "效果：持續傷害"],
   ];
 
   /* 體力、減傷依「在全部角色裡的排名」換算（折衷：有差異但不極端）。排名表第一次用到時算一次。 */
@@ -119,7 +125,11 @@
         range: k.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : fclamp(rg * FT.RG_CAST, FT.CAST_MIN, FT.CAST_MAX),
         width: k.effectRange.v ? fclamp(k.effectRange.v * FT.AR_WIDTH, FT.WIDTH_MIN, FT.WIDTH_MAX) : FT.WIDTH_DEF,
         speed: fSpeed(k.cfg), lobT: fLobT(k.cfg) };
-      if (p) Object.assign(o, { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME }, p);
+      // 效果（只放效果模組支援的；同一種代碼只留一筆）：打對手的跟著投射物／預告走，自己的在出招時套用
+      const seen = new Set(), sup = k.fx.filter((e) => FIGHT_FX[e.c] && e.c !== "DMG" && !seen.has(e.c) && seen.add(e.c)).map((e) => ({ c: e.c, dur: e.dur, val: e.val }));
+      o.enemyFx = sup.filter((e) => FIGHT_FX[e.c].to === "enemy"); o.selfFx = sup.filter((e) => FIGHT_FX[e.c].to === "self");
+      if (!k.damaging && !p) o.dmg = 0; // 沒有傷害的技能（只有減益、暈眩等）不扣血
+      if (p) Object.assign(o, { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
       return o;
     });
     // 體力、減傷（暫時沿用排名換算；第三輪改總預算制）。沒有體力資料時用中位數（N 已標成推測）
@@ -143,7 +153,7 @@
     fs.sk.forEach((k, s) => {
       if (!k) { parts.push(`技能${s + 1} 沒有`); return; }
       const extra = k.kind === "rect" ? `，射程 ${Math.round(k.range)}、寬 ${Math.round(k.width)}` : k.kind === "lob" ? `，射程 ${Math.round(k.range)}` : "";
-      parts.push(`技能${s + 1} ${SK_KIND_LABEL[k.kind]}${k.kind === "buff" ? "" : "・" + k.dmg}${extra}・冷卻 ${k.cd.toFixed(1)} 秒（${fr(k, false)}）`);
+      parts.push(`技能${s + 1} ${SK_KIND_LABEL[k.kind]}${k.kind === "buff" || k.kind === "self" ? "" : "・" + (k.dmg || "無傷害")}${extra}・冷卻 ${k.cd.toFixed(1)} 秒（${fr(k, false)}）`);
     });
     return parts.join("｜") + "　※ 前搖／有效／後搖\n" + normSummary(fs.N);
   }
