@@ -646,7 +646,7 @@ body.fight-on { overflow: hidden; }
       <div class="row"><button class="btn primary" id="fStart" type="button">開始</button><span class="hint" id="fStartMsg"></span></div>
       <details class="more">
         <summary>操作說明</summary>
-        <p class="hint">左下方向鍵：◀ ▶ 移動、跳、防。防禦條在「防」下面：按住每秒扣 20，擋下攻擊不扣血但扣防禦條，扣完＝破防（1 秒不能動）；放開 0.5 秒後慢慢回。<br>
+        <p class="hint">左手：左下一整條移動區，按左半邊往左、右半邊往右，手指可以滑來滑去換方向。右手：普攻、兩個技能，加上右上角的「跳」和右下角的「防」。防禦條在「防」左邊：按住每秒扣 20，擋下攻擊不扣血但扣防禦條，扣完＝破防（1 秒不能動）；放開 0.5 秒後慢慢回。<br>
         右下：紅色＝普攻；紫色＝技能，按鈕上寫著種類。
         定點技能（按鈕寫「定點」，矩形預告）、拋物線（含「普攻⌒」）：按住拖曳，從按下當下對手的距離開始，左右拖曳調整遠近，放開出招。「普攻→」是瞬間直線：按下就朝面向出手，前搖時有虛線預告，不會飛行。
         直線（技能與「普攻↔」）：只決定方向，點一下就朝面向射出、一直飛到場地外或打中；按住會顯示路徑，可以用 ◀ ▶ 轉向，放開才射。
@@ -853,7 +853,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v5.2";
+  const APP_VERSION = "v5.3";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -5050,7 +5050,7 @@ body.fight-on { overflow: hidden; }
         g.p.forEach((p, i) => { if (p.inv > 0 && !invBefore[i]) log.inv++; });
         if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face, Object.keys(p.st).sort().join(","), p.st.shield ? Math.round(p.st.shield.v) : 0]));
       }
-      return { log, trace, maxHp: g.p.map((p) => p.maxHp), dr: g.p.map((p) => p.dr), gauge: g.p.map((p) => +p.gauge.toFixed(1)), sv: g.p.map((p) => +p.sv.toFixed(1)), state: g.p.map((p) => p.state), face: g.p.map((p) => p.face), hp: g.p.map((p) => Math.round(p.hp)), x: g.p.map((p) => Math.round(p.x)), phase: g.phase, wins: g.wins.slice(), stats: Object.assign({}, g.stats), t: +g.t.toFixed(2) };
+      return { log, trace, cd: g.p.map((p) => p.cd.map((c) => +c.toFixed(2))), atkCd: g.p.map((p) => +p.atkCd.toFixed(2)), maxHp: g.p.map((p) => p.maxHp), dr: g.p.map((p) => p.dr), gauge: g.p.map((p) => +p.gauge.toFixed(1)), sv: g.p.map((p) => +p.sv.toFixed(1)), state: g.p.map((p) => p.state), face: g.p.map((p) => p.face), hp: g.p.map((p) => Math.round(p.hp)), x: g.p.map((p) => Math.round(p.x)), phase: g.phase, wins: g.wins.slice(), stats: Object.assign({}, g.stats), t: +g.t.toFixed(2) };
     },
     duel: () => ({ inited: !!D.inited, a: D.f[0] && D.f[0].r.id, b: D.f[1] && D.f[1].r.id, kind: D.type, mode: D.mode, seed: D.seed, settings: settingsToSaved(),
       state: D.cd != null ? "countdown" : D.playing ? "playing" : D.idle ? (D.pos > 0 ? "ended" : "idle") : "paused", pos: Math.floor(D.pos || 0),
@@ -5153,6 +5153,90 @@ body.fight-on { overflow: hidden; }
     if (pt) { store.set("pendingToast", null); setTimeout(() => toast(pt), 600); }
     requestAnimationFrame(loop);
   })();
+  /* ---------- 格鬥場：效果設定（自動產生，不要手改） ----------
+     來源：tools/fight_effects_decisions.json（格鬥場效果決定表的匯出），產生：python tools/gen_fx_table.py
+     FX_TABLE：效果代碼 → { b 處理方式, to 對象（enemy／self）, name, dur [秒數下限, 上限], k 數值倍率, val [數值下限, 上限]（%）, lv 時間乘等級 }
+     FX_MAXLEVEL：「星數|進化型態」→ 最大等級（資料寫「每級幾秒」的效果要乘上它） */
+  const FX_TABLE = {
+    "BUBBLE": {"b": "bubble", "to": "enemy", "name": "泡泡", "dur": [0.5, 1.5], "lv": "auto", "idea": "讓對手強制浮空一定秒數，上限同暈眩"},
+    "BUFF-ANTI_AVOID_PROB": {"b": "atkBox", "to": "self", "name": "命中增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "普攻攻擊範圍增加"},
+    "BUFF-ANTI_SK_AVOID_PROB": {"b": "skBox", "to": "self", "name": "技能命中增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "技能範圍擴大"},
+    "BUFF-ATK": {"b": "atk", "to": "self", "name": "攻擊增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "memo": "僅作用於普通攻擊，避免技能乘起來One turn kill"},
+    "BUFF-ATKRANGE": {"b": "atkBox", "to": "self", "name": "攻擊距離增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "普攻距離暫時增加"},
+    "BUFF-ATKSPD": {"b": "atkCd", "to": "self", "name": "攻速增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "普攻冷卻縮短"},
+    "BUFF-AVOID_CHANCE": {"b": "atkTaken", "to": "self", "name": "閃避增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "受到普通攻擊傷害降低"},
+    "BUFF-CHANGE_SPLASH": {"b": "atkBox", "to": "self", "name": "普攻變範圍攻擊", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "普通攻擊範圍增加"},
+    "BUFF-CRITICAL_CHANCE": {"b": "none", "to": "self", "name": "爆擊率增加", "lv": "auto", "memo": "暫時不處理，但我在想未來或許有機會變成超高風險高回報的賭徒技能"},
+    "BUFF-CRITICAL_POWER": {"b": "none", "to": "self", "name": "爆擊傷害增加", "lv": "auto", "memo": "暫時不處理，想法同爆擊機率"},
+    "BUFF-HP": {"b": "shield", "to": "self", "name": "體力增加", "dur": [1, 3], "val": [15, 15], "lv": "auto"},
+    "BUFF-NORMAL_DEF": {"b": "atkTaken", "to": "self", "name": "物防增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "普通攻擊減傷增加"},
+    "BUFF-SKILLRANGE": {"b": "skBox", "to": "self", "name": "技能範圍增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "定點技能寬度、施放距離暫時增加"},
+    "BUFF-SKILL_AVOID_CHANCE": {"b": "skTaken", "to": "self", "name": "技能閃避增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "受到的技能傷害減少"},
+    "BUFF-SKILL_CHANCE": {"b": "skCd", "to": "self", "name": "技能發動率增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "一定時間內技能冷卻縮短"},
+    "BUFF-SKILL_RESIST": {"b": "skTaken", "to": "self", "name": "技能抗性增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "短暫減少受到技能傷害"},
+    "BUFF-SPECIAL_DEF": {"b": "atkTaken", "to": "self", "name": "魔防增加", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "普通攻擊減傷增加"},
+    "BUFF-SPEED": {"b": "spd", "to": "self", "name": "移速增加", "dur": [1, 5], "k": 0.5, "val": [30, 50], "lv": "auto"},
+    "BUFF-VAMPIRE": {"b": "vamp", "to": "self", "name": "吸血", "dur": [1, 5], "val": [25, 25], "lv": "auto", "idea": "造成傷害的一部分回血，收益要大於持續恢復體力"},
+    "CHANGE_DARK_NONE": {"b": "none", "to": "enemy", "name": "屬性轉換", "lv": "auto"},
+    "CHANGE_ENEMY": {"b": "swap", "to": "enemy", "name": "改變敵人", "lv": "auto", "idea": "跟對手交換位置（技能要打中）"},
+    "CHANGE_FIRE_NONE": {"b": "none", "to": "enemy", "name": "屬性轉換", "lv": "auto"},
+    "CHANGE_FIRE_WATER": {"b": "none", "to": "enemy", "name": "屬性轉換", "lv": "auto"},
+    "CHANGE_LIGHT_NONE": {"b": "none", "to": "enemy", "name": "屬性轉換", "lv": "auto"},
+    "CHANGE_TREE_FIRE": {"b": "none", "to": "enemy", "name": "屬性轉換", "lv": "auto"},
+    "CHANGE_TREE_NONE": {"b": "none", "to": "enemy", "name": "屬性轉換", "lv": "auto"},
+    "CHANGE_WATER_FIRE": {"b": "none", "to": "enemy", "name": "屬性轉換", "lv": "auto"},
+    "CHANGE_WATER_NONE": {"b": "none", "to": "enemy", "name": "屬性轉換", "lv": "auto"},
+    "CHANGE_WATER_TREE": {"b": "none", "to": "enemy", "name": "屬性轉換", "lv": "auto"},
+    "CLEANING_DEBUFF": {"b": "blockDebuff", "to": "self", "name": "清除減益（持續型）", "dur": [1, 5], "lv": "auto", "idea": "一段時間內減益無效"},
+    "CLEANING_DOTHEAL": {"b": "blockRegen", "to": "enemy", "name": "清除持續回血（持續型）", "dur": [1, 5], "lv": "auto", "idea": "同上，持續一段時間"},
+    "CLEANING_ENEMY": {"b": "blockBuff", "to": "enemy", "name": "清除敵方增益（持續型）", "dur": [1, 5], "lv": "auto", "idea": "同解除敵方增益，持續一段時間"},
+    "CLEANING_POISON": {"b": "blockDot", "to": "self", "name": "清除中毒（持續型）", "dur": [1, 5], "lv": "auto", "idea": "一段時間內持續傷害無效"},
+    "CLEANING_SUMMON": {"b": "noCopy", "to": "self", "name": "清除召喚物", "dur": [1, 5], "lv": "auto", "idea": "避免被敵人召喚，如達文西莎莉"},
+    "CLEANING_UNBEAT": {"b": "pierce", "to": "enemy", "name": "解除無敵（持續型）", "lv": "auto"},
+    "CLEAN_ALLY": {"b": "cleanDebuff", "to": "self", "name": "清除我方減益", "lv": "auto", "idea": "清掉自己的減益狀態"},
+    "CLEAN_DOTHEAL": {"b": "cleanRegen", "to": "enemy", "name": "清除持續回血", "lv": "auto", "idea": "清掉對手的持續回血"},
+    "CLEAN_ENEMY": {"b": "cleanBuff", "to": "enemy", "name": "清除敵方增益", "lv": "auto", "idea": "命中時清掉對手身上的增益狀態"},
+    "CLEAN_POISON": {"b": "cleanDot", "to": "self", "name": "清除中毒", "lv": "auto", "idea": "清掉自己身上的持續傷害"},
+    "CLEAN_UNBEAT": {"b": "pierce", "to": "enemy", "name": "解除無敵 → 穿透護盾", "lv": "auto"},
+    "CURSE_DEBUFF": {"b": "curse", "to": "enemy", "name": "詛咒", "dur": [0.5, 5], "lv": "auto", "idea": "隨機給他一個負面效果"},
+    "DEBUFF-ANTI_AVOID_PROB": {"b": "atkBox", "to": "enemy", "name": "命中降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "普通攻擊範圍降低"},
+    "DEBUFF-ANTI_SK_AVOID_PROB": {"b": "skBox", "to": "enemy", "name": "技能命中降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "技能範圍降低"},
+    "DEBUFF-ATK": {"b": "atk", "to": "enemy", "name": "攻擊降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto"},
+    "DEBUFF-ATKRANGE": {"b": "atkBox", "to": "enemy", "name": "攻擊距離降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "普攻距離暫時降低"},
+    "DEBUFF-ATKSPD": {"b": "atkCd", "to": "enemy", "name": "攻速降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "普攻冷卻增加"},
+    "DEBUFF-AVOID_CHANCE": {"b": "atkTaken", "to": "enemy", "name": "閃避降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "讓敵人受到普通攻擊傷害增加"},
+    "DEBUFF-CRITICAL_CHANCE": {"b": "none", "to": "enemy", "name": "爆擊率降低", "lv": "auto"},
+    "DEBUFF-CRITICAL_POWER": {"b": "none", "to": "enemy", "name": "爆擊傷害降低", "lv": "auto"},
+    "DEBUFF-NORMAL_DEF": {"b": "atkTaken", "to": "enemy", "name": "物防降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "受到普通攻擊傷害提升"},
+    "DEBUFF-SKILLRANGE": {"b": "skBox", "to": "enemy", "name": "技能範圍降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "同上（反向）"},
+    "DEBUFF-SKILL_AVOID_CHANCE": {"b": "skTaken", "to": "enemy", "name": "技能閃避降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "同技能抗性處理"},
+    "DEBUFF-SKILL_CHANCE": {"b": "skCd", "to": "enemy", "name": "技能發動率降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "技能冷卻變長"},
+    "DEBUFF-SKILL_RESIST": {"b": "skTaken", "to": "enemy", "name": "技能抗性降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "讓敵方受到技能傷害增加"},
+    "DEBUFF-SPECIAL_DEF": {"b": "atkTaken", "to": "enemy", "name": "魔防降低", "dur": [1, 5], "k": 0.5, "val": [10, 30], "lv": "auto", "idea": "受到普通攻擊傷害提升"},
+    "DEBUFF-SPEED": {"b": "spd", "to": "enemy", "name": "移速降低（減速）", "dur": [1, 5], "k": 0.5, "val": [30, 50], "lv": "auto"},
+    "DMG": {"b": "dmg", "to": "enemy", "name": "傷害", "lv": "auto", "idea": "改成用前搖以及攻擊方式來計算傷害，避免4000%對50%之類的超級不對等，你可以給建議", "memo": "取代官方倍率作法，但你覺得官方倍率有其他調整方式也跟我說"},
+    "DOT": {"b": "dot", "to": "enemy", "name": "持續傷害（中毒、燃燒等）", "dur": [1, 4], "lv": "auto", "idea": "跟傷害的計算更改方式類似，但dot 的最終傷害應要高於單擊", "memo": "記得參考傷害的指示"},
+    "DOTHEAL": {"b": "regen", "to": "self", "name": "持續回血", "dur": [1, 4], "val": [20, 20], "lv": "auto"},
+    "FEAR": {"b": "fear", "to": "enemy", "name": "恐懼", "dur": [0.5, 1.5], "lv": "auto", "idea": "對手被迫後退+無法技能與普攻"},
+    "HEAL": {"b": "heal", "to": "self", "name": "回血", "val": [10, 15], "lv": "auto"},
+    "KNOCKBACK": {"b": "down", "to": "enemy", "name": "擊退", "lv": "auto"},
+    "MIRROR_MAG": {"b": "mirror", "to": "self", "name": "反射魔法傷害", "dur": [1, 3], "val": [20, 30], "lv": "auto", "idea": "同上"},
+    "MIRROR_PHY": {"b": "mirror", "to": "self", "name": "反射物理傷害", "dur": [1, 3], "val": [20, 30], "lv": "auto", "idea": "一段時間內把受到的部分傷害反彈\n備註：數值像倍率（常見 0.7）"},
+    "MOVE_ATTACK": {"b": "dash", "to": "self", "name": "突進攻擊", "lv": "auto", "idea": "自己決定要突進到哪裡，用類似拋物線攻擊的方式使用"},
+    "MOVE_ENEMY1": {"b": "pull", "to": "enemy", "name": "拉動敵人", "lv": "auto", "idea": "把對手拉向自己"},
+    "MOVE_ENEMY2": {"b": "pull", "to": "enemy", "name": "拉動敵人（遠）", "lv": "auto", "idea": "把敵人拉到自己面前"},
+    "POLYMORPH": {"b": "poly", "to": "enemy", "name": "變形", "dur": [0.5, 1.5], "lv": "auto", "idea": "讓對手變形，只能移動（變成的不同樣子資料庫應該有）"},
+    "SCALE": {"b": "scale", "to": "enemy", "name": "縮放", "dur": [1, 5], "val": [30, 30], "lv": "auto", "idea": "把對手尺寸變大+判定框暫時變大"},
+    "SILENCE": {"b": "silence", "to": "enemy", "name": "沉默", "dur": [1, 3], "lv": "auto"},
+    "SKILL_RESET": {"b": "cdReset", "to": "self", "name": "技能冷卻重置", "lv": "auto", "idea": "另一個技能的冷卻立刻歸零"},
+    "STUN": {"b": "stun", "to": "enemy", "name": "暈眩", "dur": [0.5, 1.5], "lv": "auto"},
+    "SUMMON": {"b": "new", "to": "self", "name": "召喚", "lv": "auto", "idea": "先暫時不動，等後續其他技能處理完再來看這個部分"},
+    "SUMMON_ENEMY": {"b": "copy", "to": "self", "name": "召喚對手複製體", "lv": "auto", "idea": "在我方叫出對手的複製體，複製體會在原地普攻以及把兩個技能放完之後消失"},
+    "TEMPT": {"b": "charm", "to": "enemy", "name": "魅惑", "dur": [3, 3], "lv": "auto", "idea": "對手的左右操作反轉"},
+    "THROW_ALLY": {"b": "dash", "to": "self", "name": "投擲隊友", "lv": "auto", "idea": "同突進攻擊（2026-11-04 確認：做成突進）"},
+    "UNBEAT": {"b": "shield", "to": "self", "name": "無敵 → 護盾", "dur": [1, 3], "val": [15, 15], "lv": "auto"},
+  };
+  const FX_MAXLEVEL = {"1|NORMAL": 40, "2|NORMAL": 50, "3|NORMAL": 60, "4|NORMAL": 70, "4|ULTRA": 160, "5|NORMAL": 80, "5|ULTRA": 180, "6|NORMAL": 100, "6|ULTRA": 200, "7|NORMAL": 120, "7|ULTRA": 220, "8|HYPER": 240, "8|NORMAL": 140, "8|ULTRA": 240, "9|NORMAL": 180};
   /* ---------- 格鬥場（v5.0 測試版）：固定數值、角色資料換算 ----------
      調平衡只要改這個檔：FT（全體共用的規則數值）、FIGHT_PRESET（自製角色手寫數值）、fightStats（官方角色換算）。
      規則本身在 js-18-fight-engine.js，畫面與觸控在 js-19。時間單位一律是秒，畫面上的「格」＝ 1/60 秒。
@@ -5164,6 +5248,9 @@ body.fight-on { overflow: hidden; }
     HP_MIN: 850, HP_MAX: 1200, DR_MAX: 0.2,           // 體力、減傷的範圍（官方角色依資料排名換算）
     // 移動
     GRAV: 1700, JUMP_V: 800, AIR_CTRL: 0.85,          // 重力、起跳速度（約 188 高、滯空約 0.94 秒）、空中左右移動的比例
+    DASH_T: 0.25, BUBBLE_H: 90,                       // 突進花的時間、泡泡浮起的高度
+    DASH_K: 2, DASH_DEF: 300, DASH_MAX: 700,          // 突進距離＝效果自帶的數值（points）× 2；沒有數值用 300；最遠 700
+    PUSH_H: 0.5,                                      // 推擠：只有一方在空中時完全不推（跳得過對手）；兩人都在空中時，高度差超過身高 × 0.5 就不推
     // 出招
     ACTIVE: 4 / 60,                                   // 近戰普攻的有效判定持續時間（4 格）
     BUFFER: 0.15,                                     // 輸入緩衝：出招中、冷卻中提早按下，0.15 秒內會自動接上
@@ -5202,8 +5289,8 @@ body.fight-on { overflow: hidden; }
 
   /* 招式的操作方式：dist＝按住拖曳決定位置（矩形、拋物線），dir＝只決定方向、點一下就放（直線、普攻投射物），
      tap＝按下就放（近戰普攻、輔助技能） */
-  const AIM_MODE = { rect: "dist", lob: "dist", line: "dir", shot: "dir", melee: "tap", dline: "tap", self: "tap", buff: "tap" };
-  const SK_KIND_LABEL = { rect: "指定位置打擊（矩形預告）", line: "直線投射物", lob: "拋物線", self: "自身", buff: "輔助（暫時用加攻＋回血代替）" };
+  const AIM_MODE = { rect: "dist", lob: "dist", dash: "dist", line: "dir", shot: "dir", melee: "tap", dline: "tap", self: "tap", buff: "tap" };
+  const SK_KIND_LABEL = { dash: "突進", rect: "指定位置打擊（矩形預告）", line: "直線投射物", lob: "拋物線", self: "自身", buff: "輔助（暫時用加攻＋回血代替）" };
   const ATK_KIND_LABEL = { melee: "近戰", dline: "瞬間直線", shot: "直線投射物", lob: "拋物線" };
 
   /* 自製角色的手寫數值（官方角色由 fightStats 從資料換算）；沒寫的欄位用換算值 */
@@ -5231,6 +5318,21 @@ body.fight-on { overflow: hidden; }
     ["u1008h-brown", "效果：攻擊降低、穿透護盾＋擊退"],
     ["u023u-sindy", "效果：沉默、攻擊與移速增加"],
     ["u010e-clara", "效果：持續傷害"],
+    ["u010u-clara", "效果：技能抗性降低（受到技能傷害增加）"],
+    ["u1001h-brown", "效果：反射傷害、普攻傷害減少"],
+    ["u014u-cony", "效果：吸血、技能範圍增加"],
+    ["u1084h-alice", "效果：技能冷卻縮短、冷卻重置"],
+    ["u1216e-towa", "效果：突進＋暈眩"],
+    ["u1278e-er", "效果：長距離突進（600）"],
+    ["u003u-bella", "效果：交換位置"],
+    ["u1013e-brown", "效果：拉近對手"],
+    ["u1116h-claris", "效果：魅惑（左右反轉）、沉默"],
+    ["u1617h-ka", "效果：恐懼"],
+    ["u099u-alice", "效果：變形"],
+    ["u1418e-moon", "效果：泡泡"],
+    ["u1065e-cony", "效果：變大＋擊退"],
+    ["u1145h-brown", "效果：詛咒（隨機負面效果）"],
+    ["u1004e-sally", "效果：召喚對手複製體"],
   ];
 
   /* 體力、減傷依「在全部角色裡的排名」換算（折衷：有差異但不極端）。排名表第一次用到時算一次。 */
@@ -5257,6 +5359,11 @@ body.fight-on { overflow: hidden; }
      前搖：資料裡有準備動作（*_ready）就依它算，沒有就取動作長度的 50%（見 hitFrac）。 */
   const fSpeed = (cfg) => (cfg && cfg.v > 0 ? fclamp(cfg.v * FT.SPEED_K, FT.SPEED_MIN, FT.SPEED_MAX) : FT.SPEED_DEF);
   const fLobT = (cfg) => (cfg && cfg.v > 0 ? fclamp(FT.LOB_TIME * FT.LOB_V0 / cfg.v, FT.LOB_TMIN, FT.LOB_TMAX) : FT.LOB_TIME);
+  // 突進距離：用突進效果自帶的數值（原作的衝刺距離，跟射程無關）
+  function fightDashRange(k) {
+    const e = k.fx.find((x) => FIGHT_FX[x.c] && FIGHT_FX[x.c].form === "dash");
+    return Math.min(FT.DASH_MAX, (e && e.val > 0 ? e.val : FT.DASH_DEF) * FT.DASH_K);
+  }
   function fightStats(f) {
     const N = normUnit(f.r, animNames(f.part)), pre = FIGHT_PRESET[f.r.id] || {}, rk = fightRanks(), F = N.f;
     const rg = F.rg.v, ai = F.ai.v || 1.2;
@@ -5274,20 +5381,20 @@ body.fight-on { overflow: hidden; }
     const sk = N.sk.map((k, s) => {
       if (!k.exists || !k.clip) return null;
       const d = dur(k.clip, 0.4, 1.0), p = (pre.sk || [])[s];
-      const o = { form: k.form, kind: FORM_KIND.sk[k.form], clip: k.clip, clipSub: k.clipSub, dur: d, hitAt: d * hitFrac(f, k.clip), dmg: s ? 200 : 120, sv: s ? FT.SV_SK2 : FT.SV_SK1,
+      const o = { s, form: k.form, kind: FORM_KIND.sk[k.form], clip: k.clip, clipSub: k.clipSub, dur: d, hitAt: d * hitFrac(f, k.clip), dmg: s ? 200 : 120, sv: s ? FT.SV_SK2 : FT.SV_SK1,
         cd: s ? fclamp(k.cd.v || 12, 8, 15) : fclamp(k.cd.v || 6, 4, 10),
         name: (f.skills && f.skills[s] && f.skills[s].name) || `技能${s + 1}`, bul: k.cfg && k.cfg.p && f.bul[k.cfg.p] ? k.cfg : null,
-        range: k.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : fclamp(rg * FT.RG_CAST, FT.CAST_MIN, FT.CAST_MAX),
+        range: k.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : k.form === "dash" ? fightDashRange(k) : fclamp(rg * FT.RG_CAST, FT.CAST_MIN, FT.CAST_MAX),
         width: k.effectRange.v ? fclamp(k.effectRange.v * FT.AR_WIDTH, FT.WIDTH_MIN, FT.WIDTH_MAX) : FT.WIDTH_DEF,
         speed: fSpeed(k.cfg), lobT: fLobT(k.cfg) };
       // 效果（只放效果模組支援的；同一種代碼只留一筆）：打對手的跟著投射物／預告走，自己的在出招時套用
-      const seen = new Set(), sup = k.fx.filter((e) => FIGHT_FX[e.c] && e.c !== "DMG" && !seen.has(e.c) && seen.add(e.c)).map((e) => ({ c: e.c, dur: e.dur, val: e.val }));
+      const seen = new Set(), sup = k.fx.filter((e) => FIGHT_FX[e.c] && e.c !== "DMG" && !seen.has(e.c) && seen.add(e.c)).map((e) => ({ c: e.c, dur: e.dur, val: e.val, durLv: e.durLv || 0, lvMax: N.lvMax || 0 }));
       o.enemyFx = sup.filter((e) => FIGHT_FX[e.c].to === "enemy"); o.selfFx = sup.filter((e) => FIGHT_FX[e.c].to === "self");
       if (!k.damaging && !p) o.dmg = 0; // 沒有傷害的技能（只有減益、暈眩等）不扣血
       if (p) Object.assign(o, { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
       return o;
     });
-    // 體力、減傷（暫時沿用排名換算；第三輪改總預算制）。沒有體力資料時用中位數（N 已標成推測）
+    // 體力、減傷（暫時沿用排名換算；階段 3（數值平衡）改總預算制）。沒有體力資料時用中位數（N 已標成推測）
     const hpPct = F.hp.st === "ok" ? rk.hp(F.hp.v) : 0.5;
     return {
       hp: pre.hp || Math.round(FT.HP_MIN + (FT.HP_MAX - FT.HP_MIN) * hpPct),
@@ -5307,81 +5414,192 @@ body.fight-on { overflow: hidden; }
       `普攻 ${ATK_KIND_LABEL[a.kind]}${a.kind === "melee" ? " " + Math.round(a.reach) + " 遠" : a.kind === "dline" || a.kind === "lob" ? " " + Math.round(a.range) + " 遠" : ""}・${a.dmg}（${fr(a, a.kind === "melee")}）`];
     fs.sk.forEach((k, s) => {
       if (!k) { parts.push(`技能${s + 1} 沒有`); return; }
-      const extra = k.kind === "rect" ? `，射程 ${Math.round(k.range)}、寬 ${Math.round(k.width)}` : k.kind === "lob" ? `，射程 ${Math.round(k.range)}` : "";
+      const extra = k.kind === "dash" ? `，距離 ${Math.round(k.range)}（左右都可以）` : k.kind === "rect" ? `，射程 ${Math.round(k.range)}、寬 ${Math.round(k.width)}` : k.kind === "lob" ? `，射程 ${Math.round(k.range)}` : "";
       parts.push(`技能${s + 1} ${SK_KIND_LABEL[k.kind]}${k.kind === "buff" || k.kind === "self" ? "" : "・" + (k.dmg || "無傷害")}${extra}・冷卻 ${k.cd.toFixed(1)} 秒（${fr(k, false)}）`);
     });
     return parts.join("｜") + "　※ 前搖／有效／後搖\n" + normSummary(fs.N);
   }
   /* ---------- 格鬥場：技能效果模組（Effect Registry） ----------
-     每種效果代碼（skill_fx.json 的 c）一筆：作用對象 to（"enemy" 命中對手時套用／"self" 出招時套用在自己身上）、
-     套用方式 apply(g, 出手者, 目標, 效果, 這一下的情況)，以及畫面用的狀態名稱。
-     這裡有的代碼＝格鬥場已支援（標準化層與相容性報告都看這張表）；要加新效果，在這裡加一筆就好，不用改戰鬥主程式。
-     效果的數字一律換算到格鬥場的範圍（原作的持續時間常常 8～10 秒，太長），換算規則在 FX_NUM。
+     兩層：
+       FX_TABLE（js-18-fight-data-fx.js，由決定表產生）：每個效果代碼用哪一種「處理方式」b、作用對象、數字範圍。
+       FX_BEHAVIOR（這個檔）：每一種處理方式怎麼做。
+     FIGHT_FX＝兩者組起來：決定表選了、而且這裡有實作的代碼才算「已支援」（標準化層、相容性報告都看它）。
+     要讓某個效果換做法：改決定表（或 tools/fight_effects_decisions.json）→ python tools/gen_fx_table.py → python build.py。
+     要新增一種做法：在 FX_BEHAVIOR 加一筆，並在 tools/gen_fx_table.py 的 NEW_MAP 指給對應的代碼。
 
      角色身上的狀態 p.st：{ 狀態名: { t: 剩幾秒, v: 數值, … } }
-     重複中招：同一種狀態重新計時、數值取比較大的（不疊加），見 fxSet。 */
+     重複中招：同一種狀態重新計時、數值取比較大的（不疊加），見 fxSet。增益與減益的分類見 FX_POS／FX_NEG（清除效果用）。 */
 
-  // 數字換算：持續秒數上下限、百分比類效果的倍率與上下限
-  const FX_NUM = {
-    STUN_T: [0.5, 1.5],          // 暈眩
-    SILENCE_T: [1, 3],           // 沉默
-    MOD_T: [1, 5],               // 攻擊、移速增減
-    SHIELD_T: [1, 3],            // 護盾（取代無敵）
-    DOT_T: [1, 4],               // 持續傷害、持續回血
-    PCT_K: 0.5, PCT: [0.1, 0.3], // 百分比類：資料 % × 0.5，限制在 10%～30%（例如減速 40% → 20%）
-    DOT_FIRST: 0.4,              // 持續傷害：命中先扣這招傷害的 40%，其餘 60% 分次扣
-    TICK: 0.5,                   // 持續傷害、持續回血每 0.5 秒一次
-    HEAL: 0.12,                  // 回血：最大體力的 12%
-    DOTHEAL: 0.2,                // 持續回血：總共最大體力的 20%
-    SHIELD: 0.15,                // 護盾：最大體力的 15%
-  };
-  const fxDur = (e, range) => fclamp(e.dur > 0 ? e.dur : range[1], range[0], range[1]);
-  const fxPct = (e) => fclamp((e.val > 0 ? e.val : 40) / 100 * FX_NUM.PCT_K, FX_NUM.PCT[0], FX_NUM.PCT[1]);
-  // 設定一個狀態：重新計時、數值取大
+  const FX_NUM = { DOT_FIRST: 0.4, DOT_TOTAL: 1.3, TICK: 0.5, HEAL_DATA: [50, 150] };
+  /* DOT_FIRST：持續傷害命中先扣這招傷害的 40%；DOT_TOTAL：持續傷害的總傷害＝單擊的 1.3 倍（要等它扣完的補償）
+     TICK：持續傷害、持續回血每 0.5 秒一次；HEAL_DATA：回血的原作數值在這個範圍內依比例對到決定表的上下限 */
+
+  // 持續秒數：資料寫「每級幾秒」時乘上這隻角色的最大等級（決定表選「不乘」就不乘），再套上下限
+  function fxDur(e, P) {
+    const [lo, hi] = P.dur || [1, 5];
+    let t = e.dur > 0 ? e.dur : hi;
+    if (e.durLv > 0 && P.lv !== "never") t = e.lvMax ? e.durLv * e.lvMax : hi;
+    return fclamp(t, lo, hi);
+  }
+  // 百分比類：資料 % × k，限制在決定表的上下限（回傳 0～1）
+  const fxPct = (e, P) => fclamp((e.val > 0 ? e.val : 40) / 100 * (P.k == null ? 0.5 : P.k), (P.val ? P.val[0] : 10) / 100, (P.val ? P.val[1] : 30) / 100);
+  // 固定比例類（回血、護盾、吸血、反射）：資料數值在 HEAL_DATA 範圍內依比例對到上下限；沒有數值就取中間
+  function fxRatio(e, P) {
+    const [lo, hi] = P.val || [10, 10], [a, b] = FX_NUM.HEAL_DATA;
+    const r = e.val > 0 ? fclamp((e.val - a) / (b - a), 0, 1) : 0.5;
+    return (lo + (hi - lo) * r) / 100;
+  }
+  const fxDebuffCode = (c) => c.startsWith("DEBUFF-");
+
+  // 增益、減益（清除效果用）；持續清除＝一段時間內不能再中
+  const FX_POS = new Set(["atkUp", "spdUp", "skDef", "atkDef", "atkBoxUp", "skBoxUp", "cdFast", "atkSpdUp", "vamp", "mirror", "regen", "noDebuff", "noDot"]);
+  const FX_NEG = new Set(["atkDown", "spdDown", "skVul", "atkVul", "atkBoxDown", "skBoxDown", "cdSlow", "atkSpdDown", "silence", "dot", "noBuff", "noRegen"]);
+  // 設定一個狀態（被持續清除擋下時回傳 false）
   function fxSet(p, name, t, v, extra) {
+    if (FX_NEG.has(name) && p.st.noDebuff) return false;
+    if (name === "dot" && p.st.noDot) return false;
+    if (FX_POS.has(name) && p.st.noBuff) return false;
+    if (name === "regen" && p.st.noRegen) return false;
     const old = p.st[name];
     p.st[name] = Object.assign({ t: Math.max(t, old ? old.t : 0), v: Math.max(v || 0, old ? old.v || 0 : 0) }, extra || {});
+    return true;
   }
   const fxText = (g, p, text, color) => g.fx.push({ kind: "text", text, x: p.x, y: FT.CH * 1.25, t: 0, life: 0.8, color });
+  const fxClear = (p, names) => { let n = 0; for (const k of Object.keys(p.st)) if (names.has ? names.has(k) : names.includes(k)) { delete p.st[k]; n++; } return n; };
 
-  const FIGHT_FX = {
-    // 傷害本身由命中結算處理（這裡只標示已支援）
-    DMG: { to: "enemy" },
-    // 持續傷害：命中時 fightHit 只先扣 DOT_FIRST，其餘在這裡分次扣
-    DOT: { to: "enemy", status: "dot", apply(g, a, o, e, hit) {
-      const T = fxDur(e, FX_NUM.DOT_T), total = hit.full * (1 - FX_NUM.DOT_FIRST) * (1 - o.dr);
-      fxSet(o, "dot", T, total / (T / FX_NUM.TICK), { tick: FX_NUM.TICK, from: a.side });
+  // 「增益一個、減益一個」的狀態（依代碼字首 DEBUFF- 決定套哪一個）
+  const fxMod = (up, down, upTag, downTag, color) => ({
+    apply(g, src, t, e, P) {
+      const neg = fxDebuffCode(e.c), name = neg ? down : up;
+      if (fxSet(t, name, fxDur(e, P), fxPct(e, P))) fxText(g, t, neg ? downTag : upTag, color);
+    },
+  });
+
+  /* 處理方式：apply(g, 出手者, 被套用的人, 效果, 決定表參數, 這一下的情況)
+     「被套用的人」：對象是敵＝被打中的對手；是己＝出手者自己。hit＝{ dmg 實際扣的血, full 這招原本的傷害, dir, s 技能序 } */
+  const FX_BEHAVIOR = {
+    dmg: {},                                           // 傷害本身由命中結算處理
+    // 持續傷害：命中先扣 DOT_FIRST，其餘在時間內分次扣，總傷害＝單擊的 DOT_TOTAL 倍
+    dot: { apply(g, src, t, e, P, hit) {
+      const T = fxDur(e, P), total = hit.full * (FX_NUM.DOT_TOTAL - FX_NUM.DOT_FIRST) * (1 - t.dr);
+      if (fxSet(t, "dot", T, total / (T / FX_NUM.TICK), { tick: FX_NUM.TICK, from: src.side })) fxText(g, t, "中毒", "#b46bff");
     } },
-    // 暈眩：跟受擊硬直不同的控制狀態，期間完全不能動（已經倒地就不再暈）
-    STUN: { to: "enemy", apply(g, a, o, e) {
-      if (o.stunKind === "down" || o.ko) return;
-      o.stun = Math.max(o.stun, fxDur(e, FX_NUM.STUN_T)); o.stunKind = "stunfx"; o.act = null; o.aim = [null, null, null];
-      fxText(g, o, "暈眩", "#ffd84a");
+    stun: { apply(g, src, t, e, P) {
+      if (t.stunKind === "down" || t.ko) return;
+      t.stun = Math.max(t.stun, fxDur(e, P)); t.stunKind = "stunfx"; t.act = null; t.aim = [null, null, null];
+      fxText(g, t, "暈眩", "#ffd84a");
     } },
-    // 擊退：直接倒地（命中結算裡判斷，這裡處理沒有傷害的情況）
-    KNOCKBACK: { to: "enemy", knockdown: true, apply(g, a, o, e, hit) { if (!hit.dmg) fightDown(g, o, hit.dir); } },
-    // 沉默：不能用技能（可以移動、防禦、普攻）
-    SILENCE: { to: "enemy", status: "silence", apply(g, a, o, e) { fxSet(o, "silence", fxDur(e, FX_NUM.SILENCE_T), 1); o.aim[0] = o.aim[1] = null; fxText(g, o, "沉默", "#c9a7ff"); } },
-    "DEBUFF-ATK": { to: "enemy", status: "atkDown", apply(g, a, o, e) { fxSet(o, "atkDown", fxDur(e, FX_NUM.MOD_T), fxPct(e)); fxText(g, o, "攻↓", "#9fd0ff"); } },
-    "DEBUFF-SPEED": { to: "enemy", status: "spdDown", apply(g, a, o, e) { fxSet(o, "spdDown", fxDur(e, FX_NUM.MOD_T), fxPct(e)); fxText(g, o, "速↓", "#9fd0ff"); } },
-    // 解除無敵（兩種代碼當同一種）：有傷害的技能＝傷害穿透護盾（命中結算看 pierce）；沒傷害＝直接打掉護盾
-    CLEAN_UNBEAT: { to: "enemy", pierce: true, apply(g, a, o, e, hit) { if (!hit.dmg && o.st.shield) { delete o.st.shield; fxText(g, o, "破盾！", "#ff8a3d"); } } },
-    // 自己身上
-    HEAL: { to: "self", apply(g, p) { const v = Math.round(p.maxHp * FX_NUM.HEAL); p.hp = Math.min(p.maxHp, p.hp + v); g.fx.push({ kind: "num", text: "+" + v, x: p.x, y: FT.CH * 1.05, t: 0, life: 0.8, heal: true }); } },
-    DOTHEAL: { to: "self", status: "regen", apply(g, p, o, e) { const T = fxDur(e, FX_NUM.DOT_T); fxSet(p, "regen", T, p.maxHp * FX_NUM.DOTHEAL / (T / FX_NUM.TICK), { tick: FX_NUM.TICK }); } },
-    // 無敵 → 護盾：先吸收傷害，被打破或時間到就消失
-    UNBEAT: { to: "self", status: "shield", apply(g, p, o, e) { fxSet(p, "shield", fxDur(e, FX_NUM.SHIELD_T), p.maxHp * FX_NUM.SHIELD); fxText(g, p, "護盾", "#7dd3ff"); } },
-    "BUFF-ATK": { to: "self", status: "atkUp", apply(g, p, o, e) { fxSet(p, "atkUp", fxDur(e, FX_NUM.MOD_T), fxPct(e)); fxText(g, p, "攻↑", "#ffb14a"); } },
-    "BUFF-SPEED": { to: "self", status: "spdUp", apply(g, p, o, e) { fxSet(p, "spdUp", fxDur(e, FX_NUM.MOD_T), fxPct(e)); fxText(g, p, "速↑", "#7dff9a"); } },
+    down: { knockdown: true, apply(g, src, t, e, P, hit) { if (!hit.dmg) fightDown(g, t, hit.dir); } },
+    silence: { apply(g, src, t, e, P) { if (fxSet(t, "silence", fxDur(e, P), 1)) { t.aim[0] = t.aim[1] = null; fxText(g, t, "沉默", "#c9a7ff"); } } },
+    // 攻擊增減：只影響普攻（避免技能乘起來一招斃命）
+    atk: fxMod("atkUp", "atkDown", "攻↑", "攻↓", "#ffb14a"),
+    spd: fxMod("spdUp", "spdDown", "速↑", "速↓", "#7dff9a"),
+    // 受到的技能／普攻傷害：增益＝減少，減益＝增加
+    skTaken: fxMod("skDef", "skVul", "技傷↓", "技傷↑", "#9fd0ff"),
+    atkTaken: fxMod("atkDef", "atkVul", "普傷↓", "普傷↑", "#9fd0ff"),
+    // 判定框上下左右一起變大／變小
+    atkBox: fxMod("atkBoxUp", "atkBoxDown", "普攻範圍↑", "普攻範圍↓", "#ffd84a"),
+    skBox: fxMod("skBoxUp", "skBoxDown", "技能範圍↑", "技能範圍↓", "#ffd84a"),
+    // 技能冷卻：持續期間轉快／轉慢，套用當下也立刻減少／增加同比例的剩餘冷卻
+    skCd: { apply(g, src, t, e, P) {
+      const neg = fxDebuffCode(e.c), v = fxPct(e, P);
+      if (!fxSet(t, neg ? "cdSlow" : "cdFast", fxDur(e, P), v)) return;
+      t.cd = t.cd.map((c) => c * (neg ? 1 + v : 1 - v));
+      fxText(g, t, neg ? "冷卻↑" : "冷卻↓", "#7dd3ff");
+    } },
+    atkCd: fxMod("atkSpdUp", "atkSpdDown", "攻速↑", "攻速↓", "#ffb14a"),
+    cdReset: { apply(g, src, t, e, P, hit) { const o = hit && hit.s != null ? 1 - hit.s : -1; if (o >= 0 && t.cd[o] > 0) { t.cd[o] = 0; fxText(g, t, "冷卻重置", "#7dd3ff"); } } },
+    // 清除：立刻清掉；持續清除：清掉並在一段時間內不能再中
+    cleanBuff: { apply(g, src, t) { if (fxClear(t, FX_POS)) fxText(g, t, "增益被清除", "#ff8a3d"); } },
+    blockBuff: { apply(g, src, t, e, P) { fxClear(t, FX_POS); fxSet(t, "noBuff", fxDur(e, P), 1); fxText(g, t, "封印增益", "#ff8a3d"); } },
+    cleanRegen: { apply(g, src, t) { if (fxClear(t, ["regen"])) fxText(g, t, "回血被清除", "#ff8a3d"); } },
+    blockRegen: { apply(g, src, t, e, P) { fxClear(t, ["regen"]); fxSet(t, "noRegen", fxDur(e, P), 1); } },
+    cleanDebuff: { apply(g, src, t) { if (fxClear(t, FX_NEG)) fxText(g, t, "淨化", "#7dff9a"); } },
+    blockDebuff: { apply(g, src, t, e, P) { fxClear(t, FX_NEG); fxSet(t, "noDebuff", fxDur(e, P), 1); fxText(g, t, "減益無效", "#7dff9a"); } },
+    cleanDot: { apply(g, src, t) { if (fxClear(t, ["dot"])) fxText(g, t, "解毒", "#7dff9a"); } },
+    blockDot: { apply(g, src, t, e, P) { fxClear(t, ["dot"]); fxSet(t, "noDot", fxDur(e, P), 1); } },
+    // 吸血：造成傷害的一部分回成血；反射：受到的傷害一部分反彈（見 fightDamage）
+    vamp: { apply(g, src, t, e, P) { if (fxSet(t, "vamp", fxDur(e, P), fxRatio(e, P))) fxText(g, t, "吸血", "#ff6b8a"); } },
+    mirror: { apply(g, src, t, e, P) { if (fxSet(t, "mirror", fxDur(e, P), fxRatio(e, P))) fxText(g, t, "反射", "#7dd3ff"); } },
+    // 回血、持續回血、護盾（取代無敵）
+    heal: { apply(g, src, t, e, P) { const v = Math.round(t.maxHp * fxRatio(e, P)); t.hp = Math.min(t.maxHp, t.hp + v); g.fx.push({ kind: "num", text: "+" + v, x: t.x, y: FT.CH * 1.05, t: 0, life: 0.8, heal: true }); } },
+    regen: { apply(g, src, t, e, P) { const T = fxDur(e, P); fxSet(t, "regen", T, t.maxHp * fxRatio(e, P) / (T / FX_NUM.TICK), { tick: FX_NUM.TICK }); } },
+    shield: { apply(g, src, t, e, P) { const v = t.maxHp * fxRatio(e, P); fxSet(t, "shield", fxDur(e, P), v, { max: v }); fxText(g, t, "護盾", "#7dd3ff"); } },
+    // 解除無敵：有傷害的技能穿透護盾（命中結算看 pierce）；沒傷害的技能打掉護盾
+    pierce: { pierce: true, apply(g, src, t, e, P, hit) { if (!hit.dmg && t.st.shield) { delete t.st.shield; fxText(g, t, "破盾！", "#ff8a3d"); } } },
   };
-  FIGHT_FX.CLEANING_UNBEAT = FIGHT_FX.CLEAN_UNBEAT;
+
+  /* 第 2 部分：位移、控制、外觀、詛咒、複製體 */
+  // 被控制時不能做的事：fear（被迫後退、不能攻擊）、poly（只能移動）；charm 只是左右反轉
+  const fxCantAct = (p) => !!(p.st.fear || p.st.poly);
+  // 詛咒會抽的負面效果（借用這些代碼在決定表的設定；含暈眩）
+  const FX_CURSE = ["STUN", "SILENCE", "DEBUFF-ATK", "DEBUFF-SPEED", "DEBUFF-SKILL_RESIST", "DEBUFF-NORMAL_DEF", "DEBUFF-ATKRANGE", "DEBUFF-SKILLRANGE", "DEBUFF-SKILL_CHANCE", "DEBUFF-ATKSPD"];
+  Object.assign(FX_BEHAVIOR, {
+    // 突進：招式本身的動作（js-18-fight-engine 的 FIGHT_RELEASE.dash），這裡不用做事
+    dash: { form: "dash" },
+    // 把對手拉到自己面前（0.2 秒滑過去）
+    pull: { apply(g, src, t) {
+      if (t.ko || !src.fs && !g.cfg.fs[src.side]) return;
+      const to = src.x + src.face * ((fightFs(g, src).bw + g.cfg.fs[t.side].bw) / 2 + 10);
+      fightSlide(t, to, 0.2); fxText(g, t, "拉近", "#ff8a3d");
+    } },
+    // 打中就交換位置
+    swap: { apply(g, src, t) { if (t.ko || src.clone) return; const x = src.x; fightSlide(src, t.x, 0.25); fightSlide(t, x, 0.25); fxText(g, t, "換位", "#ff8a3d"); } },
+    // 魅惑：左右操作反轉
+    charm: { apply(g, src, t, e, P) { if (fxSet(t, "charm", fxDur(e, P), 1)) fxText(g, t, "魅惑", "#ff6bd5"); } },
+    // 恐懼：被迫往後退，不能技能、普攻、防禦、跳
+    fear: { apply(g, src, t, e, P) { if (fxSet(t, "fear", fxDur(e, P), 1, { from: src.x })) { t.act = null; t.aim = [null, null, null]; fxText(g, t, "恐懼", "#b46bff"); } } },
+    // 變形：只能移動；外觀換成施放者這招的投射物圖案（見畫面）
+    poly: { apply(g, src, t, e, P, hit) {
+      if (fxSet(t, "poly", fxDur(e, P), 1, { own: src.side, bul: hit.bul || null })) { t.act = null; t.aim = [null, null, null]; fxText(g, t, "變形", "#ffd84a"); }
+    } },
+    // 泡泡：被困住浮在空中，完全不能動（跟暈眩一樣是控制狀態）
+    bubble: { apply(g, src, t, e, P) {
+      if (t.stunKind === "down" || t.ko) return;
+      t.stun = Math.max(t.stun, fxDur(e, P)); t.stunKind = "bubble"; t.act = null; t.aim = [null, null, null]; t.vy = 0;
+      fxText(g, t, "泡泡", "#7dd3ff");
+    } },
+    // 縮放：對手變大，受傷判定框跟著變大
+    scale: { apply(g, src, t, e, P) { if (fxSet(t, "big", fxDur(e, P), fxRatio(e, P))) fxText(g, t, "變大", "#ffd84a"); } },
+    // 詛咒：從負面效果裡隨機抽一個（用對戰的固定亂數，重播結果一樣）
+    curse: { apply(g, src, t, e, P, hit) {
+      const pool = FX_CURSE.filter((c) => FIGHT_FX[c]), c = pool[Math.floor(g.rng() * pool.length)];
+      if (!c) return;
+      fxText(g, t, "詛咒", "#b46bff");
+      fxRun(g, src, t, { c, dur: e.dur, durLv: e.durLv, lvMax: e.lvMax, val: null }, hit);
+    } },
+    // 複製體：在自己前面叫出對手的複製體（見 fightCloneSpawn）；對手有「防複製」就失敗
+    copy: { apply(g, src) { fightCloneSpawn(g, src); } },
+    noCopy: { apply(g, src, t, e, P) { if (fxSet(t, "noCopy", fxDur(e, P), 1)) fxText(g, t, "防複製", "#7dff9a"); } },
+  });
+  // 會打斷動作的控制類（突進途中不生效）
+  const FX_CONTROL = new Set(["stun", "down", "bubble", "fear", "poly", "pull", "swap"]);
+  FX_POS.add("noCopy"); ["charm", "fear", "poly", "big"].forEach((n) => FX_NEG.add(n));
+
+  // 決定表 × 處理方式 → 已支援的效果（none、new、還沒實作的處理方式都不算）
+  const FIGHT_FX = {};
+  for (const [code, row] of Object.entries(FX_TABLE)) {
+    const B = FX_BEHAVIOR[row.b];
+    if (!B) continue;
+    FIGHT_FX[code] = { to: row.to, b: row.b, P: row, knockdown: !!B.knockdown, pierce: !!B.pierce, form: B.form || null, apply: B.apply };
+  }
+
   // 狀態在畫面上的名稱（頭上的小標籤）
   const FX_STATUS_TAG = { dot: ["毒", "#b46bff"], silence: ["沉默", "#c9a7ff"], atkDown: ["攻↓", "#9fd0ff"], spdDown: ["速↓", "#9fd0ff"], regen: ["回", "#7dff9a"],
-    shield: ["盾", "#7dd3ff"], atkUp: ["攻↑", "#ffb14a"], spdUp: ["速↑", "#7dff9a"] };
+    shield: ["盾", "#7dd3ff"], atkUp: ["攻↑", "#ffb14a"], spdUp: ["速↑", "#7dff9a"], skDef: ["技防", "#7dd3ff"], skVul: ["技弱", "#ff8a3d"],
+    atkDef: ["普防", "#7dd3ff"], atkVul: ["普弱", "#ff8a3d"], atkBoxUp: ["普框↑", "#ffd84a"], atkBoxDown: ["普框↓", "#9fd0ff"], skBoxUp: ["技框↑", "#ffd84a"],
+    skBoxDown: ["技框↓", "#9fd0ff"], cdFast: ["冷卻快", "#7dd3ff"], cdSlow: ["冷卻慢", "#ff8a3d"], atkSpdUp: ["攻速↑", "#ffb14a"], atkSpdDown: ["攻速↓", "#9fd0ff"],
+    vamp: ["吸血", "#ff6b8a"], mirror: ["反射", "#7dd3ff"], noBuff: ["封增", "#ff8a3d"], noRegen: ["封回", "#ff8a3d"], noDebuff: ["淨", "#7dff9a"], noDot: ["抗毒", "#7dff9a"],
+    charm: ["魅惑", "#ff6bd5"], fear: ["恐懼", "#b46bff"], poly: ["變形", "#ffd84a"], big: ["變大", "#ffd84a"], noCopy: ["防複製", "#7dff9a"] };
 
-  // 攻擊、移速的倍率（狀態加總）
-  const fxAtkMul = (p) => (1 + (p.st.atkUp ? p.st.atkUp.v : 0)) * (1 - (p.st.atkDown ? p.st.atkDown.v : 0));
-  const fxSpdMul = (p) => (1 + (p.st.spdUp ? p.st.spdUp.v : 0)) * (1 - (p.st.spdDown ? p.st.spdDown.v : 0));
+  // 狀態換算成倍率（加總：增益 + 、減益 −）
+  const fxV = (p, name) => (p.st[name] ? p.st[name].v : 0);
+  const fxAtkMul = (p) => (1 + fxV(p, "atkUp")) * (1 - fxV(p, "atkDown"));             // 普攻傷害
+  const fxSpdMul = (p) => (1 + fxV(p, "spdUp")) * (1 - fxV(p, "spdDown"));             // 移動速度
+  const fxTakenMul = (p, skill) => (skill ? 1 - fxV(p, "skDef") + fxV(p, "skVul") : 1 - fxV(p, "atkDef") + fxV(p, "atkVul")); // 受到的傷害
+  const fxBoxMul = (p, skill) => (skill ? 1 + fxV(p, "skBoxUp") - fxV(p, "skBoxDown") : 1 + fxV(p, "atkBoxUp") - fxV(p, "atkBoxDown")); // 判定框大小
+  const fxCdRate = (p) => 1 + fxV(p, "cdFast") - fxV(p, "cdSlow");                       // 技能冷卻轉的速度
+  const fxAtkCdMul = (p) => 1 - fxV(p, "atkSpdUp") + fxV(p, "atkSpdDown");              // 普攻冷卻長度
 
   // 每一步：狀態倒數、持續傷害／回血到點就結算
   function fxTick(g, p) {
@@ -5399,10 +5617,11 @@ body.fight-on { overflow: hidden; }
       if (s.t <= 0) delete p.st[name];
     }
   }
+  const fxRun = (g, src, t, e, hit) => { const d = FIGHT_FX[e.c]; if (d && d.apply) d.apply(g, src, t, e, d.P, hit || {}); };
   // 出招時套用在自己身上的效果
-  function fxCastSelf(g, p, k) { for (const e of k.selfFx || []) FIGHT_FX[e.c].apply(g, p, null, e); }
-  // 命中對手時套用的效果（hit＝{ dmg: 這一下實際扣的血, full: 這招原本的傷害, dir }）
-  function fxOnHit(g, a, o, list, hit) { for (const e of list || []) { const d = FIGHT_FX[e.c]; if (d && d.apply) d.apply(g, a, o, e, hit); } }
+  function fxCastSelf(g, p, k) { for (const e of k.selfFx || []) fxRun(g, p, p, e, { s: k.s }); }
+  // 命中對手時套用的效果
+  function fxOnHit(g, a, o, list, hit) { for (const e of list || []) fxRun(g, a, o, e, hit); }
   /* ---------- 格鬥場（v5.0 測試版）：規則引擎 ----------
      一對一、側面、玩家自己操作。fightStep 每一步（1/60 秒）只吃「雙方這一步的按鍵」與固定亂數，
      同樣的按鍵就會得到同樣的結果（之後錄影、線上對戰都靠這點）。跟雙人對戰的 compileReal 完全分開。
@@ -5429,7 +5648,7 @@ body.fight-on { overflow: hidden; }
   }
   function fightNew(cfg) {
     const g = { cfg, rng: mulberry32((cfg.seed || 1) * 7919 + 7), round: 1, wins: [0, 0], phase: "intro", phaseT: 0, timeLeft: cfg.secs,
-      projs: [], teles: [], fx: [], events: [], t: 0, winner: -1, roundWinner: -1, nextId: 1,
+      projs: [], teles: [], clones: [], fx: [], events: [], t: 0, winner: -1, roundWinner: -1, nextId: 1,
       stats: { lastCombo: 0, lastDmg: 0, total: 0, hits: 0 } };
     g.p = [fightFighter(g, 0), fightFighter(g, 1)];
     g.events.push({ type: "round" });
@@ -5441,13 +5660,16 @@ body.fight-on { overflow: hidden; }
   const fightBlankInput = () => ({ mx: 0, jump: false, guard: false, atk: false, skDown: [false, false, false], skUp: [false, false, false], skCancel: [false, false, false], skAim: [null, null, null] });
   const FT_EMPTY = fightBlankInput();
   const fightSlot = (fs, s) => (s === 2 ? fs.atk : fs.sk[s]); // 第 s 格按鈕對應的招式（2＝普攻）
-  const FT_AIMED = { rect: true, lob: true, line: true, shot: true }; // 按住才出招的種類（放開時出招）
+  const FT_AIMED = { rect: true, lob: true, line: true, shot: true, dash: true }; // 按住才出招的種類（放開時出招）
+  const fightFs = (g, p) => p.fs || g.cfg.fs[p.side]; // 選手（或複製體）的數值
+  // 強制滑動（拉近、交換位置、突進）：T 秒內從目前位置滑到 to；onEnd 在到達時呼叫
+  function fightSlide(p, to, T, onEnd) { p.slide = { x0: p.x, x1: fclamp(to, -FT.AW / 2 + 30, FT.AW / 2 - 30), t: 0, T, onEnd }; }
   const fOnGround = (p) => p.y <= 0.01;
   const fFree = (p) => !p.ko && p.stun <= 0 && !p.act; // 可以出新招
   // 矩形預告時間：依距離（近快遠慢）或跟這招的前搖一樣長
   const fightTeleDelay = (g, k, d) => (g.cfg.teleMode === "sync" ? Math.max(FT.TELE_SYNC_MIN, k.hitAt) : FT.TELE_MIN + (FT.TELE_MAX - FT.TELE_MIN) * (d / k.range));
   // 目前狀態（給畫面顯示與測試用；規則本身看各個計時器）
-  const FT_STATE_LABEL = { idle: "待機", walk: "走路", jump: "跳", aim: "瞄準", attack: "攻擊", skill: "技能", guard: "防禦", block: "防禦硬直", hit: "硬直", break: "破防", down: "倒地", stunfx: "暈眩", ko: "倒下" };
+  const FT_STATE_LABEL = { idle: "待機", walk: "走路", jump: "跳", aim: "瞄準", attack: "攻擊", skill: "技能", guard: "防禦", block: "防禦硬直", hit: "硬直", break: "破防", down: "倒地", stunfx: "暈眩", bubble: "泡泡", ko: "倒下" };
   function fightStateOf(p) {
     if (p.ko) return "ko";
     if (p.stun > 0) return p.stunKind || "hit";
@@ -5471,6 +5693,7 @@ body.fight-on { overflow: hidden; }
     fightSeparate(g);
     fightProjectiles(g);
     fightTeles(g);
+    fightClones(g);
     for (const p of g.p) p.state = fightStateOf(p);
     for (const e of g.fx) e.t += dt;
     g.fx = g.fx.filter((e) => e.t < (e.life || 0.6));
@@ -5494,7 +5717,7 @@ body.fight-on { overflow: hidden; }
         g.phase = "over"; g.winner = g.wins[0] === g.wins[1] ? -1 : g.wins[0] > g.wins[1] ? 0 : 1;
       } else {
         g.round++; g.phase = "intro"; g.phaseT = 0; g.timeLeft = g.cfg.secs;
-        g.p = [fightFighter(g, 0), fightFighter(g, 1)]; g.projs = []; g.teles = []; g.events.push({ type: "round" });
+        g.p = [fightFighter(g, 0), fightFighter(g, 1)]; g.projs = []; g.teles = []; g.clones = []; g.events.push({ type: "round" });
       }
     }
   }
@@ -5516,6 +5739,7 @@ body.fight-on { overflow: hidden; }
     const dt = FT.STEP, f = g.cfg.f[p.side];
     fightTimers(p, inp);
     fxTick(g, p);
+    fightSlideStep(g, p);
     if (p.ko) { p.x += p.kbv * dt; p.kbv *= 0.9; fightPhysics(g, p); return; }
     if (p.stun > 0) { fightStunned(g, p); return; }
     p.x += p.kbv * dt; p.kbv *= 0.8; // 擋下攻擊後的小滑行
@@ -5529,10 +5753,17 @@ body.fight-on { overflow: hidden; }
     fightPhysics(g, p);
   }
 
+  function fightSlideStep(g, p) {
+    const m = p.slide; if (!m) return;
+    m.t += FT.STEP; const r = Math.min(1, m.t / m.T);
+    p.x = m.x0 + (m.x1 - m.x0) * r;
+    if (r >= 1) { p.slide = null; if (m.onEnd) m.onEnd(); }
+  }
+
   function fightTimers(p, inp) {
     const dt = FT.STEP;
     p.anim.t += dt;
-    p.cd = p.cd.map((c) => Math.max(0, c - dt)); p.atkCd = Math.max(0, p.atkCd - dt);
+    p.cd = p.cd.map((c) => Math.max(0, c - dt * fxCdRate(p))); p.atkCd = Math.max(0, p.atkCd - dt);
     p.inv = Math.max(0, p.inv - dt); p.buff = Math.max(0, p.buff - dt);
     p.quiet += dt;
     // 硬直累積值：一陣子沒挨打就開始下降
@@ -5554,20 +5785,21 @@ body.fight-on { overflow: hidden; }
   function fightStunned(g, p) {
     const dt = FT.STEP, f = g.cfg.f[p.side];
     p.stun -= dt; p.x += p.kbv * dt; p.kbv *= 0.88;
+    if (p.stunKind === "bubble") { p.y += (FT.BUBBLE_H - p.y) * 0.12; p.vy = 0; } // 泡泡：慢慢浮起來，結束後落下
     p.guard = p.stunKind === "block"; // 防禦硬直時仍然在防禦（連續的攻擊照樣擋）
     if (p.stunKind !== "block") fightAnim(p, f.clips.knockback || idleClip(f));
     if (p.stun <= 0) {
       if (p.stunKind === "down") { p.inv = FT.WAKE_INV; g.fx.push({ kind: "text", text: "起身", x: p.x, y: FT.CH * 1.2, t: 0, life: 0.6 }); }
       p.stun = 0; p.stunKind = "";
     }
-    fightPhysics(g, p);
+    if (p.stunKind !== "bubble") fightPhysics(g, p);
   }
 
   // 防禦：按住下、在地上、沒在出招、防禦條還有。按住本身會消耗防禦條，扣完就破防；破防後要回到 GAUGE_REARM 才能再防
   function fightGuard(g, p, inp, ground) {
     const dt = FT.STEP;
     if (p.guardLock && p.gauge >= FT.GAUGE_REARM) p.guardLock = false;
-    p.guard = !!inp.guard && ground && !p.act && p.gauge > 0 && !p.guardLock;
+    p.guard = !!inp.guard && ground && !p.act && p.gauge > 0 && !p.guardLock && !fxCantAct(p); // 恐懼、變形時不能防
     if (p.guard) {
       p.guardIdle = 0;
       p.gauge -= FT.GAUGE_HOLD * dt;
@@ -5599,7 +5831,9 @@ body.fight-on { overflow: hidden; }
     for (const s of [0, 1, 2]) {
       const aim = p.aim[s], k = fightSlot(fs, s);
       if (!aim) continue;
-      if (AIM_MODE[k.kind] === "dist" && inp.skAim[s] != null) aim.d = fclamp(aim.d0 + inp.skAim[s], FT.AIM_MIN, k.range);
+      // 突進：落點用場地上的實際位移（左右都能拖，無視朝向；skAim 是「往前拖多少」，乘回面向＝往右拖多少）
+      if (k.kind === "dash" && inp.skAim[s] != null) { const R = k.range * fxBoxMul(p, true); aim.d = fclamp(aim.d0 + inp.skAim[s] * p.face, -R, R); }
+      else if (AIM_MODE[k.kind] === "dist" && inp.skAim[s] != null) aim.d = fclamp(aim.d0 + inp.skAim[s], FT.AIM_MIN, k.range * fxBoxMul(p, s < 2));
       aim.cancel = !!inp.skCancel[s];
       if (!inp.skUp[s] && !aim.release) continue;
       p.aim[s] = null;
@@ -5613,13 +5847,15 @@ body.fight-on { overflow: hidden; }
     const act = { kind: s === 2 ? "atk" : "sk", s, t: 0, dur: k.dur, hitAt: k.hitAt, done: false, clip: k.clip, aimD: d, id: g.nextId++, air: !fOnGround(p), melee: s === 2 && k.kind === "melee" };
     if (k.kind === "rect") {
       const delay = fightTeleDelay(g, k, d);
-      g.teles.push({ own: p.side, x: p.x + p.face * (g.cfg.fs[p.side].bw / 2 + d), w: k.width, t: 0, delay, dmg: k.dmg, sv: k.sv, s, bul: k.bul, id: act.id, fx: k.enemyFx });
+      const box = fxBoxMul(p, true); // 技能判定框大小（範圍增減效果）
+      g.teles.push({ own: p.side, x: p.x + p.face * (g.cfg.fs[p.side].bw / 2 + d), w: k.width * box, air: FT.AIR_SAFE * box, t: 0, delay, dmg: k.dmg, sv: k.sv, s, bul: k.bul, id: act.id, fx: k.enemyFx });
       act.done = true; // 傷害由預告結算
     }
     p.act = act;
-    if (s === 2) p.atkCd = k.cd; else p.cd[s] = k.cd;
+    if (s === 2) p.atkCd = Math.max(0.15, k.cd * fxAtkCdMul(p)); else p.cd[s] = k.cd; // 攻速增減只影響普攻冷卻
     fightAnim(p, k.clip || idleClip(f));
     if (s < 2) { g.events.push({ type: "cast", side: p.side }); fxCastSelf(g, p, k); }
+    if (k.kind === "dash") p.armor = true; // 突進：從出招到衝完都不會被打斷
     if (k.kind === "dline") { const bw = g.cfg.fs[p.side].bw; g.fx.push({ kind: "dlineTele", own: p.side, x0: p.x + p.face * bw / 2, x1: p.x + p.face * (bw / 2 + k.range), y: p.y + FT.CH * 0.4, t: 0, life: k.hitAt }); }
     if (act.melee) { const bw = g.cfg.fs[p.side].bw; g.fx.push({ kind: "reach", own: p.side, x0: p.x + p.face * bw / 2, x1: p.x + p.face * (bw / 2 + k.reach), y: p.y, t: 0, life: FT.ACTIVE + k.hitAt + 0.1 }); }
     if (k.kind === "buff" || k.kind === "self") g.fx.push({ kind: "selfring", own: p.side, x: p.x, t: 0, life: 0.8 });
@@ -5630,13 +5866,15 @@ body.fight-on { overflow: hidden; }
     const dt = FT.STEP, fs = g.cfg.fs[p.side];
     const aiming = p.aim.some(Boolean);
     // 按住招式時：預設左右鍵只轉身不走路（設定 holdMove 時照常走路）
-    const mx = p.guard ? 0 : inp.mx;
+    // 魅惑：左右反轉；恐懼：被迫往遠離施放者的方向走
+    let mx = p.guard ? 0 : inp.mx * (p.st.charm ? -1 : 1);
+    if (p.st.fear) mx = p.x >= p.st.fear.from ? 1 : -1;
     if (mx) p.face = mx > 0 ? 1 : -1;
     const walk = aiming && !g.cfg.holdMove ? 0 : mx;
     p.vx = walk * fs.walk * fxSpdMul(p) * (ground ? 1 : FT.AIR_CTRL);
     p.x += p.vx * dt;
-    if (inp.jump && ground && !p.guard && !p.aim[0] && !p.aim[1]) p.vy = FT.JUMP_V; // 瞄準技能時不能跳（技能只能在地上放）
-    if (p.guard) return;
+    if (inp.jump && ground && !p.guard && !p.aim[0] && !p.aim[1] && !fxCantAct(p)) p.vy = FT.JUMP_V; // 瞄準技能時不能跳（技能只能在地上放）
+    if (p.guard || fxCantAct(p)) return; // 恐懼、變形：只能移動
     // 開始新招：普攻（地上、空中都可以），技能（只能在地上；投射物技能每人場上最多一顆）
     for (const s of [2, 0, 1]) {
       const b = p.buf[s], k = fightSlot(fs, s);
@@ -5647,7 +5885,8 @@ body.fight-on { overflow: hidden; }
       if (!FT_AIMED[k.kind]) { fightCast(g, p, s, k, 0); continue; } // 近戰普攻、輔助技能：按下就放
       // 按住才出的招：起點＝按下當下對手的距離（之後不會自己跟著跑）；已經放開了（點一下）就直接出
       const gap = Math.max(0, Math.abs(o.x - p.x) - (fs.bw + g.cfg.fs[o.side].bw) / 2);
-      const d0 = AIM_MODE[k.kind] === "dist" ? fclamp(gap + g.cfg.fs[o.side].bw / 2, FT.AIM_MIN, k.range) : 0;
+      let d0 = AIM_MODE[k.kind] === "dist" ? fclamp(gap + g.cfg.fs[o.side].bw / 2, FT.AIM_MIN, k.range * fxBoxMul(p, s < 2)) : 0;
+      if (k.kind === "dash") d0 = fclamp(o.x - p.x, -k.range, k.range); // 突進：起點＝對手的位置（場地上的位移，可以在背後）
       p.aim[s] = { d0, d: d0, cancel: false, release: b.up };
     }
   }
@@ -5663,12 +5902,18 @@ body.fight-on { overflow: hidden; }
       }
     }
   }
-  // 兩人不會重疊（用身體寬推開）、不會走出場地
+  /* 兩人不會重疊（用身體寬推開）、不會走出場地。
+     只有一方在空中時完全不推（跳得過對手）；兩人都在地上時一定推；兩人都在空中時高度差超過 PUSH_H 個身高就不推。
+     越過去不會自動轉身。 */
   function fightSeparate(g) {
     const [a, b] = g.p, fa = g.cfg.fs[0], fb = g.cfg.fs[1];
+    const ga = fOnGround(a), gb = fOnGround(b);
+    // 突進途中直接穿過對手（不推擠）；衝完停在對手身上時由突進那邊自己退開（見 FIGHT_RELEASE.dash）
+    const dashing = (a.slide && a.armor) || (b.slide && b.armor);
+    const push = dashing ? false : ga && gb ? true : ga !== gb ? false : Math.abs(a.y - b.y) < FT.CH * FT.PUSH_H;
     const minD = (fa.bw + fb.bw) / 2;
     const dx = b.x - a.x;
-    if (Math.abs(dx) < minD && Math.abs(a.y - b.y) < FT.CH * 0.7) {
+    if (Math.abs(dx) < minD && push) {
       const push = (minD - Math.abs(dx)) / 2, dir = dx >= 0 ? 1 : -1;
       a.x -= dir * push; b.x += dir * push;
     }
@@ -5677,13 +5922,14 @@ body.fight-on { overflow: hidden; }
 
   /* ---------- 判定 ----------
      受傷框：寬 HURT_W、從腳底往上一個身高，置中在角色 x（跟圖片大小無關）。 */
-  const fHurt = (o) => ({ x0: o.x - FT.HURT_W / 2, x1: o.x + FT.HURT_W / 2, y0: o.y, y1: o.y + FT.CH });
+  const fHurtMul = (o) => 1 + (o.st && o.st.big ? o.st.big.v : 0); // 縮放：受傷判定框跟著變大
+  const fHurt = (o) => { const m = fHurtMul(o); return { x0: o.x - FT.HURT_W * m / 2, x1: o.x + FT.HURT_W * m / 2, y0: o.y, y1: o.y + FT.CH * m }; };
   const fOverlapX = (a0, a1, b0, b1) => Math.max(a0, a1) >= Math.min(b0, b1) && Math.min(a0, a1) <= Math.max(b0, b1);
   // 近戰普攻：判定框從身體前緣往前 reach，高度跟著出招者當下的位置（空中普攻也是）
   function fightMeleeCheck(g, p, o, a) {
-    const fs = g.cfg.fs[p.side], k = fs.atk, h = fHurt(o);
-    const x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.reach;
-    if (o.ko || !fOverlapX(x0, x1, h.x0, h.x1) || h.y0 > p.y + FT.CH * 0.8 || h.y1 < p.y) return false;
+    const fs = g.cfg.fs[p.side], k = fs.atk, h = fHurt(o), m = fxBoxMul(p, false); // 普攻判定框大小
+    const x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.reach * m;
+    if (o.ko || !fOverlapX(x0, x1, h.x0, h.x1) || h.y0 > p.y + FT.CH * 0.8 * m || h.y1 < p.y - FT.CH * 0.1 * (m - 1)) return false;
     fightHit(g, p, o, k.dmg, k.sv, false, a.id, null);
     g.events.push({ type: "swing", side: p.side });
     return true;
@@ -5708,16 +5954,39 @@ body.fight-on { overflow: hidden; }
     },
     // 瞬間直線（遠程直接命中的普攻）：不產生飛行物，這一刻檢查身體前緣往前 range 內、同一高度有沒有對手
     dline(g, p, o, a, k) {
-      const fs = g.cfg.fs[p.side], x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.range, h = fHurt(o);
+      const fs = fightFs(g, p), m = fxBoxMul(p, a.s < 2), x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.range * m, h = fHurt(o);
       g.fx.push({ kind: "dline", own: p.side, x0, x1, y: p.y + FT.CH * 0.4, t: 0, life: 0.25 });
-      if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && h.y0 <= p.y + FT.CH * 0.8 && h.y1 >= p.y) fightHit(g, p, o, k.dmg, k.sv, a.s < 2, a.id, k.enemyFx);
+      if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && h.y0 <= p.y + FT.CH * 0.8 * m && h.y1 >= p.y) fightHit(g, p, o, k.dmg, k.sv, a.s < 2, a.id, k.enemyFx);
+    },
+    // 突進：衝到拖曳的位置（0.25 秒），到了再判定落點附近（寬 k.width）有沒有對手
+    // a.aimD 是場地上的位移（正＝往右）：先轉向衝的方向；突進途中不會被打斷（p.armor，見 fightHit）
+    dash(g, p, o, a, k) {
+      const fs = fightFs(g, p), to = p.x + a.aimD;
+      if (Math.abs(a.aimD) > 1) p.face = a.aimD > 0 ? 1 : -1;
+      a.dur = Math.max(a.dur, a.t + FT.DASH_T + 0.15);
+      p.armor = true;
+      fightSlide(p, to, FT.DASH_T, () => {
+        p.armor = false;
+        const h = fHurt(o), w = k.width * fxBoxMul(p, true) / 2, cx = p.x + p.face * fs.bw / 2;
+        g.fx.push({ kind: "impact", x: cx, w: w * 2, t: 0, life: 0.35, own: p.side });
+        if (!o.ko && fOverlapX(cx - w, cx + w, h.x0, h.x1) && o.y < FT.AIR_SAFE * 2) fightHit(g, p, o, k.dmg, k.sv, true, a.id, k.enemyFx, k.bul);
+        fightDashExit(g, p, o);
+      });
     },
   };
   FIGHT_RELEASE.shot = FIGHT_RELEASE.line;
   FIGHT_RELEASE.self = () => {}; // 自身：效果在出招時就套用了（fightCast → fxCastSelf）
-  const fightProjBase = (g, p, a, k) => { const x = p.x + p.face * g.cfg.fs[p.side].bw / 2; return { own: p.side, x, px: x, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id, fx: k.enemyFx }; };
+  const fightProjBase = (g, p, a, k) => { const x = p.x + p.face * fightFs(g, p).bw / 2; return { own: p.side, x, px: x, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id, fx: k.enemyFx, box: fxBoxMul(p, a.s < 2) }; };
+  // 突進衝完停在對手身上：只把突進的人往前進方向推出去（撞牆就改退到另一邊），不推對手
+  function fightDashExit(g, p, o) {
+    const minD = (fightFs(g, p).bw + g.cfg.fs[o.side].bw) / 2, lim = FT.AW / 2 - fightFs(g, p).bw / 2;
+    if (Math.abs(p.x - o.x) >= minD || !fOnGround(o)) return;
+    let x = o.x + p.face * minD;
+    if (Math.abs(x) > lim) x = o.x - p.face * minD;
+    p.x = fclamp(x, -lim, lim);
+  }
   function fightRelease(g, p, o, a) {
-    const k = fightSlot(g.cfg.fs[p.side], a.s), fn = FIGHT_RELEASE[k.kind];
+    const k = fightSlot(fightFs(g, p), a.s), fn = FIGHT_RELEASE[k.kind];
     if (fn) fn(g, p, o, a, k);
     else { g.events.push({ type: "unsupported", side: p.side, kind: k.kind }); g.fx.push({ kind: "text", text: "不支援", x: p.x, y: FT.CH * 1.2, t: 0, life: 0.6 }); }
   }
@@ -5728,16 +5997,16 @@ body.fight-on { overflow: hidden; }
       q.px = q.x; q.py = q.y; q.t += dt;
       q.x += q.vx * dt;
       if (q.kind === "lob") { q.y += q.vy * dt; q.vy -= FT.GRAV * dt; }
-      const o = g.p[1 - q.own], h = fHurt(o), r = q.kind === "lob" ? 26 : 14;
+      const o = g.p[1 - q.own], h = fHurt(o), r = (q.kind === "lob" ? 26 : 14) * (q.box || 1);
       const yLo = Math.min(q.y, q.py) - r, yHi = Math.max(q.y, q.py) + r;
       if (!o.ko && fOverlapX(q.px, q.x, h.x0 - r, h.x1 + r) && yHi > h.y0 && yLo < h.y1) {
-        fightHit(g, g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx); q.dead = true;
+        fightHit(g, q.src || g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx, q.bul); q.dead = true;
         g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 });
         continue;
       }
       if (q.kind === "lob" && q.y <= 0) {
         q.dead = true; g.fx.push({ kind: "boom", x: q.x, y: 0, t: 0, life: 0.45 });
-        if (!o.ko && fOverlapX(q.x - FT.LOB_R, q.x + FT.LOB_R, h.x0, h.x1) && o.y < FT.AIR_SAFE) fightHit(g, g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx);
+        if (!o.ko && fOverlapX(q.x - FT.LOB_R * (q.box || 1), q.x + FT.LOB_R * (q.box || 1), h.x0, h.x1) && o.y < FT.AIR_SAFE * (q.box || 1)) fightHit(g, q.src || g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx, q.bul);
       }
       if (Math.abs(q.x) > FT.AW / 2 + 80) q.dead = true; // 飛出場地
     }
@@ -5751,7 +6020,7 @@ body.fight-on { overflow: hidden; }
       t.dead = true;
       const o = g.p[1 - t.own], h = fHurt(o);
       g.fx.push({ kind: "impact", x: t.x, w: t.w, t: 0, life: 0.45, bul: t.bul, own: t.own });
-      if (!o.ko && fOverlapX(t.x - t.w / 2, t.x + t.w / 2, h.x0, h.x1) && o.y < FT.AIR_SAFE) fightHit(g, g.p[t.own], o, t.dmg, t.sv, true, t.id, t.fx);
+      if (!o.ko && fOverlapX(t.x - t.w / 2, t.x + t.w / 2, h.x0, h.x1) && o.y < (t.air || FT.AIR_SAFE)) fightHit(g, t.src || g.p[t.own], o, t.dmg, t.sv, true, t.id, t.fx, t.bul);
     }
     g.teles = g.teles.filter((t) => !t.dead);
   }
@@ -5761,10 +6030,11 @@ body.fight-on { overflow: hidden; }
      否則 → 傷害 ×（輔助加攻）×（攻擊增減）×（1 − 減傷）× 連段遞減，硬直、往後推，累積硬直值（同一招只算一次），
             滿了或有擊退效果就倒地；持續傷害的招式命中時只先扣一部分。最後套用效果。
      沒有傷害的招式（只有暈眩、減益等）：不扣血、不硬直，只套用效果。 */
-  function fightHit(g, a, o, dmg, sv, heavy, id, fx) {
+  function fightHit(g, a, o, dmg, sv, heavy, id, fx, bul) {
     fx = fx || [];
     if (o.inv > 0 || o.ko) { g.fx.push({ kind: "text", text: "無敵", x: o.x, y: FT.CH * 1.1, t: 0, life: 0.5 }); return; }
-    const dir = o.x >= a.x ? 1 : -1, full = dmg * (a.buff > 0 ? FT.BUFF_MUL : 1) * fxAtkMul(a);
+    // 傷害倍率：輔助加攻 ×（攻擊增減，只影響普攻）×（對手受到的技能／普攻傷害增減）
+    const dir = o.x >= a.x ? 1 : -1, full = dmg * (a.buff > 0 ? FT.BUFF_MUL : 1) * (heavy ? 1 : fxAtkMul(a)) * Math.max(0, fxTakenMul(o, heavy));
     o.quiet = 0;
     if (o.guard) {
       o.gauge -= full * FT.GAUGE_HIT; o.guardIdle = 0;
@@ -5772,6 +6042,13 @@ body.fight-on { overflow: hidden; }
       g.events.push({ type: "guard", side: a.side });
       if (o.gauge <= 0) fightBreak(g, o);
       else { o.stun = FT.BLOCK_STUN; o.stunKind = "block"; o.kbv = dir * FT.GUARD_PUSH; }
+      return;
+    }
+    // 突進途中（霸體）：照樣扣血，但不硬直、不被推、不倒地，控制類效果也不會生效
+    if (o.armor) {
+      const v = full > 0 ? fightDamage(g, a, o, full * (1 - o.dr), { heavy }) : 0;
+      if (v) g.events.push({ type: "hit", side: a.side, heavy, dmg: v, scale: 1 });
+      fxOnHit(g, a, o, (fx || []).filter((e) => !FX_CONTROL.has(FIGHT_FX[e.c].b)), { dmg: v, full, dir, bul });
       return;
     }
     let v = 0;
@@ -5787,14 +6064,15 @@ body.fight-on { overflow: hidden; }
       v = fightDamage(g, a, o, raw * (1 - o.dr) * scale, { pierce: fx.some((e) => FIGHT_FX[e.c].pierce), heavy, scale });
       g.events.push({ type: "hit", side: a.side, heavy, dmg: v, scale });
     } else g.events.push({ type: "fxhit", side: a.side });
-    fxOnHit(g, a, o, fx, { dmg: v, full, dir });
+    fxOnHit(g, a, o, fx, { dmg: v, full, dir, bul });
   }
   // 倒地：推遠、躺 DOWN_TIME 秒，起身後無敵（見 fightStunned）
   function fightDown(g, o, dir) {
     o.sv = 0; o.stun = FT.DOWN_TIME; o.stunKind = "down"; o.kbv = dir * FT.PUSH_DOWN; o.act = null; o.aim = [null, null, null];
     g.fx.push({ kind: "text", text: "倒地", x: o.x, y: FT.CH * 1.35, t: 0, life: 0.9 }); g.events.push({ type: "down", side: o.side });
   }
-  /* 扣血（命中、持續傷害共用）：護盾先吸收（pierce＝穿透護盾），木樁不會倒，扣到 0 就 K.O.。回傳實際扣的血。 */
+  /* 扣血（命中、持續傷害、反射共用）：護盾先吸收（pierce＝穿透護盾），木樁不會倒，扣到 0 就 K.O.。
+     之後：對手有「反射」→ 一部分傷害反彈給出手者（反彈的傷害不會再反彈）；出手者有「吸血」→ 一部分回成血。回傳實際扣的血。 */
   function fightDamage(g, a, o, amount, opt) {
     let v = amount;
     const sh = o.st.shield;
@@ -5812,10 +6090,58 @@ body.fight-on { overflow: hidden; }
     if (g.cfg.mode === "dummy" && o.side === 1) {
       o.hp = Math.max(1, o.hp);
       const st = g.stats; st.total += v; st.hits += opt.dot ? 0 : 1; st.lastCombo = (st.lastCombo || 0) + v; st.lastDmg = v;
+      fightDamageAfter(g, a, o, v, opt);
       return v;
     }
+    fightDamageAfter(g, a, o, v, opt);
     if (o.hp <= 0) { o.hp = 0; o.ko = true; o.kbv = (o.x >= a.x ? 1 : -1) * FT.PUSH_DOWN; o.stun = 0; o.st = {}; fightAnim(o, g.cfg.f[o.side].clips.knockback || idleClip(g.cfg.f[o.side])); fightRoundEnd(g, o.side); }
     return v;
+  }
+  function fightDamageAfter(g, a, o, v, opt) {
+    if (opt.reflect || !a || a === o || a.clone) return; // 複製體不吸血、不吃反射
+    if (o.st.mirror && !opt.dot && !a.ko) fightDamage(g, o, a, v * o.st.mirror.v, { reflect: true });
+    if (a.st.vamp && !a.ko) { const h = Math.round(v * a.st.vamp.v); if (h > 0) { a.hp = Math.min(a.maxHp, a.hp + h); g.fx.push({ kind: "num", text: "+" + h, x: a.x, y: FT.CH * 1.05, t: 0, life: 0.6, heal: true }); } }
+  }
+
+  /* ---------- 複製體（召喚對手複製體） ----------
+     在施放者前面叫出對手的複製體：不會被打、不會移動、面向對手，依序放普攻、技能 1、技能 2（有的才放），放完就消失。
+     複製體用對手的數值與動作，但算施放者那一方（打的是對手）。 */
+  function fightCloneSpawn(g, src) {
+    const o = g.p[1 - src.side];
+    if (o.st.noCopy) { g.fx.push({ kind: "text", text: "複製失敗", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
+    const fs = g.cfg.fs[o.side], seq = [2, 0, 1].filter((s) => { const k = fightSlot(fs, s); return k && k.kind !== "buff" && k.kind !== "self" && k.kind !== "dash"; });
+    const x = fclamp(src.x + src.face * (fightFs(g, src).bw / 2 + fs.bw / 2 + 10), -FT.AW / 2 + fs.bw / 2, FT.AW / 2 - fs.bw / 2);
+    g.clones.push({ clone: true, side: src.side, from: o.side, fs, x, y: 0, face: o.x >= x ? 1 : -1, st: {}, buff: 0, dr: 0, seq, act: null, anim: { clip: null, t: 0 } });
+    g.fx.push({ kind: "text", text: "複製體", x, y: FT.CH * 1.25, t: 0, life: 0.8, color: "#c9a7ff" });
+  }
+  function fightClones(g) {
+    for (const c of g.clones) {
+      const o = g.p[1 - c.side];
+      c.face = o.x >= c.x ? 1 : -1; c.anim.t += FT.STEP;
+      if (!c.act) {
+        const s = c.seq.shift();
+        if (s == null) { c.dead = true; continue; }
+        const k = fightSlot(c.fs, s), gap = Math.max(0, Math.abs(o.x - c.x) - c.fs.bw / 2);
+        c.act = { s, k, t: 0, hitAt: k.hitAt, dur: k.dur, aimD: fclamp(gap, FT.AIM_MIN, k.range || gap), id: g.nextId++, done: false, clip: k.clip };
+      }
+      const a = c.act; a.t += FT.STEP;
+      if (!a.done && a.t >= a.hitAt) {
+        a.done = true;
+        const k = a.k;
+        if (k.kind === "melee") {
+          const h = fHurt(o), x0 = c.x + c.face * c.fs.bw / 2, x1 = x0 + c.face * k.reach;
+          if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && o.y < FT.CH * 0.8) fightHit(g, c, o, k.dmg, k.sv, false, a.id, null);
+        } else if (k.kind === "rect") {
+          g.teles.push({ own: c.side, src: c, x: o.x, w: k.width, t: 0, delay: fightTeleDelay(g, k, Math.min(a.aimD, k.range)), dmg: k.dmg, sv: k.sv, s: a.s, bul: k.bul, id: a.id, fx: k.enemyFx });
+        } else if (FIGHT_RELEASE[k.kind]) {
+          const before = g.projs.length;
+          FIGHT_RELEASE[k.kind](g, c, o, a, k);
+          for (const q of g.projs.slice(before)) q.src = c; // 投射物記住是複製體射的（命中時用它的數值）
+        }
+      }
+      if (a.t >= a.dur) c.act = null;
+    }
+    g.clones = g.clones.filter((c) => !c.dead);
   }
 
   /* ---------- 電腦對手 ----------
@@ -5879,15 +6205,15 @@ body.fight-on { overflow: hidden; }
      問題等級 lvl：unfit 不適合格鬥場、unsupported 有功能還不支援（有明確的代替方式）、guess 推測、info 補充。 */
 
   // 攻擊形式（delivery）：普攻、技能共用的名稱
-  const FORM_LABEL = { melee: "近戰", dline: "瞬間直線", line: "直線投射物", lob: "拋物線", target: "指定位置打擊", self: "自身", buff: "輔助（代替）" };
+  const FORM_LABEL = { dash: "突進", melee: "近戰", dline: "瞬間直線", line: "直線投射物", lob: "拋物線", target: "指定位置打擊", self: "自身", buff: "輔助（代替）" };
   // 形式 → 引擎的招式種類（引擎看 kind；普攻的直線投射物叫 shot）
-  const FORM_KIND = { atk: { melee: "melee", dline: "dline", line: "shot", lob: "lob" }, sk: { target: "rect", line: "line", lob: "lob", self: "self", buff: "buff" } };
+  const FORM_KIND = { atk: { melee: "melee", dline: "dline", line: "shot", lob: "lob" }, sk: { dash: "dash", target: "rect", line: "line", lob: "lob", self: "self", buff: "buff" } };
   const FIELD_ST_LABEL = { ok: "有值", zero: "0", missing: "沒有", bad: "格式錯誤" };
 
   /* 技能效果代碼（skill_fx.json 的 c，去掉 SKILLEFF_）→ [名稱, 支援狀態]
-     支援狀態：ok 已支援、part 部分支援、r2 第二輪（第一批效果）、b2 第二批、none 未規劃。沒列到的依字首判斷（fxInfo）。
+     支援狀態：ok 已支援、part 部分支援、r2 階段 2 先做的效果、b2 待決定、none 格鬥場不用。沒列到的依字首判斷（fxInfo）。
      「已支援」不看這張表，而是看效果模組 FIGHT_FX（js-18-fight-effects.js）有沒有這個代碼。 */
-  const FX_STATUS_LABEL = { ok: "已支援", part: "部分支援", r2: "未支援（第二輪）", b2: "未支援（第二批）", none: "未規劃" };
+  const FX_STATUS_LABEL = { ok: "已支援", part: "部分支援", r2: "未支援（階段 2）", b2: "未支援（待做）", none: "格鬥場不用" };
   const FX_INFO = {
     DMG: ["傷害", "ok"], DOT: ["持續傷害", "part"],
     STUN: ["暈眩", "r2"], KNOCKBACK: ["擊退", "r2"], HEAL: ["回血", "r2"], DOTHEAL: ["持續回血", "r2"], UNBEAT: ["護盾（原：無敵）", "r2"], SILENCE: ["沉默", "r2"],
@@ -5904,10 +6230,14 @@ body.fight-on { overflow: hidden; }
     POISON: "中毒", DEBUFF: "減益", SUMMON: "召喚物" };
   Object.assign(FX_INFO, { MIRROR_PHY: ["反射物理傷害", "b2"], MIRROR_MAG: ["反射魔法傷害", "b2"], CURSE_DEBUFF: ["詛咒", "b2"], SKILL_RESET: ["技能冷卻重置", "b2"],
     SCALE: ["縮放", "none"], THROW_ALLY: ["投擲隊友", "none"], CHANGE_ENEMY: ["改變敵人", "none"] });
-  const FX_NOTE = { DMG: "傷害量目前固定，第三輪改用官方倍率" };
+  const FX_NOTE = { DMG: "傷害量目前固定，階段 3（數值平衡）改用官方倍率" };
+  // 名稱與支援狀態：名稱以決定表為準；有實作＝已支援，決定表選「不處理」＝格鬥場不用，其他＝待做
   function fxInfo(code) {
-    const known = FX_INFO[code] || fxGuessInfo(code);
-    return FIGHT_FX[code] ? [known[0], "ok"] : known;
+    const known = FX_INFO[code] || fxGuessInfo(code), row = FX_TABLE[code];
+    const name = row && row.name ? row.name : known[0];
+    if (FIGHT_FX[code]) return [name, "ok"];
+    if (row && row.b === "none") return [name, "none"];
+    return [name, row ? "b2" : known[1]];
   }
   function fxGuessInfo(code) {
     const stat = (x) => FX_STAT[x] || x;
@@ -5956,6 +6286,9 @@ body.fight-on { overflow: hidden; }
   function normUnit(r, anims) {
     const id = r.id, st = S.stats[id], pj = S.proj[id] || null, fxAll = (S.fx || {})[id] || null, pre = FIGHT_PRESET[id] || null;
     const N = { id, name: r.name || "", issues: [], f: {}, clips: normClips(anims), atk: null, sk: [], preset: !!pre };
+    // 星數＋進化型態 → 最大等級（效果時間寫成「每級幾秒」時用）
+    const grade = S.fx && S.fx._grade && S.fx._grade[id];
+    N.grade = grade || null; N.lvMax = grade ? FX_MAXLEVEL[grade[0] + "|" + grade[1]] || 0 : 0;
     const issue = (lvl, where, msg) => N.issues.push({ lvl, where, msg });
     // 適不適合格鬥場
     if (!r.name) issue("unfit", "名稱", "沒有名稱（多半是頭目、NPC 或召喚物）");
@@ -5989,7 +6322,10 @@ body.fight-on { overflow: hidden; }
         k.fx = fxs.fx.map((e) => {
           const c = String(e.c || ""), [label, sup] = fxInfo(c), m = e.m || {};
           const val = [m.value, m.percent, m.amount].find((x) => typeof x === "number");
-          return { c, label, sup, dur: e.d && +e.d.seconds || 0, r: +e.r || 0, val: val == null ? null : val, mk: m.kind || null };
+          // 持續時間：fixed／一般秒數直接用；levelFormula（每級 amount 秒）或不到 1 秒的 gradeCalculated＝每級秒數（durLv），之後乘最大等級
+          const d = e.d || {}, sec = +d.seconds || 0;
+          const durLv = d.kind === "levelFormula" ? +d.amount || 0 : d.kind === "gradeCalculated" && sec > 0 && sec < 1 ? sec : 0;
+          return { c, label, sup, dur: durLv ? 0 : sec, durLv, r: +e.r || 0, val: val == null ? null : val, mk: m.kind || null };
         });
       } else if (base) {
         k.fxSrc = "stats";
@@ -6008,16 +6344,17 @@ body.fight-on { overflow: hidden; }
       k.damaging = k.fx.some((e) => FX_DAMAGE.has(e.c) || ((e.c === "STUN" || e.c === "KNOCKBACK") && e.mk === "statPercent"));
       const summon = k.fx.some((e) => FX_SUMMON.has(e.c)), toEnemy = k.fx.some((e) => fxTo(e) === "enemy"), toSelf = k.fx.some((e) => fxTo(e) === "self");
       if (p) k.form = { rect: "target", line: "line", lob: "lob", buff: "buff" }[p.kind] || "target";
+      else if (k.fx.some((e) => FIGHT_FX[e.c] && FIGHT_FX[e.c].form === "dash")) k.form = "dash"; // 突進：按住拖曳選位置，衝過去再判定
       else if (k.damaging || toEnemy) {
         const dd = normDelivery(k.cfg, rg, false); k.form = dd.form; k.src = dd.src;
         if (dd.note) issue(dd.unsupported ? "unsupported" : "guess", where, dd.note);
       } else if (summon) k.form = "target";
       else if (toSelf) k.form = "self";
-      else { k.form = "buff"; issue("unsupported", where, "效果全都還沒支援（第二批），暫時用「加攻＋回血」代替"); }
-      if (summon && !p) issue("unsupported", where, k.damaging ? "召喚未支援（第二批），目前只有傷害部分" : "召喚未支援（第二批），以指定位置打擊代替");
+      else { k.form = "buff"; issue("unsupported", where, "效果全都還沒支援（待做），暫時用「加攻＋回血」代替"); }
+      if (summon && !p) issue("unsupported", where, k.damaging ? "召喚未支援（待做），目前只有傷害部分" : "召喚未支援（待做），以指定位置打擊代替");
       if (!p && k.form === "target" && k.effectRange.st === "missing") issue("guess", where, "沒有作用範圍，用預設寬度");
       // 還沒支援的效果（傷害、召喚以外；召喚上面已經標過）
-      const todo = k.fx.filter((e) => e.sup !== "ok" && !FX_SUMMON.has(e.c));
+      const todo = k.fx.filter((e) => e.sup !== "ok" && e.sup !== "none" && !FX_SUMMON.has(e.c)); // 「格鬥場不用」的效果不算問題
       if (todo.length && !p) issue("unsupported", where, todo.map((e) => e.label).filter((x, i, a) => a.indexOf(x) === i).join("、") + " 未支援");
       const done = k.fx.filter((e) => e.sup === "ok" && e.c !== "DMG").map((e) => e.label).filter((x, i, a) => a.indexOf(x) === i);
       if (done.length && !p) issue("info", where, "效果：" + done.join("、"));
@@ -6092,19 +6429,23 @@ body.fight-on { overflow: hidden; }
     const ch = 410; return { pvp: false, view: { y: 150, h: FH - ch - 150, ground: 110 }, ctrl: { y: FH - ch, h: ch }, hud: { y: 0, h: 150 } };
   }
   const fScale = FW / FT.AW;
+  /* 按鈕位置（自己的座標；兩人模式的上半部整個轉 180 度）
+     左手：一整條左右移動（左半邊＝◀、右半邊＝▶，left／right 是兩半的中心與大小）
+     右手：普攻（最大）、技能 1、技能 2、跳（右上角）、防（右下角）；r＝圓形按鈕半徑 */
   function fightButtons(L) {
-    const c = L.ctrl, k = c.h / 410;
+    const c = L.ctrl, k = Math.min(1, c.h / 410 + 0.2), y = (f) => c.y + c.h * f;
+    const barH = Math.min(150, c.h * 0.42), barY = y(0.58);
     return {
-      // 方向鍵：上＝跳、下＝防禦、左右＝移動（r＝按鈕半徑）
-      up: { x: 160, y: c.y + c.h * 0.55 - 92 * Math.min(1, k + 0.2), r: 46 * Math.min(1, k + 0.2) },
-      down: { x: 160, y: c.y + c.h * 0.55 + 92 * Math.min(1, k + 0.2), r: 46 * Math.min(1, k + 0.2) },
-      left: { x: 160 - 92 * Math.min(1, k + 0.2), y: c.y + c.h * 0.55, r: 46 * Math.min(1, k + 0.2) },
-      right: { x: 160 + 92 * Math.min(1, k + 0.2), y: c.y + c.h * 0.55, r: 46 * Math.min(1, k + 0.2) },
-      atk: { x: 600, y: c.y + c.h * 0.6, r: 80 * Math.min(1, k + 0.15) },
-      sk0: { x: 440, y: c.y + c.h * 0.8, r: 56 * Math.min(1, k + 0.2) },
-      sk1: { x: 455, y: c.y + c.h * 0.3, r: 56 * Math.min(1, k + 0.2) },
+      left: { x: 95, y: barY, w: 165, h: barH, r: barH / 2 },
+      right: { x: 265, y: barY, w: 165, h: barH, r: barH / 2 },
+      atk: { x: 560, y: y(0.46), r: 70 * Math.min(1, c.h / 410 + 0.15) },
+      sk0: { x: 445, y: y(0.66), r: 54 * k },
+      sk1: { x: 460, y: y(0.22), r: 54 * k },
+      up: { x: 662, y: Math.max(y(0.16), c.y + 40 * k + 6), r: 40 * k },          // 貼齊上緣，不會超出按鈕區
+      down: { x: 676, y: Math.min(y(0.8), c.y + c.h - 40 * k - 6), r: 40 * k },   // 右下角，不超出下緣
     };
   }
+  const MOVE_SPLIT = 350; // 左邊這條線以左是移動區
 
   /* ---------- 選角畫面 ---------- */
   function fightCharOptions(sel, want) {
@@ -6212,7 +6553,7 @@ body.fight-on { overflow: hidden; }
   // 每位玩家的觸控狀態：pads＝方向鍵（手指 → 哪一顆），btn＝按住中的普攻／技能（手指位置），以及這一步要送出的「按下／放開」
   const fightCtl = () => ({ pads: new Map(), btn: {}, jump: false, atk: false, skDown: [false, false, false], skUp: [false, false, false], skCancelAt: [false, false, false] });
   const SLOT_OF = { sk0: 0, sk1: 1, atk: 2 };
-  const PADS = ["up", "down", "left", "right"];
+  const RIGHT_KEYS = ["atk", "sk0", "sk1", "up", "down"]; // 右手的按鈕（up＝跳、down＝防）
   // 普攻是「按住才出」的種類（直線投射物、拋物線）：普攻鈕改走按住／放開的流程
   const atkIsShot = (who) => !!(FG.fs[who] && FT_AIMED[FG.fs[who].atk.kind]);
   function fightLocal(ev) {
@@ -6223,12 +6564,8 @@ body.fight-on { overflow: hidden; }
     if (L.pvp && y < FH / 2) { who = 1; x = FW - x; y = FH - y; }
     return { who, x, y };
   }
-  // 手指在哪一顆方向鍵上（左半邊才算；離按鈕稍遠也算，方便滑過去換方向）
-  function padAt(B, x, y) {
-    let best = null, bd = 1e9;
-    for (const k of PADS) { const b = B[k], d = Math.hypot(x - b.x, y - b.y); if (d < b.r * 1.6 && d < bd) { best = k; bd = d; } }
-    return best;
-  }
+  // 移動區：以兩顆按鈕中間為界，左邊＝◀、右邊＝▶（手指滑過中線就換方向）
+  function padAt(B, x) { return x < (B.left.x + B.right.x) / 2 ? "left" : "right"; }
   const fTouches = new Map();
   fcv.addEventListener("pointerdown", (ev) => {
     if (!FG.g) return;
@@ -6237,14 +6574,16 @@ body.fight-on { overflow: hidden; }
     const { who, x, y } = fightLocal(ev), L = fightLayout(), B = fightButtons(L), c = FG.ctl[who];
     if (!c || (FG.set.mode !== "pvp" && who !== 0)) return;
     if (y < L.ctrl.y - 60) return;
-    if (x < 330) {
-      const k = padAt(B, x, y); if (!k) return;
-      c.pads.set(ev.pointerId, k); if (k === "up") c.jump = true;
-      fTouches.set(ev.pointerId, { who, kind: "pad" }); return;
+    if (x < MOVE_SPLIT) {
+      c.pads.set(ev.pointerId, padAt(B, x));
+      fTouches.set(ev.pointerId, { who, kind: "pad", move: true }); return;
     }
     let best = null, bd = 1e9;
-    for (const k of ["atk", "sk0", "sk1"]) { const b = B[k], d = Math.hypot(x - b.x, y - b.y); if (d < b.r * 1.35 && d < bd) { best = k; bd = d; } }
+    for (const k of RIGHT_KEYS) { const b = B[k], d = Math.hypot(x - b.x, y - b.y); if (d < b.r * 1.35 && d < bd) { best = k; bd = d; } }
     if (!best) return;
+    // 跳：按下那一下；防：按住期間（跟移動一樣記在 pads）
+    if (best === "up") { c.jump = true; c.pads.set(ev.pointerId, "up"); fTouches.set(ev.pointerId, { who, kind: "pad" }); return; }
+    if (best === "down") { c.pads.set(ev.pointerId, "down"); fTouches.set(ev.pointerId, { who, kind: "pad" }); return; }
     c.btn[best] = { id: ev.pointerId, x0: x, y0: y, x, y };
     if (best === "atk" && !atkIsShot(who)) c.atk = true; else c.skDown[SLOT_OF[best]] = true;
     fTouches.set(ev.pointerId, { who, kind: best });
@@ -6254,19 +6593,26 @@ body.fight-on { overflow: hidden; }
     ev.preventDefault();
     const { x, y } = fightLocal(ev), c = FG.ctl[t.who];
     if (t.kind === "pad") {
-      const k = padAt(fightButtons(fightLayout()), x, y), prev = c.pads.get(ev.pointerId);
-      if (k && k !== prev) { c.pads.set(ev.pointerId, k); if (k === "up") c.jump = true; }
+      if (t.move) c.pads.set(ev.pointerId, padAt(fightButtons(fightLayout()), x)); // 移動區可以滑來滑去換方向；跳、防不跟著手指
       return;
     }
     const o = c.btn[t.kind]; if (o) { o.x = x; o.y = y; }
   });
+  /* 取消區：手指離開按鈕外圈（半徑 × 2.3）再放開＝取消。突進要左右拖很遠，只看上下（左右拖多遠都不取消） */
+  const CANCEL_R = 2.3;
+  function fightCancelAt(who, key, b, B) {
+    if (!b) return false;
+    const k = FG.fs[who] && fightSlot(FG.fs[who], SLOT_OF[key]);
+    if (k && k.kind === "dash") return Math.abs(b.y - B.y) > B.r * CANCEL_R;
+    return Math.hypot(b.x - B.x, b.y - B.y) > B.r * CANCEL_R;
+  }
   const fUp = (ev) => {
     const t = fTouches.get(ev.pointerId); if (!t) return;
     fTouches.delete(ev.pointerId);
     const c = FG.ctl[t.who]; if (!c) return;
     if (t.kind === "pad") { c.pads.delete(ev.pointerId); return; }
     const s = SLOT_OF[t.kind], b = c.btn[t.kind], B = fightButtons(fightLayout())[t.kind];
-    if (s < 2 || atkIsShot(t.who)) { c.skCancelAt[s] = !!b && Math.hypot(b.x - B.x, b.y - B.y) > B.r * 2.3; c.skUp[s] = true; }
+    if (s < 2 || atkIsShot(t.who)) { c.skCancelAt[s] = fightCancelAt(t.who, t.kind, b, B); c.skUp[s] = true; }
     delete c.btn[t.kind];
   };
   fcv.addEventListener("pointerup", fUp); fcv.addEventListener("pointercancel", fUp);
@@ -6287,19 +6633,20 @@ body.fight-on { overflow: hidden; }
   function fightInput(i) {
     const c = FG.ctl[i], g = FG.g, inp = fightBlankInput();
     if (!c) return inp;
-    const flip = FG.set.mode === "pvp" && i === 1 ? -1 : 1; // 上半部的人看到的畫面是轉過來的
+    /* 兩人模式上半部的人：觸控座標已經換成他自己的座標（fightLocal），而他看到的畫面也是轉正的，
+       所以他的「左」就是場地的左，不用再反轉 */
     const held = new Set(c.pads.values());
     let lx = held.has("right") ? 1 : held.has("left") ? -1 : 0;
     if (held.has("down")) inp.guard = true;
     const m = FKEYS[i], K = FG.keys;
     if (K.has(m.l)) lx = -1; if (K.has(m.r)) lx = 1; if (K.has(m.d)) inp.guard = true;
-    inp.mx = lx * flip;
+    inp.mx = lx;
     inp.jump = c.jump; inp.atk = c.atk; inp.skDown = c.skDown.slice(); inp.skUp = c.skUp.slice(); inp.skCancel = c.skCancelAt.slice();
     const face = g ? g.p[i].face : 1, B = fightButtons(fightLayout());
     for (const [key, s] of Object.entries(SLOT_OF)) {
       const b = c.btn[key]; if (!b || (s === 2 && !atkIsShot(i))) continue;
-      inp.skAim[s] = ((b.x - b.x0) * flip / fScale) * 1.6 * face; // 往自己看到的「前方」拖＝打更遠
-      inp.skCancel[s] = Math.hypot(b.x - B[key].x, b.y - B[key].y) > B[key].r * 2.3;
+      inp.skAim[s] = ((b.x - b.x0) / fScale) * 1.6 * face; // 往自己看到的「前方」拖＝打更遠
+      inp.skCancel[s] = fightCancelAt(i, key, b, B[key]);
     }
     c.jump = false; c.atk = false; c.skDown = [false, false, false]; c.skUp = [false, false, false]; c.skCancelAt = [false, false, false];
     return inp;
@@ -6374,6 +6721,7 @@ body.fight-on { overflow: hidden; }
     // 拖曳瞄準：綠色＝這招能打到的全部範圍，白色＝目前拖到的位置（自己的一定畫；勾選「顯示判定範圍」時也畫對手的）
     for (const i of [0, 1]) if (i === who || FG.set.showRange) fightDrawAims(c, g, i, X, Y, gy);
     // 角色
+    for (const cl of g.clones) fightDrawClone(c, g, cl, X, Y);
     for (const i of [0, 1]) fightDrawFighter(c, g, i, X, Y);
     // 拋物線落點（飛行中；畫在角色前面才不會被擋住）
     for (const q of g.projs) if (q.kind === "lob") {
@@ -6439,6 +6787,11 @@ body.fight-on { overflow: hidden; }
         const x0 = at(a.d - k.width / 2), x1 = at(a.d + k.width / 2), lo = Math.min(x0, x1);
         c.fillStyle = a.cancel ? "rgba(120,120,120,0.18)" : "rgba(255,255,255,0.16)"; c.fillRect(lo, gy - H, Math.abs(x1 - x0), H); c.strokeRect(lo, gy - H, Math.abs(x1 - x0), H);
         fightLabel(c, "預告 " + fightTeleDelay(g, k, a.d).toFixed(2) + " 秒", at(a.d), gy - H - 16, 22, "#ffffff");
+      } else if (k.kind === "dash") { // 突進：落點是場地上的位移（左右都可以）；地上一條虛線到落點，落點畫判定範圍
+        const wx = (d) => X(me.x + d);
+        if (FG.set.showRange) green(wx(-k.range), wx(k.range), gy - 24, gy);
+        c.beginPath(); c.moveTo(X(me.x), gy - 10); c.lineTo(wx(a.d), gy - 10); c.stroke();
+        c.setLineDash([]); c.strokeRect(wx(a.d) - k.width * fScale / 2, gy - H * 0.6, k.width * fScale, H * 0.6);
       } else if (k.kind === "lob") {
         if (FG.set.showRange) green(at(FT.AIM_MIN - FT.LOB_R), at(k.range + FT.LOB_R), gy - 24, gy);
         const sx = at(0), ex = at(a.d), sy = Y(me.y + FT.CH * 0.6), top = Math.min(sy, gy) - 120;
@@ -6454,6 +6807,29 @@ body.fight-on { overflow: hidden; }
     c.save(); c.font = canvasFont(900, size); c.textAlign = "center"; c.textBaseline = "middle"; c.setLineDash([]);
     c.lineWidth = 5; c.strokeStyle = "#1b2038"; c.strokeText(text, x, y); c.fillStyle = color; c.fillText(text, x, y); c.restore();
   }
+  /* 變形：畫成施放者那一招的投射物圖案（資料沒有「變成什麼」，用施放者的圖代替）；沒有圖就畫一團 */
+  function fightDrawPoly(c, g, p, X, Y) {
+    const ps = p.st.poly, f = g.cfg.f[ps.own], dr = ps.bul && f.bul[ps.bul.p], k = fScale * FT.CH / f.h;
+    const anim = dr && pickAnim(dr.part, ["normal", "idle", "wait", "finish"]);
+    if (anim) {
+      const n = dr.part.animations[anim].frame_count, idx = Math.floor(g.t * (dr.part.anim_rate || 24)) % Math.max(1, n);
+      c.save(); c.translate(X(p.x), Y(p.y + FT.CH * 0.3)); c.scale(k * 1.3, k * 1.3); drawPartCtx(c, dr, anim, idx, 0, 0, p.face < 0, 0); c.restore();
+    } else {
+      c.save(); c.fillStyle = "#ffd84a"; c.strokeStyle = "#1b2038"; c.lineWidth = 4;
+      c.beginPath(); c.ellipse(X(p.x), Y(p.y + FT.CH * 0.25), FT.CH * 0.28 * fScale, FT.CH * 0.22 * fScale, 0, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore();
+    }
+  }
+  // 複製體：用對手的樣子、半透明紫色調，播目前招式的動作
+  function fightDrawClone(c, g, cl, X, Y) {
+    const f = g.cfg.f[cl.from], a = cl.act;
+    let clip = a ? a.clip : null; if (!clip || !f.part.animations[clip]) clip = idleClip(f);
+    const n = f.part.animations[clip].frame_count, idx = a ? Math.min(n - 1, Math.floor(a.t / a.dur * n)) : Math.floor(cl.anim.t * (f.part.anim_rate || 24)) % Math.max(1, n);
+    const k = fScale * FT.CH / f.h;
+    c.save(); c.translate(X(cl.x), Y(cl.y)); c.scale(k, k);
+    drawFighterCtx(c, f, clip, idx, 0, cl.face < 0, false, 0.55);
+    c.restore();
+    fightLabel(c, "複製體", X(cl.x), Y(FT.CH * 1.15), 18, "#c9a7ff");
+  }
   function fightDrawFighter(c, g, i, X, Y) {
     const p = g.p[i], f = g.cfg.f[i];
     let clip = p.act ? p.act.clip : p.anim.clip;
@@ -6463,14 +6839,22 @@ body.fight-on { overflow: hidden; }
     if (p.act) idx = Math.min(n - 1, Math.floor(p.act.t / p.act.dur * n));
     else if (p.stun > 0 || p.ko) idx = Math.min(n - 1, Math.floor(p.anim.t * (f.part.anim_rate || 24)));
     else idx = Math.floor(p.anim.t * (f.part.anim_rate || 24)) % Math.max(1, n);
-    const k = fScale * FT.CH / f.h;
+    const big = fHurtMul(p), k = fScale * FT.CH / f.h * big; // 縮放：整個角色跟著變大
     let alpha = 1;
     if (p.inv > 0 && Math.floor(p.inv * 12) % 2) alpha = 0.3;
     // 陰影
-    c.fillStyle = "rgba(0,0,0,0.25)"; c.beginPath(); c.ellipse(X(p.x), Y(0), g.cfg.fs[i].bw * fScale * 0.6, 8, 0, 0, Math.PI * 2); c.fill();
-    c.save(); c.translate(X(p.x), Y(p.y)); c.scale(k, k);
-    drawFighterCtx(c, f, clip, idx, 0, p.face < 0, p.quiet < 0.08 && !p.guard && p.stunKind !== "block", alpha);
-    c.restore();
+    c.fillStyle = "rgba(0,0,0,0.25)"; c.beginPath(); c.ellipse(X(p.x), Y(0), g.cfg.fs[i].bw * fScale * 0.6 * big, 8, 0, 0, Math.PI * 2); c.fill();
+    if (p.st.poly) fightDrawPoly(c, g, p, X, Y);
+    else {
+      c.save(); c.translate(X(p.x), Y(p.y)); c.scale(k, k);
+      drawFighterCtx(c, f, clip, idx, 0, p.face < 0, p.quiet < 0.08 && !p.guard && p.stunKind !== "block", alpha);
+      c.restore();
+    }
+    // 泡泡：包住角色的大泡泡
+    if (p.stunKind === "bubble" && p.stun > 0) {
+      c.save(); c.strokeStyle = "rgba(160,225,255,0.95)"; c.fillStyle = "rgba(160,225,255,0.22)"; c.lineWidth = 4;
+      c.beginPath(); c.arc(X(p.x), Y(p.y + FT.CH * 0.5), FT.CH * 0.62 * fScale, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore();
+    }
     // 防護罩：防禦條越少越紅
     if (p.guard) {
       const r = 1 - Math.max(0, p.gauge) / FT.GAUGE_MAX;
@@ -6480,7 +6864,7 @@ body.fight-on { overflow: hidden; }
     }
     // 護盾：藍色外框，越少越淡
     if (p.st.shield) {
-      const r = Math.min(1, p.st.shield.v / (p.maxHp * FX_NUM.SHIELD));
+      const r = Math.min(1, p.st.shield.v / (p.st.shield.max || p.st.shield.v));
       c.strokeStyle = `rgba(125,211,255,${0.35 + 0.6 * r})`; c.lineWidth = 5; c.setLineDash([]);
       c.beginPath(); c.ellipse(X(p.x), Y(p.y + FT.CH * 0.5), g.cfg.fs[i].bw * fScale * 0.95, FT.CH * fScale * 0.68, 0, 0, Math.PI * 2); c.stroke();
     }
@@ -6576,17 +6960,16 @@ body.fight-on { overflow: hidden; }
     if (!human) { c.restore(); return; }
     const held = new Set(ctl ? ctl.pads.values() : []);
     const pad = (key, label) => {
-      const b = B[key], on = held.has(key);
+      const b = B[key], on = held.has(key), w = b.w || b.r * 2, h = b.h || b.r * 2;
       c.fillStyle = on ? "#ffd84a" : "rgba(255,255,255,0.12)"; c.strokeStyle = "rgba(255,255,255,0.55)"; c.lineWidth = 3;
-      c.beginPath(); if (c.roundRect) c.roundRect(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2, 14); else c.rect(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2); c.fill(); c.stroke();
+      c.beginPath(); if (c.roundRect) c.roundRect(b.x - w / 2, b.y - h / 2, w, h, 14); else c.rect(b.x - w / 2, b.y - h / 2, w, h); c.fill(); c.stroke();
       c.fillStyle = on ? "#1b2038" : "#fff"; c.font = canvasFont(900, 26); c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(label, b.x, b.y);
     };
     pad("up", "跳"); pad("down", "防"); pad("left", "◀"); pad("right", "▶");
     { // 防禦條（破防後要回到 GAUGE_REARM 才能再防：這段期間顯示灰色）
       const r = Math.max(0, p.gauge) / FT.GAUGE_MAX, b = B.down;
-      // 放在「防」下面；兩人模式下面沒空間時改放右邊
-      const below = b.y + b.r + 22 <= L.ctrl.y + L.ctrl.h;
-      const gx = below ? b.x - 70 : b.x + b.r + 12, gy = below ? b.y + b.r + 8 : b.y - 6, gw = below ? 140 : 96;
+      // 放在「防」左邊
+      const gw = 90, gx = b.x - b.r - 10 - gw, gy = b.y - 6;
       c.fillStyle = "#333a5c"; c.fillRect(gx, gy, gw, 12);
       c.fillStyle = p.guardLock ? "#777c99" : r < 0.3 ? "#ff5060" : "#59a7ff"; c.fillRect(gx, gy, gw * r, 12);
       c.strokeStyle = "rgba(255,255,255,0.6)"; c.lineWidth = 1; c.strokeRect(gx, gy, gw, 12);
@@ -6595,7 +6978,10 @@ body.fight-on { overflow: hidden; }
       const b = B[key], held = ctl && ctl.btn[key];
       const slot = fightSlot(fs, SLOT_OF[key]);
       if (held && slot && FT_AIMED[slot.kind]) { // 拖曳中：外圈是取消區
-        c.strokeStyle = "rgba(255,90,90,0.5)"; c.setLineDash([8, 8]); c.lineWidth = 3; c.beginPath(); c.arc(b.x, b.y, b.r * 2.3, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+        c.strokeStyle = "rgba(255,90,90,0.5)"; c.setLineDash([8, 8]); c.lineWidth = 3; c.beginPath();
+        if (slot.kind === "dash") { const dy = b.r * CANCEL_R; c.moveTo(0, b.y - dy); c.lineTo(FW, b.y - dy); c.moveTo(0, b.y + dy); c.lineTo(FW, b.y + dy); } // 突進：上下兩條線外＝取消
+        else c.arc(b.x, b.y, b.r * CANCEL_R, 0, Math.PI * 2);
+        c.stroke(); c.setLineDash([]);
       }
       c.fillStyle = off ? "#3a3f5c" : held ? "#ffd84a" : key === "atk" ? "#e0323f" : "#7c5cff";
       c.beginPath(); c.arc(b.x, b.y, b.r, 0, Math.PI * 2); c.fill();
@@ -6608,7 +6994,7 @@ body.fight-on { overflow: hidden; }
     btn("atk", { shot: "普攻↔", lob: "普攻⌒", dline: "普攻→" }[fs.atk.kind] || "普攻", p.atkCd, fs.atk.cd, false);
     for (const s of [0, 1]) {
       const k = fs.sk[s];
-      const lab = k ? ({ rect: "定點", line: "直線", lob: "拋物", self: "自身", buff: "輔助" }[k.kind] + (s + 1)) : "—";
+      const lab = k ? ({ rect: "定點", line: "直線", lob: "拋物", self: "自身", dash: "突進", buff: "輔助" }[k.kind] + (s + 1)) : "—";
       btn("sk" + s, lab, k ? p.cd[s] : 0, k ? k.cd : 1, !k);
     }
     c.restore();

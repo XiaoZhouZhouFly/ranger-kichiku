@@ -414,12 +414,13 @@ def _compact(d):
 def sync_skill_fx(data) -> None:
     """格鬥場用：每個技能的完整效果清單，原樣保留上游的效果代碼與欄位（不認識的也保留），
     讓網頁端自己決定支援哪些。這一步失敗只會跳過這個檔，不影響其他資料。
-    格式：{角色: [技能1, 技能2]}，技能＝null 或 {"cd": 冷卻, "rate": 發動率, "trig": 觸發方式,
+    格式：{角色: [技能1, 技能2], "_grade": {角色: [星數, 進化型態]}}，技能＝null 或 {"cd": 冷卻, "rate": 發動率, "trig": 觸發方式,
           "fx": [{"c": 效果代碼（去掉 SKILLEFF_）, "m": 數值物件, "d": 持續物件, "r": 範圍, 其他上游欄位…}]}"""
     if not data:
         return
     try:
         out = load_json(SKILL_FX, {})
+        grade = out.get("_grade") if isinstance(out.get("_grade"), dict) else {}
         for r in data.get("rangers") or []:
             uid = r.get("rangerCode") or ""
             if not re.match(r"u(\d+)([a-z]?)-(.+)$", uid):
@@ -445,8 +446,12 @@ def sync_skill_fx(data) -> None:
             while len(skills) < 2:
                 skills.append(None)
             out[uid] = skills
+            # 星數＋進化型態：效果的時間寫成「每級幾秒」時，要乘上這個組合的最大等級（網頁端對照表）
+            if r.get("starGrade") is not None:
+                grade[uid] = [r.get("starGrade"), r.get("evolution") or "NORMAL"]
+        out["_grade"] = grade
         write_if_changed(SKILL_FX, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode())
-        log(f"技能效果：{len(out)} 隻角色")
+        log(f"技能效果：{len(out) - 1} 隻角色")
     except Exception as e:  # noqa: BLE001
         log(f"⚠ 技能效果整理失敗，這次略過（其他資料不受影響）：{e}")
 

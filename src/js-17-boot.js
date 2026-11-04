@@ -68,7 +68,7 @@
         g.p.forEach((p, i) => { if (p.inv > 0 && !invBefore[i]) log.inv++; });
         if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face, Object.keys(p.st).sort().join(","), p.st.shield ? Math.round(p.st.shield.v) : 0]));
       }
-      return { log, trace, maxHp: g.p.map((p) => p.maxHp), dr: g.p.map((p) => p.dr), gauge: g.p.map((p) => +p.gauge.toFixed(1)), sv: g.p.map((p) => +p.sv.toFixed(1)), state: g.p.map((p) => p.state), face: g.p.map((p) => p.face), hp: g.p.map((p) => Math.round(p.hp)), x: g.p.map((p) => Math.round(p.x)), phase: g.phase, wins: g.wins.slice(), stats: Object.assign({}, g.stats), t: +g.t.toFixed(2) };
+      return { log, trace, cd: g.p.map((p) => p.cd.map((c) => +c.toFixed(2))), atkCd: g.p.map((p) => +p.atkCd.toFixed(2)), maxHp: g.p.map((p) => p.maxHp), dr: g.p.map((p) => p.dr), gauge: g.p.map((p) => +p.gauge.toFixed(1)), sv: g.p.map((p) => +p.sv.toFixed(1)), state: g.p.map((p) => p.state), face: g.p.map((p) => p.face), hp: g.p.map((p) => Math.round(p.hp)), x: g.p.map((p) => Math.round(p.x)), phase: g.phase, wins: g.wins.slice(), stats: Object.assign({}, g.stats), t: +g.t.toFixed(2) };
     },
     duel: () => ({ inited: !!D.inited, a: D.f[0] && D.f[0].r.id, b: D.f[1] && D.f[1].r.id, kind: D.type, mode: D.mode, seed: D.seed, settings: settingsToSaved(),
       state: D.cd != null ? "countdown" : D.playing ? "playing" : D.idle ? (D.pos > 0 ? "ended" : "idle") : "paused", pos: Math.floor(D.pos || 0),

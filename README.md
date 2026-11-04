@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v5.2-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v5.2"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v5.3-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v5.3"></a>
 </p>
 
 <p align="center">
@@ -49,8 +49,9 @@
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v5.2）
+## 最近更新（v5.3）
 
+- 格鬥場：幾乎所有技能效果都有作用了（77 種裡 62 種），新增突進、拉近、交換位置、魅惑、恐懼、變形、泡泡、變大、詛咒、對手複製體、吸血、反射、冷卻增減等；按鍵改成左手移動、右手攻擊＋跳＋防，跳得過對手。
 - 格鬥場：技能效果開始有作用了——暈眩、擊退（倒地）、沉默、持續傷害、攻擊與移速增減、回血、護盾（原作的無敵）、穿透護盾，角色頭上會顯示狀態。只作用在自己身上的技能變成「自身」技能，按下就生效。
 - 格鬥場：官方角色的招式辨識更準確。遠程直接命中的普攻（例如射程 800 的角色）改成「瞬間直線」，不再變成近戰；拋物線普攻改成真的拋物線；投射物速度照原始資料。選角說明會標出這隻角色哪些功能還不支援（例如暈眩、召喚）。
 - 新增「格鬥場（測試版）」：用手指操作的一對一格鬥。可以打木樁練手感、跟電腦打（三種難度），或兩人拿同一支手機對打（上下鏡像）。有防禦條、硬直值與倒地、連段傷害遞減、預告式範圍技能、投射物；回合數與秒數可以自己設定。

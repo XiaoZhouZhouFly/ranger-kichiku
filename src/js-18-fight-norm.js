@@ -8,15 +8,15 @@
      問題等級 lvl：unfit 不適合格鬥場、unsupported 有功能還不支援（有明確的代替方式）、guess 推測、info 補充。 */
 
   // 攻擊形式（delivery）：普攻、技能共用的名稱
-  const FORM_LABEL = { melee: "近戰", dline: "瞬間直線", line: "直線投射物", lob: "拋物線", target: "指定位置打擊", self: "自身", buff: "輔助（代替）" };
+  const FORM_LABEL = { dash: "突進", melee: "近戰", dline: "瞬間直線", line: "直線投射物", lob: "拋物線", target: "指定位置打擊", self: "自身", buff: "輔助（代替）" };
   // 形式 → 引擎的招式種類（引擎看 kind；普攻的直線投射物叫 shot）
-  const FORM_KIND = { atk: { melee: "melee", dline: "dline", line: "shot", lob: "lob" }, sk: { target: "rect", line: "line", lob: "lob", self: "self", buff: "buff" } };
+  const FORM_KIND = { atk: { melee: "melee", dline: "dline", line: "shot", lob: "lob" }, sk: { dash: "dash", target: "rect", line: "line", lob: "lob", self: "self", buff: "buff" } };
   const FIELD_ST_LABEL = { ok: "有值", zero: "0", missing: "沒有", bad: "格式錯誤" };
 
   /* 技能效果代碼（skill_fx.json 的 c，去掉 SKILLEFF_）→ [名稱, 支援狀態]
-     支援狀態：ok 已支援、part 部分支援、r2 第二輪（第一批效果）、b2 第二批、none 未規劃。沒列到的依字首判斷（fxInfo）。
+     支援狀態：ok 已支援、part 部分支援、r2 階段 2 先做的效果、b2 待決定、none 格鬥場不用。沒列到的依字首判斷（fxInfo）。
      「已支援」不看這張表，而是看效果模組 FIGHT_FX（js-18-fight-effects.js）有沒有這個代碼。 */
-  const FX_STATUS_LABEL = { ok: "已支援", part: "部分支援", r2: "未支援（第二輪）", b2: "未支援（第二批）", none: "未規劃" };
+  const FX_STATUS_LABEL = { ok: "已支援", part: "部分支援", r2: "未支援（階段 2）", b2: "未支援（待做）", none: "格鬥場不用" };
   const FX_INFO = {
     DMG: ["傷害", "ok"], DOT: ["持續傷害", "part"],
     STUN: ["暈眩", "r2"], KNOCKBACK: ["擊退", "r2"], HEAL: ["回血", "r2"], DOTHEAL: ["持續回血", "r2"], UNBEAT: ["護盾（原：無敵）", "r2"], SILENCE: ["沉默", "r2"],
@@ -33,10 +33,14 @@
     POISON: "中毒", DEBUFF: "減益", SUMMON: "召喚物" };
   Object.assign(FX_INFO, { MIRROR_PHY: ["反射物理傷害", "b2"], MIRROR_MAG: ["反射魔法傷害", "b2"], CURSE_DEBUFF: ["詛咒", "b2"], SKILL_RESET: ["技能冷卻重置", "b2"],
     SCALE: ["縮放", "none"], THROW_ALLY: ["投擲隊友", "none"], CHANGE_ENEMY: ["改變敵人", "none"] });
-  const FX_NOTE = { DMG: "傷害量目前固定，第三輪改用官方倍率" };
+  const FX_NOTE = { DMG: "傷害量目前固定，階段 3（數值平衡）改用官方倍率" };
+  // 名稱與支援狀態：名稱以決定表為準；有實作＝已支援，決定表選「不處理」＝格鬥場不用，其他＝待做
   function fxInfo(code) {
-    const known = FX_INFO[code] || fxGuessInfo(code);
-    return FIGHT_FX[code] ? [known[0], "ok"] : known;
+    const known = FX_INFO[code] || fxGuessInfo(code), row = FX_TABLE[code];
+    const name = row && row.name ? row.name : known[0];
+    if (FIGHT_FX[code]) return [name, "ok"];
+    if (row && row.b === "none") return [name, "none"];
+    return [name, row ? "b2" : known[1]];
   }
   function fxGuessInfo(code) {
     const stat = (x) => FX_STAT[x] || x;
@@ -85,6 +89,9 @@
   function normUnit(r, anims) {
     const id = r.id, st = S.stats[id], pj = S.proj[id] || null, fxAll = (S.fx || {})[id] || null, pre = FIGHT_PRESET[id] || null;
     const N = { id, name: r.name || "", issues: [], f: {}, clips: normClips(anims), atk: null, sk: [], preset: !!pre };
+    // 星數＋進化型態 → 最大等級（效果時間寫成「每級幾秒」時用）
+    const grade = S.fx && S.fx._grade && S.fx._grade[id];
+    N.grade = grade || null; N.lvMax = grade ? FX_MAXLEVEL[grade[0] + "|" + grade[1]] || 0 : 0;
     const issue = (lvl, where, msg) => N.issues.push({ lvl, where, msg });
     // 適不適合格鬥場
     if (!r.name) issue("unfit", "名稱", "沒有名稱（多半是頭目、NPC 或召喚物）");
@@ -118,7 +125,10 @@
         k.fx = fxs.fx.map((e) => {
           const c = String(e.c || ""), [label, sup] = fxInfo(c), m = e.m || {};
           const val = [m.value, m.percent, m.amount].find((x) => typeof x === "number");
-          return { c, label, sup, dur: e.d && +e.d.seconds || 0, r: +e.r || 0, val: val == null ? null : val, mk: m.kind || null };
+          // 持續時間：fixed／一般秒數直接用；levelFormula（每級 amount 秒）或不到 1 秒的 gradeCalculated＝每級秒數（durLv），之後乘最大等級
+          const d = e.d || {}, sec = +d.seconds || 0;
+          const durLv = d.kind === "levelFormula" ? +d.amount || 0 : d.kind === "gradeCalculated" && sec > 0 && sec < 1 ? sec : 0;
+          return { c, label, sup, dur: durLv ? 0 : sec, durLv, r: +e.r || 0, val: val == null ? null : val, mk: m.kind || null };
         });
       } else if (base) {
         k.fxSrc = "stats";
@@ -137,16 +147,17 @@
       k.damaging = k.fx.some((e) => FX_DAMAGE.has(e.c) || ((e.c === "STUN" || e.c === "KNOCKBACK") && e.mk === "statPercent"));
       const summon = k.fx.some((e) => FX_SUMMON.has(e.c)), toEnemy = k.fx.some((e) => fxTo(e) === "enemy"), toSelf = k.fx.some((e) => fxTo(e) === "self");
       if (p) k.form = { rect: "target", line: "line", lob: "lob", buff: "buff" }[p.kind] || "target";
+      else if (k.fx.some((e) => FIGHT_FX[e.c] && FIGHT_FX[e.c].form === "dash")) k.form = "dash"; // 突進：按住拖曳選位置，衝過去再判定
       else if (k.damaging || toEnemy) {
         const dd = normDelivery(k.cfg, rg, false); k.form = dd.form; k.src = dd.src;
         if (dd.note) issue(dd.unsupported ? "unsupported" : "guess", where, dd.note);
       } else if (summon) k.form = "target";
       else if (toSelf) k.form = "self";
-      else { k.form = "buff"; issue("unsupported", where, "效果全都還沒支援（第二批），暫時用「加攻＋回血」代替"); }
-      if (summon && !p) issue("unsupported", where, k.damaging ? "召喚未支援（第二批），目前只有傷害部分" : "召喚未支援（第二批），以指定位置打擊代替");
+      else { k.form = "buff"; issue("unsupported", where, "效果全都還沒支援（待做），暫時用「加攻＋回血」代替"); }
+      if (summon && !p) issue("unsupported", where, k.damaging ? "召喚未支援（待做），目前只有傷害部分" : "召喚未支援（待做），以指定位置打擊代替");
       if (!p && k.form === "target" && k.effectRange.st === "missing") issue("guess", where, "沒有作用範圍，用預設寬度");
       // 還沒支援的效果（傷害、召喚以外；召喚上面已經標過）
-      const todo = k.fx.filter((e) => e.sup !== "ok" && !FX_SUMMON.has(e.c));
+      const todo = k.fx.filter((e) => e.sup !== "ok" && e.sup !== "none" && !FX_SUMMON.has(e.c)); // 「格鬥場不用」的效果不算問題
       if (todo.length && !p) issue("unsupported", where, todo.map((e) => e.label).filter((x, i, a) => a.indexOf(x) === i).join("、") + " 未支援");
       const done = k.fx.filter((e) => e.sup === "ok" && e.c !== "DMG").map((e) => e.label).filter((x, i, a) => a.indexOf(x) === i);
       if (done.length && !p) issue("info", where, "效果：" + done.join("、"));

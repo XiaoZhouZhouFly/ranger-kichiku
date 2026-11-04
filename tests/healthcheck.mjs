@@ -461,7 +461,28 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   check(heal.trace[160][1][2] > heal.trace[149][1][2], "回血技能應該回血");
   const buff = await R({ c0: "u023u-sindy", c1: "x001-cube", steps: 60, script: [sk(1, 5)] });
   check(has(buff, 0, "atkUp") && has(buff, 0, "spdUp"), "增益技能應該加上攻擊、移速增加");
-  return "8 種效果都有作用";
+  // v5.3：受傷增減、清除增益、反射、吸血、冷卻重置
+  const vul = await R({ c0: "u010u-clara", c1: "x001-cube", steps: 400, script: [...W, sk(1, 50), sk(0, 200)] });
+  const base = await R({ c0: "u010u-clara", c1: "x001-cube", steps: 400, script: [...W, sk(0, 200)] });
+  check(vul.log.dmg[vul.log.dmg.length - 1] > base.log.dmg[0], `技能抗性降低後，下一招技能傷害應該變高：${vul.log.dmg} vs ${base.log.dmg}`);
+  const clean = await R({ c0: "u032u-ron", c1: "u023u-sindy", steps: 300, script: [sk(1, 2, 1), { side: 0, from: 0, to: 40, mx: 1 }, sk(1, 60)] });
+  check(has(clean, 1, "atkUp") && !clean.trace[150][1][7].includes("atkUp"), "清除敵方增益應該清掉對手的攻擊增加");
+  const mir = await R({ c0: "x001-cube", c1: "u1001h-brown", steps: 200, script: [sk(1, 2, 1), { side: 0, from: 0, to: 60, mx: 1 }, { side: 0, from: 80, to: 200, atk: 30 }] });
+  check(mir.hp[0] < mir.maxHp[0], "反射應該讓出手的人也受傷");
+  const reset = await R({ c0: "u1084h-alice", c1: "x001-cube", steps: 125, script: [sk(1, 5), sk(0, 118)] });
+  check(reset.cd[0][1] === 0, `技能冷卻重置應該讓另一個技能冷卻歸零：${reset.cd[0]}`);
+  // v5.3 第 2 部分：突進、拉近、交換位置、泡泡、複製體
+  const dash = await R({ c0: "u1216e-towa", c1: "x001-cube", steps: 250, script: [...W, sk(0, 50)] });
+  check(dash.log.hits >= 1 && dash.x[0] > -38, `突進應該衝過去並打中：x ${dash.x[0]}、命中 ${dash.log.hits}`);
+  const pull = await R({ c0: "u1013e-brown", c1: "x001-cube", steps: 250, script: [...W, sk(0, 50)] });
+  check(pull.x[1] < 150, `拉動敵人應該把對手拉近：對手 x ${pull.x[1]}`);
+  const swap = await R({ c0: "u003u-bella", c1: "x001-cube", steps: 200, script: [...W, sk(1, 50)] });
+  check(swap.x[0] > swap.x[1], `交換位置後左右應該對調：${swap.x}`);
+  const bub = await R({ c0: "u1418e-moon", c1: "x001-cube", steps: 300, script: [...W, sk(0, 50)] });
+  check(bub.trace.some((t) => t[1][3] === "bubble" && t[1][1] > 50), "泡泡應該讓對手浮起來");
+  const copy = await R({ c0: "u1004e-sally", c1: "x001-cube", steps: 400, script: [...W, sk(0, 50)] });
+  check(copy.log.hits >= 2, `複製體應該也會攻擊：命中 ${copy.log.hits}`);
+  return "13＋5＋10 種效果都有作用";
 });
 
 await test("官方角色對戰可執行", async (open) => {

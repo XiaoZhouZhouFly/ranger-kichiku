@@ -24,7 +24,7 @@
   }
   function fightNew(cfg) {
     const g = { cfg, rng: mulberry32((cfg.seed || 1) * 7919 + 7), round: 1, wins: [0, 0], phase: "intro", phaseT: 0, timeLeft: cfg.secs,
-      projs: [], teles: [], fx: [], events: [], t: 0, winner: -1, roundWinner: -1, nextId: 1,
+      projs: [], teles: [], clones: [], fx: [], events: [], t: 0, winner: -1, roundWinner: -1, nextId: 1,
       stats: { lastCombo: 0, lastDmg: 0, total: 0, hits: 0 } };
     g.p = [fightFighter(g, 0), fightFighter(g, 1)];
     g.events.push({ type: "round" });
@@ -36,13 +36,16 @@
   const fightBlankInput = () => ({ mx: 0, jump: false, guard: false, atk: false, skDown: [false, false, false], skUp: [false, false, false], skCancel: [false, false, false], skAim: [null, null, null] });
   const FT_EMPTY = fightBlankInput();
   const fightSlot = (fs, s) => (s === 2 ? fs.atk : fs.sk[s]); // 第 s 格按鈕對應的招式（2＝普攻）
-  const FT_AIMED = { rect: true, lob: true, line: true, shot: true }; // 按住才出招的種類（放開時出招）
+  const FT_AIMED = { rect: true, lob: true, line: true, shot: true, dash: true }; // 按住才出招的種類（放開時出招）
+  const fightFs = (g, p) => p.fs || g.cfg.fs[p.side]; // 選手（或複製體）的數值
+  // 強制滑動（拉近、交換位置、突進）：T 秒內從目前位置滑到 to；onEnd 在到達時呼叫
+  function fightSlide(p, to, T, onEnd) { p.slide = { x0: p.x, x1: fclamp(to, -FT.AW / 2 + 30, FT.AW / 2 - 30), t: 0, T, onEnd }; }
   const fOnGround = (p) => p.y <= 0.01;
   const fFree = (p) => !p.ko && p.stun <= 0 && !p.act; // 可以出新招
   // 矩形預告時間：依距離（近快遠慢）或跟這招的前搖一樣長
   const fightTeleDelay = (g, k, d) => (g.cfg.teleMode === "sync" ? Math.max(FT.TELE_SYNC_MIN, k.hitAt) : FT.TELE_MIN + (FT.TELE_MAX - FT.TELE_MIN) * (d / k.range));
   // 目前狀態（給畫面顯示與測試用；規則本身看各個計時器）
-  const FT_STATE_LABEL = { idle: "待機", walk: "走路", jump: "跳", aim: "瞄準", attack: "攻擊", skill: "技能", guard: "防禦", block: "防禦硬直", hit: "硬直", break: "破防", down: "倒地", stunfx: "暈眩", ko: "倒下" };
+  const FT_STATE_LABEL = { idle: "待機", walk: "走路", jump: "跳", aim: "瞄準", attack: "攻擊", skill: "技能", guard: "防禦", block: "防禦硬直", hit: "硬直", break: "破防", down: "倒地", stunfx: "暈眩", bubble: "泡泡", ko: "倒下" };
   function fightStateOf(p) {
     if (p.ko) return "ko";
     if (p.stun > 0) return p.stunKind || "hit";
@@ -66,6 +69,7 @@
     fightSeparate(g);
     fightProjectiles(g);
     fightTeles(g);
+    fightClones(g);
     for (const p of g.p) p.state = fightStateOf(p);
     for (const e of g.fx) e.t += dt;
     g.fx = g.fx.filter((e) => e.t < (e.life || 0.6));
@@ -89,7 +93,7 @@
         g.phase = "over"; g.winner = g.wins[0] === g.wins[1] ? -1 : g.wins[0] > g.wins[1] ? 0 : 1;
       } else {
         g.round++; g.phase = "intro"; g.phaseT = 0; g.timeLeft = g.cfg.secs;
-        g.p = [fightFighter(g, 0), fightFighter(g, 1)]; g.projs = []; g.teles = []; g.events.push({ type: "round" });
+        g.p = [fightFighter(g, 0), fightFighter(g, 1)]; g.projs = []; g.teles = []; g.clones = []; g.events.push({ type: "round" });
       }
     }
   }
@@ -111,6 +115,7 @@
     const dt = FT.STEP, f = g.cfg.f[p.side];
     fightTimers(p, inp);
     fxTick(g, p);
+    fightSlideStep(g, p);
     if (p.ko) { p.x += p.kbv * dt; p.kbv *= 0.9; fightPhysics(g, p); return; }
     if (p.stun > 0) { fightStunned(g, p); return; }
     p.x += p.kbv * dt; p.kbv *= 0.8; // 擋下攻擊後的小滑行
@@ -124,10 +129,17 @@
     fightPhysics(g, p);
   }
 
+  function fightSlideStep(g, p) {
+    const m = p.slide; if (!m) return;
+    m.t += FT.STEP; const r = Math.min(1, m.t / m.T);
+    p.x = m.x0 + (m.x1 - m.x0) * r;
+    if (r >= 1) { p.slide = null; if (m.onEnd) m.onEnd(); }
+  }
+
   function fightTimers(p, inp) {
     const dt = FT.STEP;
     p.anim.t += dt;
-    p.cd = p.cd.map((c) => Math.max(0, c - dt)); p.atkCd = Math.max(0, p.atkCd - dt);
+    p.cd = p.cd.map((c) => Math.max(0, c - dt * fxCdRate(p))); p.atkCd = Math.max(0, p.atkCd - dt);
     p.inv = Math.max(0, p.inv - dt); p.buff = Math.max(0, p.buff - dt);
     p.quiet += dt;
     // 硬直累積值：一陣子沒挨打就開始下降
@@ -149,20 +161,21 @@
   function fightStunned(g, p) {
     const dt = FT.STEP, f = g.cfg.f[p.side];
     p.stun -= dt; p.x += p.kbv * dt; p.kbv *= 0.88;
+    if (p.stunKind === "bubble") { p.y += (FT.BUBBLE_H - p.y) * 0.12; p.vy = 0; } // 泡泡：慢慢浮起來，結束後落下
     p.guard = p.stunKind === "block"; // 防禦硬直時仍然在防禦（連續的攻擊照樣擋）
     if (p.stunKind !== "block") fightAnim(p, f.clips.knockback || idleClip(f));
     if (p.stun <= 0) {
       if (p.stunKind === "down") { p.inv = FT.WAKE_INV; g.fx.push({ kind: "text", text: "起身", x: p.x, y: FT.CH * 1.2, t: 0, life: 0.6 }); }
       p.stun = 0; p.stunKind = "";
     }
-    fightPhysics(g, p);
+    if (p.stunKind !== "bubble") fightPhysics(g, p);
   }
 
   // 防禦：按住下、在地上、沒在出招、防禦條還有。按住本身會消耗防禦條，扣完就破防；破防後要回到 GAUGE_REARM 才能再防
   function fightGuard(g, p, inp, ground) {
     const dt = FT.STEP;
     if (p.guardLock && p.gauge >= FT.GAUGE_REARM) p.guardLock = false;
-    p.guard = !!inp.guard && ground && !p.act && p.gauge > 0 && !p.guardLock;
+    p.guard = !!inp.guard && ground && !p.act && p.gauge > 0 && !p.guardLock && !fxCantAct(p); // 恐懼、變形時不能防
     if (p.guard) {
       p.guardIdle = 0;
       p.gauge -= FT.GAUGE_HOLD * dt;
@@ -194,7 +207,9 @@
     for (const s of [0, 1, 2]) {
       const aim = p.aim[s], k = fightSlot(fs, s);
       if (!aim) continue;
-      if (AIM_MODE[k.kind] === "dist" && inp.skAim[s] != null) aim.d = fclamp(aim.d0 + inp.skAim[s], FT.AIM_MIN, k.range);
+      // 突進：落點用場地上的實際位移（左右都能拖，無視朝向；skAim 是「往前拖多少」，乘回面向＝往右拖多少）
+      if (k.kind === "dash" && inp.skAim[s] != null) { const R = k.range * fxBoxMul(p, true); aim.d = fclamp(aim.d0 + inp.skAim[s] * p.face, -R, R); }
+      else if (AIM_MODE[k.kind] === "dist" && inp.skAim[s] != null) aim.d = fclamp(aim.d0 + inp.skAim[s], FT.AIM_MIN, k.range * fxBoxMul(p, s < 2));
       aim.cancel = !!inp.skCancel[s];
       if (!inp.skUp[s] && !aim.release) continue;
       p.aim[s] = null;
@@ -208,13 +223,15 @@
     const act = { kind: s === 2 ? "atk" : "sk", s, t: 0, dur: k.dur, hitAt: k.hitAt, done: false, clip: k.clip, aimD: d, id: g.nextId++, air: !fOnGround(p), melee: s === 2 && k.kind === "melee" };
     if (k.kind === "rect") {
       const delay = fightTeleDelay(g, k, d);
-      g.teles.push({ own: p.side, x: p.x + p.face * (g.cfg.fs[p.side].bw / 2 + d), w: k.width, t: 0, delay, dmg: k.dmg, sv: k.sv, s, bul: k.bul, id: act.id, fx: k.enemyFx });
+      const box = fxBoxMul(p, true); // 技能判定框大小（範圍增減效果）
+      g.teles.push({ own: p.side, x: p.x + p.face * (g.cfg.fs[p.side].bw / 2 + d), w: k.width * box, air: FT.AIR_SAFE * box, t: 0, delay, dmg: k.dmg, sv: k.sv, s, bul: k.bul, id: act.id, fx: k.enemyFx });
       act.done = true; // 傷害由預告結算
     }
     p.act = act;
-    if (s === 2) p.atkCd = k.cd; else p.cd[s] = k.cd;
+    if (s === 2) p.atkCd = Math.max(0.15, k.cd * fxAtkCdMul(p)); else p.cd[s] = k.cd; // 攻速增減只影響普攻冷卻
     fightAnim(p, k.clip || idleClip(f));
     if (s < 2) { g.events.push({ type: "cast", side: p.side }); fxCastSelf(g, p, k); }
+    if (k.kind === "dash") p.armor = true; // 突進：從出招到衝完都不會被打斷
     if (k.kind === "dline") { const bw = g.cfg.fs[p.side].bw; g.fx.push({ kind: "dlineTele", own: p.side, x0: p.x + p.face * bw / 2, x1: p.x + p.face * (bw / 2 + k.range), y: p.y + FT.CH * 0.4, t: 0, life: k.hitAt }); }
     if (act.melee) { const bw = g.cfg.fs[p.side].bw; g.fx.push({ kind: "reach", own: p.side, x0: p.x + p.face * bw / 2, x1: p.x + p.face * (bw / 2 + k.reach), y: p.y, t: 0, life: FT.ACTIVE + k.hitAt + 0.1 }); }
     if (k.kind === "buff" || k.kind === "self") g.fx.push({ kind: "selfring", own: p.side, x: p.x, t: 0, life: 0.8 });
@@ -225,13 +242,15 @@
     const dt = FT.STEP, fs = g.cfg.fs[p.side];
     const aiming = p.aim.some(Boolean);
     // 按住招式時：預設左右鍵只轉身不走路（設定 holdMove 時照常走路）
-    const mx = p.guard ? 0 : inp.mx;
+    // 魅惑：左右反轉；恐懼：被迫往遠離施放者的方向走
+    let mx = p.guard ? 0 : inp.mx * (p.st.charm ? -1 : 1);
+    if (p.st.fear) mx = p.x >= p.st.fear.from ? 1 : -1;
     if (mx) p.face = mx > 0 ? 1 : -1;
     const walk = aiming && !g.cfg.holdMove ? 0 : mx;
     p.vx = walk * fs.walk * fxSpdMul(p) * (ground ? 1 : FT.AIR_CTRL);
     p.x += p.vx * dt;
-    if (inp.jump && ground && !p.guard && !p.aim[0] && !p.aim[1]) p.vy = FT.JUMP_V; // 瞄準技能時不能跳（技能只能在地上放）
-    if (p.guard) return;
+    if (inp.jump && ground && !p.guard && !p.aim[0] && !p.aim[1] && !fxCantAct(p)) p.vy = FT.JUMP_V; // 瞄準技能時不能跳（技能只能在地上放）
+    if (p.guard || fxCantAct(p)) return; // 恐懼、變形：只能移動
     // 開始新招：普攻（地上、空中都可以），技能（只能在地上；投射物技能每人場上最多一顆）
     for (const s of [2, 0, 1]) {
       const b = p.buf[s], k = fightSlot(fs, s);
@@ -242,7 +261,8 @@
       if (!FT_AIMED[k.kind]) { fightCast(g, p, s, k, 0); continue; } // 近戰普攻、輔助技能：按下就放
       // 按住才出的招：起點＝按下當下對手的距離（之後不會自己跟著跑）；已經放開了（點一下）就直接出
       const gap = Math.max(0, Math.abs(o.x - p.x) - (fs.bw + g.cfg.fs[o.side].bw) / 2);
-      const d0 = AIM_MODE[k.kind] === "dist" ? fclamp(gap + g.cfg.fs[o.side].bw / 2, FT.AIM_MIN, k.range) : 0;
+      let d0 = AIM_MODE[k.kind] === "dist" ? fclamp(gap + g.cfg.fs[o.side].bw / 2, FT.AIM_MIN, k.range * fxBoxMul(p, s < 2)) : 0;
+      if (k.kind === "dash") d0 = fclamp(o.x - p.x, -k.range, k.range); // 突進：起點＝對手的位置（場地上的位移，可以在背後）
       p.aim[s] = { d0, d: d0, cancel: false, release: b.up };
     }
   }
@@ -258,12 +278,18 @@
       }
     }
   }
-  // 兩人不會重疊（用身體寬推開）、不會走出場地
+  /* 兩人不會重疊（用身體寬推開）、不會走出場地。
+     只有一方在空中時完全不推（跳得過對手）；兩人都在地上時一定推；兩人都在空中時高度差超過 PUSH_H 個身高就不推。
+     越過去不會自動轉身。 */
   function fightSeparate(g) {
     const [a, b] = g.p, fa = g.cfg.fs[0], fb = g.cfg.fs[1];
+    const ga = fOnGround(a), gb = fOnGround(b);
+    // 突進途中直接穿過對手（不推擠）；衝完停在對手身上時由突進那邊自己退開（見 FIGHT_RELEASE.dash）
+    const dashing = (a.slide && a.armor) || (b.slide && b.armor);
+    const push = dashing ? false : ga && gb ? true : ga !== gb ? false : Math.abs(a.y - b.y) < FT.CH * FT.PUSH_H;
     const minD = (fa.bw + fb.bw) / 2;
     const dx = b.x - a.x;
-    if (Math.abs(dx) < minD && Math.abs(a.y - b.y) < FT.CH * 0.7) {
+    if (Math.abs(dx) < minD && push) {
       const push = (minD - Math.abs(dx)) / 2, dir = dx >= 0 ? 1 : -1;
       a.x -= dir * push; b.x += dir * push;
     }
@@ -272,13 +298,14 @@
 
   /* ---------- 判定 ----------
      受傷框：寬 HURT_W、從腳底往上一個身高，置中在角色 x（跟圖片大小無關）。 */
-  const fHurt = (o) => ({ x0: o.x - FT.HURT_W / 2, x1: o.x + FT.HURT_W / 2, y0: o.y, y1: o.y + FT.CH });
+  const fHurtMul = (o) => 1 + (o.st && o.st.big ? o.st.big.v : 0); // 縮放：受傷判定框跟著變大
+  const fHurt = (o) => { const m = fHurtMul(o); return { x0: o.x - FT.HURT_W * m / 2, x1: o.x + FT.HURT_W * m / 2, y0: o.y, y1: o.y + FT.CH * m }; };
   const fOverlapX = (a0, a1, b0, b1) => Math.max(a0, a1) >= Math.min(b0, b1) && Math.min(a0, a1) <= Math.max(b0, b1);
   // 近戰普攻：判定框從身體前緣往前 reach，高度跟著出招者當下的位置（空中普攻也是）
   function fightMeleeCheck(g, p, o, a) {
-    const fs = g.cfg.fs[p.side], k = fs.atk, h = fHurt(o);
-    const x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.reach;
-    if (o.ko || !fOverlapX(x0, x1, h.x0, h.x1) || h.y0 > p.y + FT.CH * 0.8 || h.y1 < p.y) return false;
+    const fs = g.cfg.fs[p.side], k = fs.atk, h = fHurt(o), m = fxBoxMul(p, false); // 普攻判定框大小
+    const x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.reach * m;
+    if (o.ko || !fOverlapX(x0, x1, h.x0, h.x1) || h.y0 > p.y + FT.CH * 0.8 * m || h.y1 < p.y - FT.CH * 0.1 * (m - 1)) return false;
     fightHit(g, p, o, k.dmg, k.sv, false, a.id, null);
     g.events.push({ type: "swing", side: p.side });
     return true;
@@ -303,16 +330,39 @@
     },
     // 瞬間直線（遠程直接命中的普攻）：不產生飛行物，這一刻檢查身體前緣往前 range 內、同一高度有沒有對手
     dline(g, p, o, a, k) {
-      const fs = g.cfg.fs[p.side], x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.range, h = fHurt(o);
+      const fs = fightFs(g, p), m = fxBoxMul(p, a.s < 2), x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.range * m, h = fHurt(o);
       g.fx.push({ kind: "dline", own: p.side, x0, x1, y: p.y + FT.CH * 0.4, t: 0, life: 0.25 });
-      if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && h.y0 <= p.y + FT.CH * 0.8 && h.y1 >= p.y) fightHit(g, p, o, k.dmg, k.sv, a.s < 2, a.id, k.enemyFx);
+      if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && h.y0 <= p.y + FT.CH * 0.8 * m && h.y1 >= p.y) fightHit(g, p, o, k.dmg, k.sv, a.s < 2, a.id, k.enemyFx);
+    },
+    // 突進：衝到拖曳的位置（0.25 秒），到了再判定落點附近（寬 k.width）有沒有對手
+    // a.aimD 是場地上的位移（正＝往右）：先轉向衝的方向；突進途中不會被打斷（p.armor，見 fightHit）
+    dash(g, p, o, a, k) {
+      const fs = fightFs(g, p), to = p.x + a.aimD;
+      if (Math.abs(a.aimD) > 1) p.face = a.aimD > 0 ? 1 : -1;
+      a.dur = Math.max(a.dur, a.t + FT.DASH_T + 0.15);
+      p.armor = true;
+      fightSlide(p, to, FT.DASH_T, () => {
+        p.armor = false;
+        const h = fHurt(o), w = k.width * fxBoxMul(p, true) / 2, cx = p.x + p.face * fs.bw / 2;
+        g.fx.push({ kind: "impact", x: cx, w: w * 2, t: 0, life: 0.35, own: p.side });
+        if (!o.ko && fOverlapX(cx - w, cx + w, h.x0, h.x1) && o.y < FT.AIR_SAFE * 2) fightHit(g, p, o, k.dmg, k.sv, true, a.id, k.enemyFx, k.bul);
+        fightDashExit(g, p, o);
+      });
     },
   };
   FIGHT_RELEASE.shot = FIGHT_RELEASE.line;
   FIGHT_RELEASE.self = () => {}; // 自身：效果在出招時就套用了（fightCast → fxCastSelf）
-  const fightProjBase = (g, p, a, k) => { const x = p.x + p.face * g.cfg.fs[p.side].bw / 2; return { own: p.side, x, px: x, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id, fx: k.enemyFx }; };
+  const fightProjBase = (g, p, a, k) => { const x = p.x + p.face * fightFs(g, p).bw / 2; return { own: p.side, x, px: x, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id, fx: k.enemyFx, box: fxBoxMul(p, a.s < 2) }; };
+  // 突進衝完停在對手身上：只把突進的人往前進方向推出去（撞牆就改退到另一邊），不推對手
+  function fightDashExit(g, p, o) {
+    const minD = (fightFs(g, p).bw + g.cfg.fs[o.side].bw) / 2, lim = FT.AW / 2 - fightFs(g, p).bw / 2;
+    if (Math.abs(p.x - o.x) >= minD || !fOnGround(o)) return;
+    let x = o.x + p.face * minD;
+    if (Math.abs(x) > lim) x = o.x - p.face * minD;
+    p.x = fclamp(x, -lim, lim);
+  }
   function fightRelease(g, p, o, a) {
-    const k = fightSlot(g.cfg.fs[p.side], a.s), fn = FIGHT_RELEASE[k.kind];
+    const k = fightSlot(fightFs(g, p), a.s), fn = FIGHT_RELEASE[k.kind];
     if (fn) fn(g, p, o, a, k);
     else { g.events.push({ type: "unsupported", side: p.side, kind: k.kind }); g.fx.push({ kind: "text", text: "不支援", x: p.x, y: FT.CH * 1.2, t: 0, life: 0.6 }); }
   }
@@ -323,16 +373,16 @@
       q.px = q.x; q.py = q.y; q.t += dt;
       q.x += q.vx * dt;
       if (q.kind === "lob") { q.y += q.vy * dt; q.vy -= FT.GRAV * dt; }
-      const o = g.p[1 - q.own], h = fHurt(o), r = q.kind === "lob" ? 26 : 14;
+      const o = g.p[1 - q.own], h = fHurt(o), r = (q.kind === "lob" ? 26 : 14) * (q.box || 1);
       const yLo = Math.min(q.y, q.py) - r, yHi = Math.max(q.y, q.py) + r;
       if (!o.ko && fOverlapX(q.px, q.x, h.x0 - r, h.x1 + r) && yHi > h.y0 && yLo < h.y1) {
-        fightHit(g, g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx); q.dead = true;
+        fightHit(g, q.src || g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx, q.bul); q.dead = true;
         g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 });
         continue;
       }
       if (q.kind === "lob" && q.y <= 0) {
         q.dead = true; g.fx.push({ kind: "boom", x: q.x, y: 0, t: 0, life: 0.45 });
-        if (!o.ko && fOverlapX(q.x - FT.LOB_R, q.x + FT.LOB_R, h.x0, h.x1) && o.y < FT.AIR_SAFE) fightHit(g, g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx);
+        if (!o.ko && fOverlapX(q.x - FT.LOB_R * (q.box || 1), q.x + FT.LOB_R * (q.box || 1), h.x0, h.x1) && o.y < FT.AIR_SAFE * (q.box || 1)) fightHit(g, q.src || g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx, q.bul);
       }
       if (Math.abs(q.x) > FT.AW / 2 + 80) q.dead = true; // 飛出場地
     }
@@ -346,7 +396,7 @@
       t.dead = true;
       const o = g.p[1 - t.own], h = fHurt(o);
       g.fx.push({ kind: "impact", x: t.x, w: t.w, t: 0, life: 0.45, bul: t.bul, own: t.own });
-      if (!o.ko && fOverlapX(t.x - t.w / 2, t.x + t.w / 2, h.x0, h.x1) && o.y < FT.AIR_SAFE) fightHit(g, g.p[t.own], o, t.dmg, t.sv, true, t.id, t.fx);
+      if (!o.ko && fOverlapX(t.x - t.w / 2, t.x + t.w / 2, h.x0, h.x1) && o.y < (t.air || FT.AIR_SAFE)) fightHit(g, t.src || g.p[t.own], o, t.dmg, t.sv, true, t.id, t.fx, t.bul);
     }
     g.teles = g.teles.filter((t) => !t.dead);
   }
@@ -356,10 +406,11 @@
      否則 → 傷害 ×（輔助加攻）×（攻擊增減）×（1 − 減傷）× 連段遞減，硬直、往後推，累積硬直值（同一招只算一次），
             滿了或有擊退效果就倒地；持續傷害的招式命中時只先扣一部分。最後套用效果。
      沒有傷害的招式（只有暈眩、減益等）：不扣血、不硬直，只套用效果。 */
-  function fightHit(g, a, o, dmg, sv, heavy, id, fx) {
+  function fightHit(g, a, o, dmg, sv, heavy, id, fx, bul) {
     fx = fx || [];
     if (o.inv > 0 || o.ko) { g.fx.push({ kind: "text", text: "無敵", x: o.x, y: FT.CH * 1.1, t: 0, life: 0.5 }); return; }
-    const dir = o.x >= a.x ? 1 : -1, full = dmg * (a.buff > 0 ? FT.BUFF_MUL : 1) * fxAtkMul(a);
+    // 傷害倍率：輔助加攻 ×（攻擊增減，只影響普攻）×（對手受到的技能／普攻傷害增減）
+    const dir = o.x >= a.x ? 1 : -1, full = dmg * (a.buff > 0 ? FT.BUFF_MUL : 1) * (heavy ? 1 : fxAtkMul(a)) * Math.max(0, fxTakenMul(o, heavy));
     o.quiet = 0;
     if (o.guard) {
       o.gauge -= full * FT.GAUGE_HIT; o.guardIdle = 0;
@@ -367,6 +418,13 @@
       g.events.push({ type: "guard", side: a.side });
       if (o.gauge <= 0) fightBreak(g, o);
       else { o.stun = FT.BLOCK_STUN; o.stunKind = "block"; o.kbv = dir * FT.GUARD_PUSH; }
+      return;
+    }
+    // 突進途中（霸體）：照樣扣血，但不硬直、不被推、不倒地，控制類效果也不會生效
+    if (o.armor) {
+      const v = full > 0 ? fightDamage(g, a, o, full * (1 - o.dr), { heavy }) : 0;
+      if (v) g.events.push({ type: "hit", side: a.side, heavy, dmg: v, scale: 1 });
+      fxOnHit(g, a, o, (fx || []).filter((e) => !FX_CONTROL.has(FIGHT_FX[e.c].b)), { dmg: v, full, dir, bul });
       return;
     }
     let v = 0;
@@ -382,14 +440,15 @@
       v = fightDamage(g, a, o, raw * (1 - o.dr) * scale, { pierce: fx.some((e) => FIGHT_FX[e.c].pierce), heavy, scale });
       g.events.push({ type: "hit", side: a.side, heavy, dmg: v, scale });
     } else g.events.push({ type: "fxhit", side: a.side });
-    fxOnHit(g, a, o, fx, { dmg: v, full, dir });
+    fxOnHit(g, a, o, fx, { dmg: v, full, dir, bul });
   }
   // 倒地：推遠、躺 DOWN_TIME 秒，起身後無敵（見 fightStunned）
   function fightDown(g, o, dir) {
     o.sv = 0; o.stun = FT.DOWN_TIME; o.stunKind = "down"; o.kbv = dir * FT.PUSH_DOWN; o.act = null; o.aim = [null, null, null];
     g.fx.push({ kind: "text", text: "倒地", x: o.x, y: FT.CH * 1.35, t: 0, life: 0.9 }); g.events.push({ type: "down", side: o.side });
   }
-  /* 扣血（命中、持續傷害共用）：護盾先吸收（pierce＝穿透護盾），木樁不會倒，扣到 0 就 K.O.。回傳實際扣的血。 */
+  /* 扣血（命中、持續傷害、反射共用）：護盾先吸收（pierce＝穿透護盾），木樁不會倒，扣到 0 就 K.O.。
+     之後：對手有「反射」→ 一部分傷害反彈給出手者（反彈的傷害不會再反彈）；出手者有「吸血」→ 一部分回成血。回傳實際扣的血。 */
   function fightDamage(g, a, o, amount, opt) {
     let v = amount;
     const sh = o.st.shield;
@@ -407,10 +466,58 @@
     if (g.cfg.mode === "dummy" && o.side === 1) {
       o.hp = Math.max(1, o.hp);
       const st = g.stats; st.total += v; st.hits += opt.dot ? 0 : 1; st.lastCombo = (st.lastCombo || 0) + v; st.lastDmg = v;
+      fightDamageAfter(g, a, o, v, opt);
       return v;
     }
+    fightDamageAfter(g, a, o, v, opt);
     if (o.hp <= 0) { o.hp = 0; o.ko = true; o.kbv = (o.x >= a.x ? 1 : -1) * FT.PUSH_DOWN; o.stun = 0; o.st = {}; fightAnim(o, g.cfg.f[o.side].clips.knockback || idleClip(g.cfg.f[o.side])); fightRoundEnd(g, o.side); }
     return v;
+  }
+  function fightDamageAfter(g, a, o, v, opt) {
+    if (opt.reflect || !a || a === o || a.clone) return; // 複製體不吸血、不吃反射
+    if (o.st.mirror && !opt.dot && !a.ko) fightDamage(g, o, a, v * o.st.mirror.v, { reflect: true });
+    if (a.st.vamp && !a.ko) { const h = Math.round(v * a.st.vamp.v); if (h > 0) { a.hp = Math.min(a.maxHp, a.hp + h); g.fx.push({ kind: "num", text: "+" + h, x: a.x, y: FT.CH * 1.05, t: 0, life: 0.6, heal: true }); } }
+  }
+
+  /* ---------- 複製體（召喚對手複製體） ----------
+     在施放者前面叫出對手的複製體：不會被打、不會移動、面向對手，依序放普攻、技能 1、技能 2（有的才放），放完就消失。
+     複製體用對手的數值與動作，但算施放者那一方（打的是對手）。 */
+  function fightCloneSpawn(g, src) {
+    const o = g.p[1 - src.side];
+    if (o.st.noCopy) { g.fx.push({ kind: "text", text: "複製失敗", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
+    const fs = g.cfg.fs[o.side], seq = [2, 0, 1].filter((s) => { const k = fightSlot(fs, s); return k && k.kind !== "buff" && k.kind !== "self" && k.kind !== "dash"; });
+    const x = fclamp(src.x + src.face * (fightFs(g, src).bw / 2 + fs.bw / 2 + 10), -FT.AW / 2 + fs.bw / 2, FT.AW / 2 - fs.bw / 2);
+    g.clones.push({ clone: true, side: src.side, from: o.side, fs, x, y: 0, face: o.x >= x ? 1 : -1, st: {}, buff: 0, dr: 0, seq, act: null, anim: { clip: null, t: 0 } });
+    g.fx.push({ kind: "text", text: "複製體", x, y: FT.CH * 1.25, t: 0, life: 0.8, color: "#c9a7ff" });
+  }
+  function fightClones(g) {
+    for (const c of g.clones) {
+      const o = g.p[1 - c.side];
+      c.face = o.x >= c.x ? 1 : -1; c.anim.t += FT.STEP;
+      if (!c.act) {
+        const s = c.seq.shift();
+        if (s == null) { c.dead = true; continue; }
+        const k = fightSlot(c.fs, s), gap = Math.max(0, Math.abs(o.x - c.x) - c.fs.bw / 2);
+        c.act = { s, k, t: 0, hitAt: k.hitAt, dur: k.dur, aimD: fclamp(gap, FT.AIM_MIN, k.range || gap), id: g.nextId++, done: false, clip: k.clip };
+      }
+      const a = c.act; a.t += FT.STEP;
+      if (!a.done && a.t >= a.hitAt) {
+        a.done = true;
+        const k = a.k;
+        if (k.kind === "melee") {
+          const h = fHurt(o), x0 = c.x + c.face * c.fs.bw / 2, x1 = x0 + c.face * k.reach;
+          if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && o.y < FT.CH * 0.8) fightHit(g, c, o, k.dmg, k.sv, false, a.id, null);
+        } else if (k.kind === "rect") {
+          g.teles.push({ own: c.side, src: c, x: o.x, w: k.width, t: 0, delay: fightTeleDelay(g, k, Math.min(a.aimD, k.range)), dmg: k.dmg, sv: k.sv, s: a.s, bul: k.bul, id: a.id, fx: k.enemyFx });
+        } else if (FIGHT_RELEASE[k.kind]) {
+          const before = g.projs.length;
+          FIGHT_RELEASE[k.kind](g, c, o, a, k);
+          for (const q of g.projs.slice(before)) q.src = c; // 投射物記住是複製體射的（命中時用它的數值）
+        }
+      }
+      if (a.t >= a.dur) c.act = null;
+    }
+    g.clones = g.clones.filter((c) => !c.dead);
   }
 
   /* ---------- 電腦對手 ----------

@@ -20,19 +20,23 @@
     const ch = 410; return { pvp: false, view: { y: 150, h: FH - ch - 150, ground: 110 }, ctrl: { y: FH - ch, h: ch }, hud: { y: 0, h: 150 } };
   }
   const fScale = FW / FT.AW;
+  /* 按鈕位置（自己的座標；兩人模式的上半部整個轉 180 度）
+     左手：一整條左右移動（左半邊＝◀、右半邊＝▶，left／right 是兩半的中心與大小）
+     右手：普攻（最大）、技能 1、技能 2、跳（右上角）、防（右下角）；r＝圓形按鈕半徑 */
   function fightButtons(L) {
-    const c = L.ctrl, k = c.h / 410;
+    const c = L.ctrl, k = Math.min(1, c.h / 410 + 0.2), y = (f) => c.y + c.h * f;
+    const barH = Math.min(150, c.h * 0.42), barY = y(0.58);
     return {
-      // 方向鍵：上＝跳、下＝防禦、左右＝移動（r＝按鈕半徑）
-      up: { x: 160, y: c.y + c.h * 0.55 - 92 * Math.min(1, k + 0.2), r: 46 * Math.min(1, k + 0.2) },
-      down: { x: 160, y: c.y + c.h * 0.55 + 92 * Math.min(1, k + 0.2), r: 46 * Math.min(1, k + 0.2) },
-      left: { x: 160 - 92 * Math.min(1, k + 0.2), y: c.y + c.h * 0.55, r: 46 * Math.min(1, k + 0.2) },
-      right: { x: 160 + 92 * Math.min(1, k + 0.2), y: c.y + c.h * 0.55, r: 46 * Math.min(1, k + 0.2) },
-      atk: { x: 600, y: c.y + c.h * 0.6, r: 80 * Math.min(1, k + 0.15) },
-      sk0: { x: 440, y: c.y + c.h * 0.8, r: 56 * Math.min(1, k + 0.2) },
-      sk1: { x: 455, y: c.y + c.h * 0.3, r: 56 * Math.min(1, k + 0.2) },
+      left: { x: 95, y: barY, w: 165, h: barH, r: barH / 2 },
+      right: { x: 265, y: barY, w: 165, h: barH, r: barH / 2 },
+      atk: { x: 560, y: y(0.46), r: 70 * Math.min(1, c.h / 410 + 0.15) },
+      sk0: { x: 445, y: y(0.66), r: 54 * k },
+      sk1: { x: 460, y: y(0.22), r: 54 * k },
+      up: { x: 662, y: Math.max(y(0.16), c.y + 40 * k + 6), r: 40 * k },          // 貼齊上緣，不會超出按鈕區
+      down: { x: 676, y: Math.min(y(0.8), c.y + c.h - 40 * k - 6), r: 40 * k },   // 右下角，不超出下緣
     };
   }
+  const MOVE_SPLIT = 350; // 左邊這條線以左是移動區
 
   /* ---------- 選角畫面 ---------- */
   function fightCharOptions(sel, want) {
@@ -140,7 +144,7 @@
   // 每位玩家的觸控狀態：pads＝方向鍵（手指 → 哪一顆），btn＝按住中的普攻／技能（手指位置），以及這一步要送出的「按下／放開」
   const fightCtl = () => ({ pads: new Map(), btn: {}, jump: false, atk: false, skDown: [false, false, false], skUp: [false, false, false], skCancelAt: [false, false, false] });
   const SLOT_OF = { sk0: 0, sk1: 1, atk: 2 };
-  const PADS = ["up", "down", "left", "right"];
+  const RIGHT_KEYS = ["atk", "sk0", "sk1", "up", "down"]; // 右手的按鈕（up＝跳、down＝防）
   // 普攻是「按住才出」的種類（直線投射物、拋物線）：普攻鈕改走按住／放開的流程
   const atkIsShot = (who) => !!(FG.fs[who] && FT_AIMED[FG.fs[who].atk.kind]);
   function fightLocal(ev) {
@@ -151,12 +155,8 @@
     if (L.pvp && y < FH / 2) { who = 1; x = FW - x; y = FH - y; }
     return { who, x, y };
   }
-  // 手指在哪一顆方向鍵上（左半邊才算；離按鈕稍遠也算，方便滑過去換方向）
-  function padAt(B, x, y) {
-    let best = null, bd = 1e9;
-    for (const k of PADS) { const b = B[k], d = Math.hypot(x - b.x, y - b.y); if (d < b.r * 1.6 && d < bd) { best = k; bd = d; } }
-    return best;
-  }
+  // 移動區：以兩顆按鈕中間為界，左邊＝◀、右邊＝▶（手指滑過中線就換方向）
+  function padAt(B, x) { return x < (B.left.x + B.right.x) / 2 ? "left" : "right"; }
   const fTouches = new Map();
   fcv.addEventListener("pointerdown", (ev) => {
     if (!FG.g) return;
@@ -165,14 +165,16 @@
     const { who, x, y } = fightLocal(ev), L = fightLayout(), B = fightButtons(L), c = FG.ctl[who];
     if (!c || (FG.set.mode !== "pvp" && who !== 0)) return;
     if (y < L.ctrl.y - 60) return;
-    if (x < 330) {
-      const k = padAt(B, x, y); if (!k) return;
-      c.pads.set(ev.pointerId, k); if (k === "up") c.jump = true;
-      fTouches.set(ev.pointerId, { who, kind: "pad" }); return;
+    if (x < MOVE_SPLIT) {
+      c.pads.set(ev.pointerId, padAt(B, x));
+      fTouches.set(ev.pointerId, { who, kind: "pad", move: true }); return;
     }
     let best = null, bd = 1e9;
-    for (const k of ["atk", "sk0", "sk1"]) { const b = B[k], d = Math.hypot(x - b.x, y - b.y); if (d < b.r * 1.35 && d < bd) { best = k; bd = d; } }
+    for (const k of RIGHT_KEYS) { const b = B[k], d = Math.hypot(x - b.x, y - b.y); if (d < b.r * 1.35 && d < bd) { best = k; bd = d; } }
     if (!best) return;
+    // 跳：按下那一下；防：按住期間（跟移動一樣記在 pads）
+    if (best === "up") { c.jump = true; c.pads.set(ev.pointerId, "up"); fTouches.set(ev.pointerId, { who, kind: "pad" }); return; }
+    if (best === "down") { c.pads.set(ev.pointerId, "down"); fTouches.set(ev.pointerId, { who, kind: "pad" }); return; }
     c.btn[best] = { id: ev.pointerId, x0: x, y0: y, x, y };
     if (best === "atk" && !atkIsShot(who)) c.atk = true; else c.skDown[SLOT_OF[best]] = true;
     fTouches.set(ev.pointerId, { who, kind: best });
@@ -182,19 +184,26 @@
     ev.preventDefault();
     const { x, y } = fightLocal(ev), c = FG.ctl[t.who];
     if (t.kind === "pad") {
-      const k = padAt(fightButtons(fightLayout()), x, y), prev = c.pads.get(ev.pointerId);
-      if (k && k !== prev) { c.pads.set(ev.pointerId, k); if (k === "up") c.jump = true; }
+      if (t.move) c.pads.set(ev.pointerId, padAt(fightButtons(fightLayout()), x)); // 移動區可以滑來滑去換方向；跳、防不跟著手指
       return;
     }
     const o = c.btn[t.kind]; if (o) { o.x = x; o.y = y; }
   });
+  /* 取消區：手指離開按鈕外圈（半徑 × 2.3）再放開＝取消。突進要左右拖很遠，只看上下（左右拖多遠都不取消） */
+  const CANCEL_R = 2.3;
+  function fightCancelAt(who, key, b, B) {
+    if (!b) return false;
+    const k = FG.fs[who] && fightSlot(FG.fs[who], SLOT_OF[key]);
+    if (k && k.kind === "dash") return Math.abs(b.y - B.y) > B.r * CANCEL_R;
+    return Math.hypot(b.x - B.x, b.y - B.y) > B.r * CANCEL_R;
+  }
   const fUp = (ev) => {
     const t = fTouches.get(ev.pointerId); if (!t) return;
     fTouches.delete(ev.pointerId);
     const c = FG.ctl[t.who]; if (!c) return;
     if (t.kind === "pad") { c.pads.delete(ev.pointerId); return; }
     const s = SLOT_OF[t.kind], b = c.btn[t.kind], B = fightButtons(fightLayout())[t.kind];
-    if (s < 2 || atkIsShot(t.who)) { c.skCancelAt[s] = !!b && Math.hypot(b.x - B.x, b.y - B.y) > B.r * 2.3; c.skUp[s] = true; }
+    if (s < 2 || atkIsShot(t.who)) { c.skCancelAt[s] = fightCancelAt(t.who, t.kind, b, B); c.skUp[s] = true; }
     delete c.btn[t.kind];
   };
   fcv.addEventListener("pointerup", fUp); fcv.addEventListener("pointercancel", fUp);
@@ -215,19 +224,20 @@
   function fightInput(i) {
     const c = FG.ctl[i], g = FG.g, inp = fightBlankInput();
     if (!c) return inp;
-    const flip = FG.set.mode === "pvp" && i === 1 ? -1 : 1; // 上半部的人看到的畫面是轉過來的
+    /* 兩人模式上半部的人：觸控座標已經換成他自己的座標（fightLocal），而他看到的畫面也是轉正的，
+       所以他的「左」就是場地的左，不用再反轉 */
     const held = new Set(c.pads.values());
     let lx = held.has("right") ? 1 : held.has("left") ? -1 : 0;
     if (held.has("down")) inp.guard = true;
     const m = FKEYS[i], K = FG.keys;
     if (K.has(m.l)) lx = -1; if (K.has(m.r)) lx = 1; if (K.has(m.d)) inp.guard = true;
-    inp.mx = lx * flip;
+    inp.mx = lx;
     inp.jump = c.jump; inp.atk = c.atk; inp.skDown = c.skDown.slice(); inp.skUp = c.skUp.slice(); inp.skCancel = c.skCancelAt.slice();
     const face = g ? g.p[i].face : 1, B = fightButtons(fightLayout());
     for (const [key, s] of Object.entries(SLOT_OF)) {
       const b = c.btn[key]; if (!b || (s === 2 && !atkIsShot(i))) continue;
-      inp.skAim[s] = ((b.x - b.x0) * flip / fScale) * 1.6 * face; // 往自己看到的「前方」拖＝打更遠
-      inp.skCancel[s] = Math.hypot(b.x - B[key].x, b.y - B[key].y) > B[key].r * 2.3;
+      inp.skAim[s] = ((b.x - b.x0) / fScale) * 1.6 * face; // 往自己看到的「前方」拖＝打更遠
+      inp.skCancel[s] = fightCancelAt(i, key, b, B[key]);
     }
     c.jump = false; c.atk = false; c.skDown = [false, false, false]; c.skUp = [false, false, false]; c.skCancelAt = [false, false, false];
     return inp;
@@ -302,6 +312,7 @@
     // 拖曳瞄準：綠色＝這招能打到的全部範圍，白色＝目前拖到的位置（自己的一定畫；勾選「顯示判定範圍」時也畫對手的）
     for (const i of [0, 1]) if (i === who || FG.set.showRange) fightDrawAims(c, g, i, X, Y, gy);
     // 角色
+    for (const cl of g.clones) fightDrawClone(c, g, cl, X, Y);
     for (const i of [0, 1]) fightDrawFighter(c, g, i, X, Y);
     // 拋物線落點（飛行中；畫在角色前面才不會被擋住）
     for (const q of g.projs) if (q.kind === "lob") {
@@ -367,6 +378,11 @@
         const x0 = at(a.d - k.width / 2), x1 = at(a.d + k.width / 2), lo = Math.min(x0, x1);
         c.fillStyle = a.cancel ? "rgba(120,120,120,0.18)" : "rgba(255,255,255,0.16)"; c.fillRect(lo, gy - H, Math.abs(x1 - x0), H); c.strokeRect(lo, gy - H, Math.abs(x1 - x0), H);
         fightLabel(c, "預告 " + fightTeleDelay(g, k, a.d).toFixed(2) + " 秒", at(a.d), gy - H - 16, 22, "#ffffff");
+      } else if (k.kind === "dash") { // 突進：落點是場地上的位移（左右都可以）；地上一條虛線到落點，落點畫判定範圍
+        const wx = (d) => X(me.x + d);
+        if (FG.set.showRange) green(wx(-k.range), wx(k.range), gy - 24, gy);
+        c.beginPath(); c.moveTo(X(me.x), gy - 10); c.lineTo(wx(a.d), gy - 10); c.stroke();
+        c.setLineDash([]); c.strokeRect(wx(a.d) - k.width * fScale / 2, gy - H * 0.6, k.width * fScale, H * 0.6);
       } else if (k.kind === "lob") {
         if (FG.set.showRange) green(at(FT.AIM_MIN - FT.LOB_R), at(k.range + FT.LOB_R), gy - 24, gy);
         const sx = at(0), ex = at(a.d), sy = Y(me.y + FT.CH * 0.6), top = Math.min(sy, gy) - 120;
@@ -382,6 +398,29 @@
     c.save(); c.font = canvasFont(900, size); c.textAlign = "center"; c.textBaseline = "middle"; c.setLineDash([]);
     c.lineWidth = 5; c.strokeStyle = "#1b2038"; c.strokeText(text, x, y); c.fillStyle = color; c.fillText(text, x, y); c.restore();
   }
+  /* 變形：畫成施放者那一招的投射物圖案（資料沒有「變成什麼」，用施放者的圖代替）；沒有圖就畫一團 */
+  function fightDrawPoly(c, g, p, X, Y) {
+    const ps = p.st.poly, f = g.cfg.f[ps.own], dr = ps.bul && f.bul[ps.bul.p], k = fScale * FT.CH / f.h;
+    const anim = dr && pickAnim(dr.part, ["normal", "idle", "wait", "finish"]);
+    if (anim) {
+      const n = dr.part.animations[anim].frame_count, idx = Math.floor(g.t * (dr.part.anim_rate || 24)) % Math.max(1, n);
+      c.save(); c.translate(X(p.x), Y(p.y + FT.CH * 0.3)); c.scale(k * 1.3, k * 1.3); drawPartCtx(c, dr, anim, idx, 0, 0, p.face < 0, 0); c.restore();
+    } else {
+      c.save(); c.fillStyle = "#ffd84a"; c.strokeStyle = "#1b2038"; c.lineWidth = 4;
+      c.beginPath(); c.ellipse(X(p.x), Y(p.y + FT.CH * 0.25), FT.CH * 0.28 * fScale, FT.CH * 0.22 * fScale, 0, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore();
+    }
+  }
+  // 複製體：用對手的樣子、半透明紫色調，播目前招式的動作
+  function fightDrawClone(c, g, cl, X, Y) {
+    const f = g.cfg.f[cl.from], a = cl.act;
+    let clip = a ? a.clip : null; if (!clip || !f.part.animations[clip]) clip = idleClip(f);
+    const n = f.part.animations[clip].frame_count, idx = a ? Math.min(n - 1, Math.floor(a.t / a.dur * n)) : Math.floor(cl.anim.t * (f.part.anim_rate || 24)) % Math.max(1, n);
+    const k = fScale * FT.CH / f.h;
+    c.save(); c.translate(X(cl.x), Y(cl.y)); c.scale(k, k);
+    drawFighterCtx(c, f, clip, idx, 0, cl.face < 0, false, 0.55);
+    c.restore();
+    fightLabel(c, "複製體", X(cl.x), Y(FT.CH * 1.15), 18, "#c9a7ff");
+  }
   function fightDrawFighter(c, g, i, X, Y) {
     const p = g.p[i], f = g.cfg.f[i];
     let clip = p.act ? p.act.clip : p.anim.clip;
@@ -391,14 +430,22 @@
     if (p.act) idx = Math.min(n - 1, Math.floor(p.act.t / p.act.dur * n));
     else if (p.stun > 0 || p.ko) idx = Math.min(n - 1, Math.floor(p.anim.t * (f.part.anim_rate || 24)));
     else idx = Math.floor(p.anim.t * (f.part.anim_rate || 24)) % Math.max(1, n);
-    const k = fScale * FT.CH / f.h;
+    const big = fHurtMul(p), k = fScale * FT.CH / f.h * big; // 縮放：整個角色跟著變大
     let alpha = 1;
     if (p.inv > 0 && Math.floor(p.inv * 12) % 2) alpha = 0.3;
     // 陰影
-    c.fillStyle = "rgba(0,0,0,0.25)"; c.beginPath(); c.ellipse(X(p.x), Y(0), g.cfg.fs[i].bw * fScale * 0.6, 8, 0, 0, Math.PI * 2); c.fill();
-    c.save(); c.translate(X(p.x), Y(p.y)); c.scale(k, k);
-    drawFighterCtx(c, f, clip, idx, 0, p.face < 0, p.quiet < 0.08 && !p.guard && p.stunKind !== "block", alpha);
-    c.restore();
+    c.fillStyle = "rgba(0,0,0,0.25)"; c.beginPath(); c.ellipse(X(p.x), Y(0), g.cfg.fs[i].bw * fScale * 0.6 * big, 8, 0, 0, Math.PI * 2); c.fill();
+    if (p.st.poly) fightDrawPoly(c, g, p, X, Y);
+    else {
+      c.save(); c.translate(X(p.x), Y(p.y)); c.scale(k, k);
+      drawFighterCtx(c, f, clip, idx, 0, p.face < 0, p.quiet < 0.08 && !p.guard && p.stunKind !== "block", alpha);
+      c.restore();
+    }
+    // 泡泡：包住角色的大泡泡
+    if (p.stunKind === "bubble" && p.stun > 0) {
+      c.save(); c.strokeStyle = "rgba(160,225,255,0.95)"; c.fillStyle = "rgba(160,225,255,0.22)"; c.lineWidth = 4;
+      c.beginPath(); c.arc(X(p.x), Y(p.y + FT.CH * 0.5), FT.CH * 0.62 * fScale, 0, Math.PI * 2); c.fill(); c.stroke(); c.restore();
+    }
     // 防護罩：防禦條越少越紅
     if (p.guard) {
       const r = 1 - Math.max(0, p.gauge) / FT.GAUGE_MAX;
@@ -408,7 +455,7 @@
     }
     // 護盾：藍色外框，越少越淡
     if (p.st.shield) {
-      const r = Math.min(1, p.st.shield.v / (p.maxHp * FX_NUM.SHIELD));
+      const r = Math.min(1, p.st.shield.v / (p.st.shield.max || p.st.shield.v));
       c.strokeStyle = `rgba(125,211,255,${0.35 + 0.6 * r})`; c.lineWidth = 5; c.setLineDash([]);
       c.beginPath(); c.ellipse(X(p.x), Y(p.y + FT.CH * 0.5), g.cfg.fs[i].bw * fScale * 0.95, FT.CH * fScale * 0.68, 0, 0, Math.PI * 2); c.stroke();
     }
@@ -504,17 +551,16 @@
     if (!human) { c.restore(); return; }
     const held = new Set(ctl ? ctl.pads.values() : []);
     const pad = (key, label) => {
-      const b = B[key], on = held.has(key);
+      const b = B[key], on = held.has(key), w = b.w || b.r * 2, h = b.h || b.r * 2;
       c.fillStyle = on ? "#ffd84a" : "rgba(255,255,255,0.12)"; c.strokeStyle = "rgba(255,255,255,0.55)"; c.lineWidth = 3;
-      c.beginPath(); if (c.roundRect) c.roundRect(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2, 14); else c.rect(b.x - b.r, b.y - b.r, b.r * 2, b.r * 2); c.fill(); c.stroke();
+      c.beginPath(); if (c.roundRect) c.roundRect(b.x - w / 2, b.y - h / 2, w, h, 14); else c.rect(b.x - w / 2, b.y - h / 2, w, h); c.fill(); c.stroke();
       c.fillStyle = on ? "#1b2038" : "#fff"; c.font = canvasFont(900, 26); c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(label, b.x, b.y);
     };
     pad("up", "跳"); pad("down", "防"); pad("left", "◀"); pad("right", "▶");
     { // 防禦條（破防後要回到 GAUGE_REARM 才能再防：這段期間顯示灰色）
       const r = Math.max(0, p.gauge) / FT.GAUGE_MAX, b = B.down;
-      // 放在「防」下面；兩人模式下面沒空間時改放右邊
-      const below = b.y + b.r + 22 <= L.ctrl.y + L.ctrl.h;
-      const gx = below ? b.x - 70 : b.x + b.r + 12, gy = below ? b.y + b.r + 8 : b.y - 6, gw = below ? 140 : 96;
+      // 放在「防」左邊
+      const gw = 90, gx = b.x - b.r - 10 - gw, gy = b.y - 6;
       c.fillStyle = "#333a5c"; c.fillRect(gx, gy, gw, 12);
       c.fillStyle = p.guardLock ? "#777c99" : r < 0.3 ? "#ff5060" : "#59a7ff"; c.fillRect(gx, gy, gw * r, 12);
       c.strokeStyle = "rgba(255,255,255,0.6)"; c.lineWidth = 1; c.strokeRect(gx, gy, gw, 12);
@@ -523,7 +569,10 @@
       const b = B[key], held = ctl && ctl.btn[key];
       const slot = fightSlot(fs, SLOT_OF[key]);
       if (held && slot && FT_AIMED[slot.kind]) { // 拖曳中：外圈是取消區
-        c.strokeStyle = "rgba(255,90,90,0.5)"; c.setLineDash([8, 8]); c.lineWidth = 3; c.beginPath(); c.arc(b.x, b.y, b.r * 2.3, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+        c.strokeStyle = "rgba(255,90,90,0.5)"; c.setLineDash([8, 8]); c.lineWidth = 3; c.beginPath();
+        if (slot.kind === "dash") { const dy = b.r * CANCEL_R; c.moveTo(0, b.y - dy); c.lineTo(FW, b.y - dy); c.moveTo(0, b.y + dy); c.lineTo(FW, b.y + dy); } // 突進：上下兩條線外＝取消
+        else c.arc(b.x, b.y, b.r * CANCEL_R, 0, Math.PI * 2);
+        c.stroke(); c.setLineDash([]);
       }
       c.fillStyle = off ? "#3a3f5c" : held ? "#ffd84a" : key === "atk" ? "#e0323f" : "#7c5cff";
       c.beginPath(); c.arc(b.x, b.y, b.r, 0, Math.PI * 2); c.fill();
@@ -536,7 +585,7 @@
     btn("atk", { shot: "普攻↔", lob: "普攻⌒", dline: "普攻→" }[fs.atk.kind] || "普攻", p.atkCd, fs.atk.cd, false);
     for (const s of [0, 1]) {
       const k = fs.sk[s];
-      const lab = k ? ({ rect: "定點", line: "直線", lob: "拋物", self: "自身", buff: "輔助" }[k.kind] + (s + 1)) : "—";
+      const lab = k ? ({ rect: "定點", line: "直線", lob: "拋物", self: "自身", dash: "突進", buff: "輔助" }[k.kind] + (s + 1)) : "—";
       btn("sk" + s, lab, k ? p.cd[s] : 0, k ? k.cd : 1, !k);
     }
     c.restore();

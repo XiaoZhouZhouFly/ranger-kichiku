@@ -39,6 +39,7 @@ python build.py --check    # 檢查 index.html 是否由目前的 src/ 產生（
 | `js-16-share.js` | 分享連結、專案檔（`PROJECT_VER`、`migrateProject`） |
 | `js-17-boot.js` | 回報資訊、唯讀測試介面 `window.__rk`、啟動 |
 | `js-18-fight-data.js` | 格鬥場（測試版）：**全部數值 `FT`**、招式操作方式 `AIM_MODE`、自製角色手寫數值、角色名單、官方角色換算 `fightStats` |
+| `js-18-fight-data-fx.js` | 格鬥場：**效果設定 `FX_TABLE`、最大等級 `FX_MAXLEVEL`**（由 `tools/gen_fx_table.py` 自動產生，不要手改） |
 | `js-18-fight-norm.js` | 格鬥場：**角色資料標準化（解讀層）** `normUnit`：每個欄位的狀態與出處、攻擊形式、效果清單、哪些還不支援；相容性報告 `normAll` |
 | `js-18-fight-effects.js` | 格鬥場：**技能效果模組** `FIGHT_FX`（每種效果代碼一筆：對象、套用方式）、效果數字 `FX_NUM`、狀態倒數 `fxTick` |
 | `js-18-fight-engine.js` | 格鬥場：規則引擎 `fightStep`（每步 1/60 秒、只吃按鍵＋固定亂數，同樣輸入＝同樣結果）、電腦對手 `fightAi` |
@@ -69,7 +70,8 @@ python build.py --check    # 檢查 index.html 是否由目前的 src/ 產生（
 - **對戰計算改變**：改 `js-11`／`js-12`。刻意改變結果時，用 `node tests/healthcheck.mjs <網站資料夾> --update-baseline` 重記標準答案。
 - **新增錄影的地方**：呼叫 `recordCanvas`，不要再寫一份錄影流程。
 - **格鬥場的角色解讀**（某種攻擊形式、效果怎麼判斷）：改 `js-18-fight-norm.js`；改完跑 `node tools/fight_compat.mjs <網站資料夾>` 看全部角色的相容性報告。
-- **格鬥場新增一種技能效果**：在 `js-18-fight-effects.js` 的 `FIGHT_FX` 加一筆（標準化層、相容性報告會自動把它當成已支援），數字放 `FX_NUM`；需要畫面標籤就加進 `FX_STATUS_TAG`。效果整理表見 `FIGHT_EFFECTS.md`。
+- **格鬥場改某個效果的做法或數字**：改格鬥場效果決定表（或 `tools/fight_effects_decisions.json`）→ `python tools/gen_fx_table.py` → `python build.py`。
+- **格鬥場新增一種技能效果的做法**：在 `js-18-fight-effects.js` 的 `FX_BEHAVIOR` 加一筆，並在 `tools/gen_fx_table.py` 的 `NEW_MAP` 指給對應的效果代碼（標準化層、相容性報告會自動把它當成已支援），數字放 `FX_NUM`；需要畫面標籤就加進 `FX_STATUS_TAG`。效果整理表見 `FIGHT_EFFECTS.md`。
 - **格鬥場調平衡**：只改 `js-18-fight-data.js`（`FT` 是全體規則、`FIGHT_PRESET` 是自製角色）。改規則時每個機制在 engine 裡各有一個函式（`fightGuard`、`fightHit`、`fightAims`…），
   用 `window.__rk.fightRun(spec)` 跑固定輸入確認（健檢也用它）。
 - **召喚物系列對應**（資料命名對不上時）：改 repo 根目錄的 `sync_overrides.json`，不用改 `sync.py`。

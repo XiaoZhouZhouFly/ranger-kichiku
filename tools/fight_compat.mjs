@@ -40,8 +40,8 @@ await browser.close(); server.close();
 fs.writeFileSync(path.join(OUT, "fight_compat.json"), JSON.stringify({ summary: S, rows }, null, 0));
 
 // ---------- 報告 ----------
-const FORM = { melee: "近戰", dline: "瞬間直線", line: "直線投射物", lob: "拋物線", target: "指定位置打擊", self: "自身", buff: "輔助（暫時用加攻＋回血代替）" };
-const SUP = { ok: "已支援", part: "部分支援", r2: "第二輪", b2: "第二批", none: "未規劃" };
+const FORM = { melee: "近戰", dline: "瞬間直線", line: "直線投射物", lob: "拋物線", target: "指定位置打擊", self: "自身", dash: "突進", buff: "輔助（暫時用加攻＋回血代替）" };
+const SUP = { ok: "已支援", part: "部分支援", r2: "階段 2", b2: "待決定", none: "格鬥場不用" };
 const pct = (n, d) => `${n}（${((n / Math.max(1, d)) * 100).toFixed(1)}%）`;
 const table = (head, body) => [`| ${head.join(" | ")} |`, `| ${head.map(() => "---").join(" | ")} |`, ...body.map((r) => `| ${r.join(" | ")} |`)].join("\n");
 const fit = rows.filter((x) => x.fit);

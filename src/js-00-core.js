@@ -1,4 +1,4 @@
-  const APP_VERSION = "v5.2";
+  const APP_VERSION = "v5.3";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();

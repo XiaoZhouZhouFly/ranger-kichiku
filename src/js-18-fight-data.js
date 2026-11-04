@@ -9,6 +9,9 @@
     HP_MIN: 850, HP_MAX: 1200, DR_MAX: 0.2,           // 體力、減傷的範圍（官方角色依資料排名換算）
     // 移動
     GRAV: 1700, JUMP_V: 800, AIR_CTRL: 0.85,          // 重力、起跳速度（約 188 高、滯空約 0.94 秒）、空中左右移動的比例
+    DASH_T: 0.25, BUBBLE_H: 90,                       // 突進花的時間、泡泡浮起的高度
+    DASH_K: 2, DASH_DEF: 300, DASH_MAX: 700,          // 突進距離＝效果自帶的數值（points）× 2；沒有數值用 300；最遠 700
+    PUSH_H: 0.5,                                      // 推擠：只有一方在空中時完全不推（跳得過對手）；兩人都在空中時，高度差超過身高 × 0.5 就不推
     // 出招
     ACTIVE: 4 / 60,                                   // 近戰普攻的有效判定持續時間（4 格）
     BUFFER: 0.15,                                     // 輸入緩衝：出招中、冷卻中提早按下，0.15 秒內會自動接上
@@ -47,8 +50,8 @@
 
   /* 招式的操作方式：dist＝按住拖曳決定位置（矩形、拋物線），dir＝只決定方向、點一下就放（直線、普攻投射物），
      tap＝按下就放（近戰普攻、輔助技能） */
-  const AIM_MODE = { rect: "dist", lob: "dist", line: "dir", shot: "dir", melee: "tap", dline: "tap", self: "tap", buff: "tap" };
-  const SK_KIND_LABEL = { rect: "指定位置打擊（矩形預告）", line: "直線投射物", lob: "拋物線", self: "自身", buff: "輔助（暫時用加攻＋回血代替）" };
+  const AIM_MODE = { rect: "dist", lob: "dist", dash: "dist", line: "dir", shot: "dir", melee: "tap", dline: "tap", self: "tap", buff: "tap" };
+  const SK_KIND_LABEL = { dash: "突進", rect: "指定位置打擊（矩形預告）", line: "直線投射物", lob: "拋物線", self: "自身", buff: "輔助（暫時用加攻＋回血代替）" };
   const ATK_KIND_LABEL = { melee: "近戰", dline: "瞬間直線", shot: "直線投射物", lob: "拋物線" };
 
   /* 自製角色的手寫數值（官方角色由 fightStats 從資料換算）；沒寫的欄位用換算值 */
@@ -76,6 +79,21 @@
     ["u1008h-brown", "效果：攻擊降低、穿透護盾＋擊退"],
     ["u023u-sindy", "效果：沉默、攻擊與移速增加"],
     ["u010e-clara", "效果：持續傷害"],
+    ["u010u-clara", "效果：技能抗性降低（受到技能傷害增加）"],
+    ["u1001h-brown", "效果：反射傷害、普攻傷害減少"],
+    ["u014u-cony", "效果：吸血、技能範圍增加"],
+    ["u1084h-alice", "效果：技能冷卻縮短、冷卻重置"],
+    ["u1216e-towa", "效果：突進＋暈眩"],
+    ["u1278e-er", "效果：長距離突進（600）"],
+    ["u003u-bella", "效果：交換位置"],
+    ["u1013e-brown", "效果：拉近對手"],
+    ["u1116h-claris", "效果：魅惑（左右反轉）、沉默"],
+    ["u1617h-ka", "效果：恐懼"],
+    ["u099u-alice", "效果：變形"],
+    ["u1418e-moon", "效果：泡泡"],
+    ["u1065e-cony", "效果：變大＋擊退"],
+    ["u1145h-brown", "效果：詛咒（隨機負面效果）"],
+    ["u1004e-sally", "效果：召喚對手複製體"],
   ];
 
   /* 體力、減傷依「在全部角色裡的排名」換算（折衷：有差異但不極端）。排名表第一次用到時算一次。 */
@@ -102,6 +120,11 @@
      前搖：資料裡有準備動作（*_ready）就依它算，沒有就取動作長度的 50%（見 hitFrac）。 */
   const fSpeed = (cfg) => (cfg && cfg.v > 0 ? fclamp(cfg.v * FT.SPEED_K, FT.SPEED_MIN, FT.SPEED_MAX) : FT.SPEED_DEF);
   const fLobT = (cfg) => (cfg && cfg.v > 0 ? fclamp(FT.LOB_TIME * FT.LOB_V0 / cfg.v, FT.LOB_TMIN, FT.LOB_TMAX) : FT.LOB_TIME);
+  // 突進距離：用突進效果自帶的數值（原作的衝刺距離，跟射程無關）
+  function fightDashRange(k) {
+    const e = k.fx.find((x) => FIGHT_FX[x.c] && FIGHT_FX[x.c].form === "dash");
+    return Math.min(FT.DASH_MAX, (e && e.val > 0 ? e.val : FT.DASH_DEF) * FT.DASH_K);
+  }
   function fightStats(f) {
     const N = normUnit(f.r, animNames(f.part)), pre = FIGHT_PRESET[f.r.id] || {}, rk = fightRanks(), F = N.f;
     const rg = F.rg.v, ai = F.ai.v || 1.2;
@@ -119,20 +142,20 @@
     const sk = N.sk.map((k, s) => {
       if (!k.exists || !k.clip) return null;
       const d = dur(k.clip, 0.4, 1.0), p = (pre.sk || [])[s];
-      const o = { form: k.form, kind: FORM_KIND.sk[k.form], clip: k.clip, clipSub: k.clipSub, dur: d, hitAt: d * hitFrac(f, k.clip), dmg: s ? 200 : 120, sv: s ? FT.SV_SK2 : FT.SV_SK1,
+      const o = { s, form: k.form, kind: FORM_KIND.sk[k.form], clip: k.clip, clipSub: k.clipSub, dur: d, hitAt: d * hitFrac(f, k.clip), dmg: s ? 200 : 120, sv: s ? FT.SV_SK2 : FT.SV_SK1,
         cd: s ? fclamp(k.cd.v || 12, 8, 15) : fclamp(k.cd.v || 6, 4, 10),
         name: (f.skills && f.skills[s] && f.skills[s].name) || `技能${s + 1}`, bul: k.cfg && k.cfg.p && f.bul[k.cfg.p] ? k.cfg : null,
-        range: k.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : fclamp(rg * FT.RG_CAST, FT.CAST_MIN, FT.CAST_MAX),
+        range: k.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : k.form === "dash" ? fightDashRange(k) : fclamp(rg * FT.RG_CAST, FT.CAST_MIN, FT.CAST_MAX),
         width: k.effectRange.v ? fclamp(k.effectRange.v * FT.AR_WIDTH, FT.WIDTH_MIN, FT.WIDTH_MAX) : FT.WIDTH_DEF,
         speed: fSpeed(k.cfg), lobT: fLobT(k.cfg) };
       // 效果（只放效果模組支援的；同一種代碼只留一筆）：打對手的跟著投射物／預告走，自己的在出招時套用
-      const seen = new Set(), sup = k.fx.filter((e) => FIGHT_FX[e.c] && e.c !== "DMG" && !seen.has(e.c) && seen.add(e.c)).map((e) => ({ c: e.c, dur: e.dur, val: e.val }));
+      const seen = new Set(), sup = k.fx.filter((e) => FIGHT_FX[e.c] && e.c !== "DMG" && !seen.has(e.c) && seen.add(e.c)).map((e) => ({ c: e.c, dur: e.dur, val: e.val, durLv: e.durLv || 0, lvMax: N.lvMax || 0 }));
       o.enemyFx = sup.filter((e) => FIGHT_FX[e.c].to === "enemy"); o.selfFx = sup.filter((e) => FIGHT_FX[e.c].to === "self");
       if (!k.damaging && !p) o.dmg = 0; // 沒有傷害的技能（只有減益、暈眩等）不扣血
       if (p) Object.assign(o, { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
       return o;
     });
-    // 體力、減傷（暫時沿用排名換算；第三輪改總預算制）。沒有體力資料時用中位數（N 已標成推測）
+    // 體力、減傷（暫時沿用排名換算；階段 3（數值平衡）改總預算制）。沒有體力資料時用中位數（N 已標成推測）
     const hpPct = F.hp.st === "ok" ? rk.hp(F.hp.v) : 0.5;
     return {
       hp: pre.hp || Math.round(FT.HP_MIN + (FT.HP_MAX - FT.HP_MIN) * hpPct),
@@ -152,7 +175,7 @@
       `普攻 ${ATK_KIND_LABEL[a.kind]}${a.kind === "melee" ? " " + Math.round(a.reach) + " 遠" : a.kind === "dline" || a.kind === "lob" ? " " + Math.round(a.range) + " 遠" : ""}・${a.dmg}（${fr(a, a.kind === "melee")}）`];
     fs.sk.forEach((k, s) => {
       if (!k) { parts.push(`技能${s + 1} 沒有`); return; }
-      const extra = k.kind === "rect" ? `，射程 ${Math.round(k.range)}、寬 ${Math.round(k.width)}` : k.kind === "lob" ? `，射程 ${Math.round(k.range)}` : "";
+      const extra = k.kind === "dash" ? `，距離 ${Math.round(k.range)}（左右都可以）` : k.kind === "rect" ? `，射程 ${Math.round(k.range)}、寬 ${Math.round(k.width)}` : k.kind === "lob" ? `，射程 ${Math.round(k.range)}` : "";
       parts.push(`技能${s + 1} ${SK_KIND_LABEL[k.kind]}${k.kind === "buff" || k.kind === "self" ? "" : "・" + (k.dmg || "無傷害")}${extra}・冷卻 ${k.cd.toFixed(1)} 秒（${fr(k, false)}）`);
     });
     return parts.join("｜") + "　※ 前搖／有效／後搖\n" + normSummary(fs.N);
