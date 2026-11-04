@@ -98,8 +98,10 @@
     }
   }
   const fightPool = (exclude) => S.index.filter((r) => r.id !== exclude && r.name && r.name !== r.id && fightCompatOf(r).lvl !== "unfit");
+  // 卡片 i 上的角色：線上對戰時右邊卡片＝對手選的角色
+  const fightCardId = (i) => (FG.set.mode === "online" && i === 1 ? FG.olOpp || null : FG.set["c" + i]);
   function fightPanel(i) {
-    const r = S.index.find((x) => x.id === FG.set["c" + i]);
+    const r = S.index.find((x) => x.id === fightCardId(i));
     $(`fname${i}`).textContent = r ? r.name : "未選擇";
     const comp = $(`fcomp${i}`), c = r ? fightCompatOf(r) : null;
     comp.className = "compat" + (c ? " " + c.lvl : ""); comp.textContent = c ? COMPAT_LABEL[c.lvl] : ""; comp.title = c ? c.why : "";
@@ -109,6 +111,7 @@
   function fightSetChar(i, r) {
     if (!r) return;
     FG.set["c" + i] = r.id; fightSave(); fightPanel(i); fightInfo(i);
+    if (i === 0 && FG.set.mode === "online") olMyPick(); // 線上：換角色＝重新準備
   }
   function fightSearch(i) {
     const q = $(`fq${i}`).value.trim(), box = $(`fr${i}`);
@@ -146,11 +149,12 @@
     }));
   }
   async function fightInfo(i) {
-    const id = FG.set["c" + i], box = $(`fInfo${i}`);
+    const id = fightCardId(i), box = $(`fInfo${i}`);
+    if (!id) { box.textContent = FG.set.mode === "online" ? "對手還沒選角色" : ""; return; }
     box.textContent = "讀取中…";
     try {
       const f = await fightLoad(id), fs = fightStats(f);
-      if (FG.set["c" + i] !== id) return; // 讀取途中換了角色
+      if (fightCardId(i) !== id) return; // 讀取途中換了角色
       box.textContent = "";
       const brief = document.createElement("div"); brief.className = "f-brief"; for (const t of fightBrief(fs)) { const sp = document.createElement("span"); sp.textContent = t; brief.appendChild(sp); }
       const det = document.createElement("details"), sum = document.createElement("summary"), body = document.createElement("div");
@@ -168,8 +172,14 @@
     document.querySelectorAll("#fHoldMove .chip").forEach((c) => c.setAttribute("aria-pressed", String((c.dataset.fhold === "move") === !!opt.holdMove)));
     document.querySelectorAll("#fTeleMode .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.ftele === (opt.teleMode === "sync" ? "sync" : "dist"))));
     $("fCpuBox").hidden = st.mode !== "cpu"; $("fDummyBox").hidden = st.mode !== "dummy";
-    $("fRoundBox").hidden = st.mode === "dummy";
-    $("fRight").textContent = st.mode === "pvp" ? "右方（玩家 2）" : st.mode === "cpu" ? "右方（電腦）" : "右方（木樁）";
+    const online = st.mode === "online";
+    $("fRoundBox").hidden = st.mode === "dummy" || (online && OL.code && OL.side === 1);
+    $("fOnlineBox").hidden = !online; $("fStart").hidden = online; $("fNetBox").hidden = online;
+    document.querySelector(".fighter.is-b .f-search").hidden = online; $("fSwap").hidden = online; $("fRandAll").hidden = online;
+    if (online) olUi(); else if (OL.code) olLeave();
+    for (const i of [0, 1]) { fightPanel(i); }
+    $("fRight").textContent = st.mode === "pvp" ? "右方（玩家 2）" : st.mode === "cpu" ? "右方（電腦）" : online ? "對手" : "右方（木樁）";
+    document.querySelector(".fighter.is-a .side-tag").textContent = online ? "你" : "左方（玩家 1）";
     $("fRounds").value = String(st.rounds); $("fSecs").value = String(st.secs); $("fShowRange").checked = st.showRange !== false; $("fShowBox").checked = st.showBox !== false;
   }
   async function initFight() {
@@ -178,9 +188,11 @@
     // 存檔裡的角色不在資料裡（或不適合）就換回預設
     for (const i of [0, 1]) { const r = S.index.find((x) => x.id === FG.set["c" + i]); if (!r || fightCompatOf(r).lvl === "unfit") FG.set["c" + i] = i ? "x002-orb" : "x001-cube"; }
     FG.ready = true;
+    if (FG.set.mode === "online" && !new URLSearchParams(location.search).get("room")) FG.set.mode = "dummy"; // 線上對戰要重新開房，不保留
     fightSetupUi(); for (const i of [0, 1]) { fightPanel(i); fightInfo(i); }
+    olAutoJoin();
   }
-  document.querySelectorAll("#fMode .chip").forEach((c) => (c.onclick = () => { FG.set.mode = c.dataset.fmode; fightSave(); fightSetupUi(); }));
+  document.querySelectorAll("#fMode .chip").forEach((c) => (c.onclick = () => { FG.set.mode = c.dataset.fmode; fightSave(); fightSetupUi(); fightInfo(1); }));
   document.querySelectorAll("#fLevel .chip").forEach((c) => (c.onclick = () => { FG.set.level = c.dataset.flevel; fightSave(); fightSetupUi(); }));
   document.querySelectorAll("#fDummy .chip").forEach((c) => (c.onclick = () => { FG.set.dummy = c.dataset.fdummy; fightSave(); fightSetupUi(); }));
   document.querySelectorAll("#fHoldMove .chip").forEach((c) => (c.onclick = () => { FG.set.holdMove = c.dataset.fhold === "move"; fightSave(); fightSetupUi(); }));
@@ -193,6 +205,24 @@
   document.querySelectorAll("[data-frand-side]").forEach((b) => (b.onclick = () => fightRandom(+b.dataset.frandSide)));
   $("fRandAll").onclick = () => { fightRandom(0); fightRandom(1); };
   $("fSwap").onclick = () => { [FG.set.c0, FG.set.c1] = [FG.set.c1, FG.set.c0]; fightSave(); for (const i of [0, 1]) { fightPanel(i); fightInfo(i); } };
+  // v6 測試：同步檢查
+  $("fSyncRun").onclick = async () => {
+    const out = $("fSyncOut"), btn = $("fSyncRun"); btn.disabled = true; out.textContent = "計算中…";
+    try {
+      const r = await netSyncCheck((i, n) => (out.textContent = `計算中…（${i}／${n}）`));
+      out.textContent = `代碼 ${r.code}（${r.rows.filter((x) => !x.skip).length} 場${r.rows.some((x) => x.skip) ? `，${r.rows.filter((x) => x.skip).length} 場缺角色資料略過` : ""}）`;
+    } catch (e) { out.textContent = "失敗：" + (e.message || e); }
+    btn.disabled = false;
+  };
+  // v6 測試：輸入延遲與假網路
+  const netSel = (id, key, list, fmt) => {
+    const el = $(id); el.textContent = "";
+    for (const v of list) { const o = document.createElement("option"); o.value = v; o.textContent = fmt(v); el.appendChild(o); }
+    el.value = String(FG.set[key] || 0); el.onchange = () => { FG.set[key] = +el.value; fightSave(); };
+  };
+  netSel("fNetDelay", "netDelay", NET_DELAYS, (v) => (v ? `${v} 格（約 ${Math.round(v * 1000 / 60)}ms）` : "0（不延遲）"));
+  netSel("fNetLat", "netLat", NET_LATS, (v) => (v ? `${v}ms` : "無"));
+  netSel("fNetJit", "netJit", NET_JITS, (v) => (v ? `0～${v}ms` : "無"));
   $("fShowRange").onchange = () => { FG.set.showRange = $("fShowRange").checked; fightSave(); };
   $("fShowBox").onchange = () => { FG.set.showBox = $("fShowBox").checked; fightSave(); };
   $("fRounds").onchange = () => { FG.set.rounds = Math.max(1, Math.min(9, +$("fRounds").value || 3)); fightSave(); };
@@ -209,6 +239,7 @@
       FG.g = fightNew({ f, fs: FG.fs, extra, rounds: mode === "dummy" ? 1 : FG.set.rounds, secs: mode === "dummy" ? 0 : FG.set.secs, mode, seed: newSeed(100000),
         holdMove: !!(FIGHT_FIXED_OPTS || FG.set).holdMove, teleMode: (FIGHT_FIXED_OPTS || FG.set).teleMode === "sync" ? "sync" : "dist" });
       FG.ai = [{}, {}]; FG.acc = 0; FG.ctl = [fightCtl(), fightCtl()];
+      FG.net = netNew(FG.set.netDelay || 0, FG.set.netLat || 0, FG.set.netJit || 0);
       $("fStage").hidden = false; $("fOver").hidden = true; $("fStage").classList.toggle("pvp", mode === "pvp");
       $("fExit").textContent = mode === "pvp" ? "✕" : "✕ 離開";
       document.body.classList.add("fight-on");
@@ -219,11 +250,16 @@
   }
   function fightStop() {
     FG.running = false; $("fStage").hidden = true; document.body.classList.remove("fight-on");
+    if (FG.set.mode === "online") { olAfterGame(); if (FG.net) FG.net.link = null; } // 中途離開：不再送按鍵
   }
   $("fStart").onclick = fightStart;
   $("fExit").onclick = fightStop;
   $("fBack").onclick = fightStop;
-  $("fAgain").onclick = () => { fightStart(); };
+  $("fAgain").onclick = () => {
+    if (FG.set.mode !== "online") return fightStart();
+    if (FG.olGone || !OL.link) return fightStop(); // 對手已離開：回設定頁
+    olReady(true); $("fOverText").textContent += "　（等待對手按「再一場」…）"; // 雙方都按了，房主就會喊開打
+  };
   function fightResize() {
     const vw = window.innerWidth, vh = window.innerHeight;
     FH = Math.round(fclamp(FW * vh / Math.max(1, vw), 1280, 1560));
@@ -246,7 +282,7 @@
     const r = fcv.getBoundingClientRect();
     let x = (ev.clientX - r.left) / r.width * FW, y = (ev.clientY - r.top) / r.height * FH;
     const L = fightLayout();
-    let who = 0;
+    let who = FG.set.mode === "online" ? FG.me : 0; // 線上對戰：觸控一律是自己那一方
     if (L.pvp && y < FH / 2) { who = 1; x = FW - x; y = FH - y; }
     return { who, x, y };
   }
@@ -303,20 +339,23 @@
   };
   fcv.addEventListener("pointerup", fUp); fcv.addEventListener("pointercancel", fUp);
   // 鍵盤（電腦上測試用）：左方 A D 移動、W 跳、S 防禦、J 普攻、K L 技能；兩人模式右方用方向鍵、1 2 3
+  // 鍵盤組 → 哪一方（線上對戰只用第 1 組，對到自己那一方）
+  const fightKeyMap = (fn) => (FG.set.mode === "online" ? fn(FKEYS[0], FG.me) : FKEYS.forEach(fn));
   const FKEYS = [{ l: "a", r: "d", u: "w", d: "s", atk: "j", s0: "k", s1: "l" }, { l: "arrowleft", r: "arrowright", u: "arrowup", d: "arrowdown", atk: "1", s0: "2", s1: "3" }];
   window.addEventListener("keydown", (e) => {
     if (!FG.running || e.repeat) return;
     const k = e.key.toLowerCase(); FG.keys.add(k);
-    FKEYS.forEach((m, i) => { const c = FG.ctl[i]; if (!c) return; if (k === m.atk) { if (atkIsShot(i)) c.skDown[2] = true; else c.atk = true; } if (k === m.s0) c.skDown[0] = true; if (k === m.s1) c.skDown[1] = true; if (k === m.u) c.jump = true; });
+    fightKeyMap((m, i) => { const c = FG.ctl[i]; if (!c) return; if (k === m.atk) { if (atkIsShot(i)) c.skDown[2] = true; else c.atk = true; } if (k === m.s0) c.skDown[0] = true; if (k === m.s1) c.skDown[1] = true; if (k === m.u) c.jump = true; });
   });
   window.addEventListener("keyup", (e) => {
     if (!FG.running) return;
     const k = e.key.toLowerCase(); FG.keys.delete(k);
-    FKEYS.forEach((m, i) => { const c = FG.ctl[i]; if (!c) return; if (k === m.s0) c.skUp[0] = true; if (k === m.s1) c.skUp[1] = true; if (k === m.atk && atkIsShot(i)) c.skUp[2] = true; });
+    fightKeyMap((m, i) => { const c = FG.ctl[i]; if (!c) return; if (k === m.s0) c.skUp[0] = true; if (k === m.s1) c.skUp[1] = true; if (k === m.atk && atkIsShot(i)) c.skUp[2] = true; });
   });
 
   // 觸控狀態 → 這一步的按鍵（引擎格式）
-  function fightInput(i) {
+  // i＝哪一方（也是第幾組觸控按鈕）；keys＝用哪一組鍵盤（線上對戰的右方用第 1 組 A D W S J K L）
+  function fightInput(i, keys = i) {
     const c = FG.ctl[i], g = FG.g, inp = fightBlankInput();
     if (!c) return inp;
     /* 兩人模式上半部的人：觸控座標已經換成他自己的座標（fightLocal），而他看到的畫面也是轉正的，
@@ -324,7 +363,7 @@
     const held = new Set(c.pads.values());
     let lx = held.has("right") ? 1 : held.has("left") ? -1 : 0;
     if (held.has("down")) inp.guard = true;
-    const m = FKEYS[i], K = FG.keys;
+    const m = FKEYS[keys], K = FG.keys;
     if (K.has(m.l)) lx = -1; if (K.has(m.r)) lx = 1; if (K.has(m.d)) inp.guard = true;
     inp.mx = lx;
     inp.jump = c.jump; inp.atk = c.atk; inp.skDown = c.skDown.slice(); inp.skUp = c.skUp.slice(); inp.skCancel = c.skCancelAt.slice();
@@ -345,12 +384,17 @@
     FG.acc = Math.min(FG.acc + dt, 0.25);
     while (FG.acc >= FT.STEP) {
       const mode = FG.set.mode;
-      const inputs = [FG.bots[0] ? fightAi(g, 0, FG.bots[0], FG.ai[0]) : fightInput(0),
-        mode === "pvp" ? fightInput(1) : fightAi(g, 1, mode === "dummy" ? FG.set.dummy : FG.set.level, FG.ai[1])];
+      const produce = mode === "online" ? (side) => fightInput(side, 0) : (side) => side === 0 ? (FG.bots[0] ? fightAi(g, 0, FG.bots[0], FG.ai[0]) : fightInput(0))
+        : mode === "pvp" ? fightInput(1) : fightAi(g, 1, mode === "dummy" ? FG.set.dummy : FG.set.level, FG.ai[1]);
+      // v6：經過連線層（延遲輸入＋假網路）；還在等對方的輸入就先不推進
+      const inputs = netStep(FG.net, produce, performance.now());
+      if (!inputs) { FG.acc = 0; break; }
       fightStep(g, inputs);
+      netAfterStep(FG.net, g); // 線上：定期互傳狀態雜湊
       for (const e of g.events) fightSound(e);
       FG.acc -= FT.STEP;
     }
+    if (FG.set.mode === "online") olTick(g);
     if (g.phase === "over" && $("fOver").hidden) {
       $("fOver").hidden = false;
       $("fOverText").textContent = g.winner === -1 ? "平手" : `${g.winner ? "右方" : "左方"}・${FG.f[g.winner].r.name} 獲勝（${g.wins[0]}：${g.wins[1]}）`;
@@ -377,8 +421,12 @@
       c.save(); c.translate(FW, FH); c.rotate(Math.PI); fightDrawPlayer(c, g, L, 1); c.restore();
       fightHudBar(c, g, L.hud.y, L.hud.h, true);
     } else {
-      fightDrawPlayer(c, g, L, 0);
+      fightDrawPlayer(c, g, L, FG.set.mode === "online" ? FG.me : 0);
       fightHudBar(c, g, 18, 110, false);
+      if (FG.net && (FG.net.delay || FG.net.lat || FG.net.jit)) { // v6 測試：連線層狀態
+        c.fillStyle = FG.net.waiting ? "#ffd84a" : "#9aa3c8"; c.font = canvasFont(700, 20); c.textAlign = "right"; c.textBaseline = "top";
+        c.fillText(netLabel(FG.net), FW - 20, L.view.y + 44);
+      }
       if (g.cfg.mode === "dummy") {
         const st = g.stats;
         c.fillStyle = "#cfd6ff"; c.font = canvasFont(700, 24); c.textAlign = "left"; c.textBaseline = "top";
@@ -647,7 +695,7 @@
       const sh = pvp ? 5 : 7;
       c.fillStyle = "#262b48"; c.fillRect(x0, cy + bh / 2 + 3, bw, sh);
       fill(cy + bh / 2 + 3, sh, Math.min(1, p.sv / FT.SV_MAX), p.sv / FT.SV_MAX > 0.7 ? "#ff8a3d" : "#ffd84a");
-      if (!pvp) { c.fillStyle = "#e8ebff"; c.font = canvasFont(700, 20); c.textAlign = i ? "right" : "left"; c.textBaseline = "top"; c.fillText(`${g.cfg.f[i].r.name}　${Math.max(0, Math.ceil(p.hp))}／${p.maxHp}`, i ? FW - 20 : 20, cy + bh / 2 + 14); }
+      if (!pvp) { c.fillStyle = "#e8ebff"; c.font = canvasFont(700, 20); c.textAlign = i ? "right" : "left"; c.textBaseline = "top"; c.fillText(`${g.cfg.f[i].r.name}${g.cfg.mode === "online" && i === FG.me ? "（你）" : ""}　${Math.max(0, Math.ceil(p.hp))}／${p.maxHp}`, i ? FW - 20 : 20, cy + bh / 2 + 14); }
       if (g.cfg.mode !== "dummy") for (let n = 0; n < Math.ceil(g.cfg.rounds / 2); n++) {
         c.fillStyle = n < g.wins[i] ? "#ffd84a" : "#444a6e"; c.beginPath(); c.arc(i ? FW - edge - 10 - n * 18 : edge + 10 + n * 18, cy - bh / 2 - 10, 6, 0, Math.PI * 2); c.fill();
       }
@@ -661,7 +709,7 @@
   // 按鈕：搖桿、普攻、技能（冷卻轉圈；矩形技能按住時顯示取消圈）
   function fightDrawControls(c, g, L, who) {
     const B = fightButtons(L), ctl = FG.ctl[who], p = g.p[who], fs = g.cfg.fs[who];
-    const human = FG.set.mode === "pvp" || who === 0;
+    const human = FG.set.mode === "pvp" || who === (FG.set.mode === "online" ? FG.me : 0);
     c.save();
     c.fillStyle = "#1a1e36"; c.fillRect(0, L.ctrl.y, FW, L.ctrl.h);
     if (!human) { c.restore(); return; }

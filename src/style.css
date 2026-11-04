@@ -342,3 +342,5 @@ body.fight-on { overflow: hidden; }
 .f-brief span { white-space: nowrap; }
 .f-detail summary { cursor: pointer; font-size: 12px; color: var(--muted); }
 .f-detail > div { white-space: pre-line; font-size: 12px; margin-top: 4px; }
+.online-qr { width: 160px; max-width: 60%; background: #fff; padding: 6px; border-radius: 10px; margin-top: 6px; }
+.online-qr svg { display: block; width: 100%; height: auto; }

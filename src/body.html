@@ -239,6 +239,7 @@
           <button class="chip" data-fmode="dummy" aria-pressed="true">打木樁</button>
           <button class="chip" data-fmode="cpu" aria-pressed="false">打電腦</button>
           <button class="chip" data-fmode="pvp" aria-pressed="false">兩人同機</button>
+          <button class="chip" data-fmode="online" aria-pressed="false">線上對戰</button>
         </div>
       </div>
       <div class="group" id="fDummyBox">
@@ -256,6 +257,21 @@
           <button class="chip" data-flevel="normal" aria-pressed="true">普通</button>
           <button class="chip" data-flevel="hard" aria-pressed="false">困難</button>
         </div>
+      </div>
+      <div class="group" id="fOnlineBox" hidden>
+        <span class="lbl">線上對戰（測試中）</span>
+        <div class="row">
+          <button class="btn small primary" id="fOnCreate" type="button">建立房間</button>
+          <input id="fOnCode" type="text" maxlength="4" placeholder="房號（4 碼）" autocomplete="off" style="max-width:9em;text-transform:uppercase">
+          <button class="btn small" id="fOnJoin" type="button">加入</button>
+          <button class="btn small" id="fOnLeave" type="button" hidden>離開房間</button>
+        </div>
+        <p class="hint" id="fOnStatus">建立房間後把網址傳給朋友，或請朋友輸入房號。你的角色在左邊卡片選，右邊會顯示對手選的角色。</p>
+        <div id="fOnShare" hidden>
+          <div class="row"><strong id="fOnRoom"></strong><button class="btn small" id="fOnCopy" type="button">複製網址</button><span class="hint" id="fOnCopied"></span></div>
+          <div id="fOnQr" class="online-qr"></div>
+        </div>
+        <div class="row"><button class="btn primary" id="fOnReady" type="button" hidden>準備</button><span class="hint" id="fOnReadyMsg"></span></div>
       </div>
       <div class="group fight-pick">
         <div class="fighters">
@@ -316,15 +332,26 @@
       </div>
       <label class="check"><input type="checkbox" id="fShowBox" checked> 顯示碰撞箱（黃色虛線＝受傷判定框：寬 60、一個身高，跟圖片大小無關；黃圈＝投射物的命中範圍；短線＝面朝方向；頭上＝目前狀態）</label>
       <label class="check"><input type="checkbox" id="fShowRange" checked> 顯示判定範圍（綠色＝這招最遠打得到的範圍，白色虛線＝目前拖曳的位置）</label>
+      <details class="more" id="fNetBox">
+        <summary>網路模擬（v6 線上對戰測試）</summary>
+        <p class="hint">線上對戰會把每個按鍵延後幾格才生效（兩邊同時拿到才一起動）。這裡可以先在單機上試手感：右方（電腦或第 2 位玩家）當成「網路另一頭」，照下面的網路延遲晚一點才收到；延遲格數不夠蓋過網路延遲時畫面會停一下等待（右上角會顯示卡頓次數）。</p>
+        <div class="row">
+          <label class="field">輸入延遲<select id="fNetDelay"></select></label>
+          <label class="field">假網路延遲（單程）<select id="fNetLat"></select></label>
+          <label class="field">抖動<select id="fNetJit"></select></label>
+        </div>
+        <p class="hint">同步檢查：用固定的種子跑 6 場電腦對打，算出一組代碼。在電腦、iPhone、Android 各按一次，代碼一樣＝這幾台裝置的計算結果完全相同，可以線上對戰。</p>
+        <div class="row"><button class="btn small" id="fSyncRun" type="button">同步檢查</button><span class="hint" id="fSyncOut"></span></div>
+      </details>
       <div class="row"><button class="btn primary" id="fStart" type="button">開始</button><span class="hint" id="fStartMsg"></span></div>
       <details class="more">
         <summary>操作說明</summary>
         <p class="hint">左手：左下一整條移動區，按左半邊往左、右半邊往右，手指可以滑來滑去換方向。右手：普攻、兩個技能，加上右上角的「跳」和右下角的「防」。防禦條在「防」左邊：按住每秒扣 20，擋下攻擊不扣血但扣防禦條，扣完＝破防（1 秒不能動）；放開 0.5 秒後慢慢回。<br>
-        右下：紅色＝普攻；紫色＝技能，按鈕上寫著種類。
+        右下：紅色劍＝普攻；紫色＝技能（原作的技能圖標，上緣小字是種類）；盾牌＝防、箭頭＝跳。
         定點技能（按鈕寫「定點」，矩形預告）、拋物線（含「普攻⌒」）：按住拖曳，從按下當下對手的距離開始，左右拖曳調整遠近，放開出招。「普攻→」是瞬間直線：按下就朝面向出手，前搖時有虛線預告，不會飛行。
         直線（技能與「普攻↔」）：只決定方向，點一下就朝面向射出、一直飛到場地外或打中；按住會顯示路徑，可以用 ◀ ▶ 轉向，放開才射。
-        按住任何招式時拖到外面的虛線圈再放開＝取消；按住時 ◀ ▶ 預設只轉身（可在上面切換成可移動）。
-        定點技能會先預告再打下來（預告秒數顯示在預覽旁邊）；拋物線落點會先標出來。近戰普攻與輔助技能按下就放。<br>
+        按住任何招式時拖到外面的虛線圈再放開＝取消；按住時 ◀ ▶ 可以邊走邊瞄準。
+        定點技能會先預告再打下來（預告時間跟出招前搖一樣）；拋物線落點會先標出來。近戰普攻與輔助技能按下就放。<br>
         被打中會累積硬直值（血條下的黃條），滿了就倒地，起身後 1 秒無敵（角色閃爍）；同一串連續被打，傷害會遞減（100／90／80／70／60%）。
         出招中、冷卻中提早按，0.15 秒內會自動接上。電腦上也可以用鍵盤：A D 移動、W 跳、S 防禦、J 普攻、K L 技能（兩人模式右方用方向鍵與 1 2 3）。</p>
       </details>

@@ -40,6 +40,18 @@
     // 格鬥場：一隻角色的標準化結果（相容性）、全部角色的相容性報告
     fightNorm: async (id) => { await Promise.all([ensureStats(), ensureSkillFx()]); const f = await fightLoad(id), fs = fightStats(f); return { N: fs.N, atk: fs.atk.kind, sk: fs.sk.map((k) => k && k.kind), summary: fightSummary(fs) }; },
     fightCompat: () => normAll(),
+    fightSync: () => netSyncCheck(),
+    // v6：連線層自我測試（不連網）：第 0 格按的跳，延遲 d 格後才出現；假網路延遲時會卡住等待
+    fightNetTest: (d) => {
+      const n = netNew(d, 0, 0); let k = 0; const out = [];
+      for (let f = 0; f < d + 3; f++) { const r = netStep(n, () => { const i = fightBlankInput(); i.jump = k++ === 0; i.skAim[0] = 12.6; return i; }, 0); out.push(r ? (r[0].jump ? "J" : "-") : "w"); }
+      const slow = netNew(2, 100, 0); const w = [0, 1, 2, 3].map(() => (netStep(slow, fightBlankInput, 0) ? "go" : "wait"));
+      const q = netQuant(Object.assign(fightBlankInput(), { skAim: [12.6, null, -3.4] }));
+      return { seq: out.join(""), slow: w.join(","), aim: q.skAim };
+    },                                   // v6：同步檢查（回傳代碼與每場的雜湊）
+    fightNet: () => FG.net && { delay: FG.net.delay, lat: FG.net.lat, jit: FG.net.jit, frame: FG.net.frame, stalls: FG.net.stalls, waiting: FG.net.waiting,
+      link: FG.net.link ? FG.net.link.kind : null, desync: FG.net.desync, me: FG.me, hp: FG.g ? FG.g.p.map((p) => Math.round(p.hp)) : null, phase: FG.g && FG.g.phase, q: FG.net.q.map((m) => [...m.keys()].slice(0, 6)) },
+    fightOnline: () => ({ code: OL.code, side: OL.side, status: OL.status, link: OL.link ? OL.link.kind + (OL.link.ready ? ":ready" : "") : null, room: OL.room }),
     // 對戰中技能按鈕畫的是什麼：img＝原作技能圖標、text＝文字（沒有圖標）、none＝沒有這招
     fightIcons: () => (FG.fs || []).map((x) => x ? x.sk.map((k) => (!k ? "none" : fightSkillIcon(k) ? "img" : "text")) : null),
     fightRoster: () => FIGHT_ROSTER.map(([id, note]) => { const r = S.index.find((x) => x.id === id); return r ? { id, name: `${r.name}（${note}）` } : null; }).filter(Boolean),

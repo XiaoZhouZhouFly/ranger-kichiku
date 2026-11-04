@@ -641,3 +641,34 @@
     mem.mx = inp.mx;
     return inp;
   }
+
+  /* ---------- 同步檢查用的雜湊（v6）：線上對戰兩邊要算出一樣的值 ----------
+     fightHashNums：把數字的 64 位元原始值逐一混進 FNV-1a（連最後一位小數不同都會不一樣） */
+  const FH_BUF = new DataView(new ArrayBuffer(8));
+  function fightHashNums(h, nums) {
+    for (const v of nums) {
+      FH_BUF.setFloat64(0, typeof v === "number" ? v : v ? 1 : 0);
+      for (let i = 0; i < 8; i++) { h ^= FH_BUF.getUint8(i); h = Math.imul(h, 16777619) >>> 0; }
+    }
+    return h >>> 0;
+  }
+  function fightHashStr(h, str) { for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h >>> 0; }
+  // 一格的遊戲狀態（不含畫面特效）
+  function fightStateHash(g, h = 2166136261) {
+    for (const p of g.p) {
+      h = fightHashNums(h, [p.x, p.y, p.vx || 0, p.vy || 0, p.hp, p.gauge, p.sv, p.face, p.stun || 0, p.inv || 0, p.atkCd, p.cd[0], p.cd[1], p.act ? p.act.t : -1]);
+      h = fightHashStr(h, (p.state || "") + "|" + Object.keys(p.st).sort().join(","));
+      for (const k of Object.keys(p.st).sort()) h = fightHashNums(h, [p.st[k].t, p.st[k].v || 0]);
+    }
+    for (const q of g.projs) h = fightHashNums(h, [q.x, q.y || 0, q.own]);
+    for (const t of g.teles) h = fightHashNums(h, [t.x, t.w, t.t, t.own]);
+    for (const m of g.summons) h = fightHashNums(h, [m.x, m.hp, m.side]);
+    for (const c of g.clones) h = fightHashNums(h, [c.x, c.hp || 0, c.side]);
+    return fightHashNums(h, [g.t, g.round, g.wins[0], g.wins[1]]);
+  }
+  // 換算後的角色數值（開打前兩邊比對，確定拿到同一份資料、算出同樣的數字）
+  function fightStatsHash(fs) {
+    const pick = (k) => k && [k.kind, k.dmg, k.cd, k.dur, k.hitAt, k.range, k.width, k.speed, k.lobT, k.reach, k.sv, JSON.stringify(k.enemyFx || []), JSON.stringify(k.selfFx || [])];
+    return fightHashStr(2166136261, JSON.stringify([fs.hp, fs.dr, fs.walk, fs.bw, pick(fs.atk), pick(fs.sk[0]), pick(fs.sk[1])]));
+  }
+

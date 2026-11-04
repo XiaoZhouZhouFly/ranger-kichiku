@@ -445,6 +445,49 @@ await test("格鬥場：選角（搜尋、角色庫、精選、隨機、交換�
   return `精選 ${n}，隨機 5 次都適合，技能圖標 ${JSON.stringify(icons)}`;
 });
 
+await test("格鬥場：線上對戰準備（同步檢查代碼穩定、延遲輸入、輸入整數化）", async (open) => {
+  const p = await open(); await p.goto(BASE + "?app=fight");
+  await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
+  const a = await p.evaluate(() => window.__rk.fightSync()), b = await p.evaluate(() => window.__rk.fightSync());
+  check(a.code === b.code && a.rows.every((x) => !x.skip), `同步檢查跑兩次代碼應該一樣：${a.code}／${b.code}`);
+  const t = await p.evaluate(() => [window.__rk.fightNetTest(0), window.__rk.fightNetTest(3)]);
+  check(t[0].seq.startsWith("J") && t[1].seq.startsWith("---J"), `延遲輸入：按下的跳應該在第 0／第 3 格才生效：${t[0].seq}／${t[1].seq}`);
+  check(t[1].slow.endsWith("wait"), `假網路延遲時應該停下來等：${t[1].slow}`);
+  check(t[1].aim[0] === 13 && t[1].aim[1] === null && t[1].aim[2] === -3, `拖曳距離應該取整數：${JSON.stringify(t[1].aim)}`);
+  return `同步代碼 ${a.code}，延遲 ${t[1].seq}`;
+});
+
+await test("格鬥場：線上對戰（假資料庫、兩個分頁：開房、加入、直連、準備、同步、再一場、斷線）", async (open) => {
+  const A = await open({ width: 390, height: 844 });
+  const ready = (q) => q.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
+  await A.goto(BASE + "?app=fight&fakefb=1"); await ready(A);
+  await A.click("[data-fmode='online']");
+  await A.evaluate(() => { const r = document.getElementById("fRounds"), s = document.getElementById("fSecs"); r.value = "1"; r.dispatchEvent(new Event("change")); s.value = "20"; s.dispatchEvent(new Event("change")); });
+  await A.click("#fOnCreate"); await A.waitForFunction(() => window.__rk.fightOnline().code, null, { timeout: 20000 });
+  const code = await A.evaluate(() => window.__rk.fightOnline().code);
+  const B = await A.context().newPage(); await B.goto(BASE + `?app=fight&fakefb=1&room=${code}`); await ready(B);
+  for (const q of [A, B]) await q.waitForSelector("#fOnReady:not([hidden])", { timeout: 30000 });
+  const link = await A.evaluate(() => window.__rk.fightOnline().link);
+  await A.click("#fOnReady"); await B.click("#fOnReady");
+  for (const q of [A, B]) await q.waitForFunction(() => window.__rk.fight().running && window.__rk.fightNet().frame > 60, null, { timeout: 30000 });
+  await A.keyboard.down("d"); await B.keyboard.down("a");
+  for (let k = 0; k < 15; k++) { await A.keyboard.press("j"); await B.keyboard.press("j"); await A.waitForTimeout(150); }
+  await A.keyboard.up("d"); await B.keyboard.up("a");
+  await A.waitForFunction(() => window.__rk.fightNet().phase === "over", null, { timeout: 40000 });
+  await B.waitForFunction(() => window.__rk.fightNet().phase === "over", null, { timeout: 10000 });
+  const [na, nb] = await Promise.all([A, B].map((q) => q.evaluate(() => window.__rk.fightNet())));
+  check(!na.desync && !nb.desync && JSON.stringify(na.hp) === JSON.stringify(nb.hp), `雙方結果應該一樣：A ${JSON.stringify(na.hp)}、B ${JSON.stringify(nb.hp)}、不同步 ${JSON.stringify(na.desync || nb.desync)}`);
+  // 再一場：一方先按要等另一方
+  await A.click("#fAgain"); await A.waitForTimeout(1000);
+  check((await A.evaluate(() => window.__rk.fightNet().phase)) === "over", "只有一方按「再一場」時不應該開打");
+  await B.click("#fAgain");
+  await A.waitForFunction(() => window.__rk.fightNet().phase !== "over" && window.__rk.fightNet().frame > 30, null, { timeout: 20000 });
+  await B.waitForFunction(() => window.__rk.fightNet().frame > 30, null, { timeout: 20000 });
+  // 斷線
+  await B.close(); await A.waitForFunction(() => /斷線/.test(document.getElementById("fOverText").textContent), null, { timeout: 15000 });
+  return `房號 ${code}，${link}，結果 ${JSON.stringify(na.hp)}`;
+});
+
 await test("格鬥場：角色資料解讀（攻擊形式、缺資料、不支援的標示）", async (open) => {
   const p = await open(); await p.goto(BASE + "?app=fight");
   await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });

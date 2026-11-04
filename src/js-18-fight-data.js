@@ -223,7 +223,8 @@
     const dr = pre.dr != null ? pre.dr : B.dr;
     return {
       hp: pre.hp || Math.round(BAL.EHP * B.dur * (1 - dr) * (1 - BAL.DR_TAX * dr)), dr,
-      bw: fclamp(f.w / f.h * FT.CH, 56, 120), walk: pre.walk || fclamp(B.walk, 150, 345), atk, sk, N, B: FIGHT_PRESET[f.r.id] ? null : B, // 自製角色是手寫數值，不顯示預算
+      bw: fclamp(f.w / f.h * FT.CH, 56, 120), walk: pre.walk || Math.round(fclamp(B.walk, 150, 345)), atk, sk, N, // walk 取整數：不同瀏覽器的 Math.pow 可能差一點點，線上對戰要兩邊完全一樣
+      B: FIGHT_PRESET[f.r.id] ? null : B, // 自製角色是手寫數值，不顯示預算
     };
   }
   // 招式的「前搖／有效／後搖」（格）。有效：近戰＝持續判定、投射物＝射出那一格、矩形＝預告結束那一格
