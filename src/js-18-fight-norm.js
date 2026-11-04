@@ -67,6 +67,8 @@
     for (const c of CLIPS) out[c.key] = c.names.find((n) => anims.has(n)) || null;
     return out;
   }
+  // 快速相容性判斷用：假設所有動作都有（不用下載動畫檔；選角後再用真正的動畫判斷）
+  const NORM_ALL_ANIMS = new Set(CLIPS.flatMap((c) => c.names));
   // 有影格的動畫名稱
   const animNames = (part) => new Set(Object.keys(part.animations).filter((n) => part.animations[n]?.frames?.length));
 

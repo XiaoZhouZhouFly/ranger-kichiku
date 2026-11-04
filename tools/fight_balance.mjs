@@ -36,8 +36,9 @@ const page = await browser.newPage();
 await page.goto(`http://127.0.0.1:${server.address().port}/index.html?app=fight`);
 await page.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 120000 });
 
-const ids = IDS ? IDS.split(",") : await page.evaluate(() => [...document.getElementById("fChar0").options].map((o) => o.value));
-const names = await page.evaluate(() => Object.fromEntries([...document.getElementById("fChar0").options].map((o) => [o.value, o.textContent])));
+const roster = await page.evaluate(() => window.__rk.fightRoster());
+const ids = IDS ? IDS.split(",") : roster.map((x) => x.id);
+const names = Object.fromEntries(roster.map((x) => [x.id, x.name]));
 const stats = {};
 for (const id of ids) stats[id] = await page.evaluate((x) => window.__rk.fightStatsOf(x), id);
 

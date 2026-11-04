@@ -58,10 +58,25 @@ def build_site():
             'body{margin:0}img{max-width:100%}</style>\n</head>\n<body>' + rest + '\n</body>\n</html>\n')
 
 
+def version_problem():
+    """網頁上的版本號（src/js-00-core.js 的 APP_VERSION）要跟 CHANGELOG.md 最上面的版本一樣。"""
+    import re
+    app = re.search(r'APP_VERSION = "([^"]+)"', (SRC / "js-00-core.js").read_text(encoding="utf-8"))
+    log = re.search(r"^## (v[\d.]+)", (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"), re.M)
+    if app and log and app.group(1) != log.group(1):
+        return f"版本號不一致：網頁是 {app.group(1)}、CHANGELOG 最新是 {log.group(1)}（改 src/js-00-core.js 的 APP_VERSION）"
+    return ""
+
+
 def main(argv):
     out = ROOT / "index.html"
     html = build_site()
+    vp = version_problem()
+    if vp:
+        print(vp)
     if "--check" in argv:
+        if vp:
+            return 1
         cur = out.read_text(encoding="utf-8") if out.exists() else ""
         if cur != html:
             print("index.html 跟 src/ 不一致：請在電腦上跑 python build.py 後，把新的 index.html 一起上傳。")

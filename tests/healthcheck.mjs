@@ -404,6 +404,47 @@ await test("格鬥場（測試版）：矩形、防禦條、硬直值倒地、�
   return `電腦對打 ${a.wins.join("：")}、命中 ${a.log.hits}、防禦 ${a.log.guards}、倒地 ${a.log.downs}`;
 });
 
+await test("格鬥場：選角（搜尋、角色庫、精選、隨機、交換、不適合的變灰、固定設定、按鈕圖標）", async (open) => {
+  const p = await open(); await p.goto(BASE + "?app=fight");
+  await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
+  const set = () => p.evaluate(() => window.__rk.fight().set);
+  // 搜尋 → 點卡片換上右方
+  await p.fill("#fq1", "粉琪"); await p.waitForSelector("#fr1 .r-card");
+  await p.locator("#fr1 .r-card:not(.locked)").first().click();
+  check((await set()).c1 !== "x002-orb", "搜尋後點卡片應該換上右方");
+  // 不適合的：灰色、點了不會換上、會顯示原因
+  await p.fill("#fq0", "u1063hsk"); await p.waitForSelector("#fr0 .r-card.locked");
+  const before = (await set()).c0; await p.locator("#fr0 .r-card.locked").first().click();
+  check((await set()).c0 === before, "不適合的角色點了不應該換上");
+  check(/體力/.test(await p.locator("#fr0 .r-card.locked .compat").first().textContent()), "不適合的角色點了應該顯示原因");
+  // 角色庫＋精選
+  await p.click("[data-flib-side='0']"); await p.check("#libFeat");
+  const n = await p.textContent("#libCount");
+  check(/共 3\d 隻/.test(n), `精選應該是測試名單（約 35 隻）：${n}`);
+  await p.locator("#libGrid .r-card").nth(2).click();
+  check(await p.locator("#library").isHidden(), "選好後角色庫應該收起");
+  // 隨機只抽適合的；交換
+  for (let k = 0; k < 5; k++) {
+    await p.click("#fRandAll"); const s = await set();
+    const lv = await p.evaluate((ids) => ids.map((id) => window.__rk.fightQuick(id).lvl), [s.c0, s.c1]);
+    check(!lv.includes("unfit") && s.c0 !== s.c1, `隨機應該只抽適合的兩隻不同角色：${s.c0} ${s.c1} ${lv}`);
+  }
+  const s0 = await set(); await p.click("#fSwap"); const s1 = await set();
+  check(s1.c0 === s0.c1 && s1.c1 === s0.c0, "交換應該對調左右");
+  // 藏起來的設定：畫面上看不到
+  check(await p.locator("#fOptBox").isHidden(), "按住招式、技能預告的設定應該藏起來");
+  // 重點數值一行＋詳細折疊
+  await p.evaluate(() => window.__rk.fightPick(0, "u1021e-pink")); await p.evaluate(() => window.__rk.fightPick(1, "x001-cube"));
+  await p.waitForSelector("#fInfo0 .f-brief span");
+  check(/❤/.test(await p.textContent("#fInfo0 .f-brief")) && (await p.locator("#fInfo0 details.f-detail").count()) === 1, "選角卡應該有重點數值與「詳細」");
+  // 對戰中技能按鈕：有原作圖標就畫圖標，自製角色沒有圖標就用文字
+  await p.click("#fStart"); await p.waitForFunction(() => window.__rk.fight().running);
+  await p.waitForFunction(() => { const x = window.__rk.fightIcons(); return x[0] && x[0][0] === "img"; }, null, { timeout: 15000 });
+  const icons = await p.evaluate(() => window.__rk.fightIcons());
+  check(icons[0][0] === "img" && icons[0][1] === "none" && icons[1].every((x) => x === "text"), `技能按鈕圖標：${JSON.stringify(icons)}`);
+  return `精選 ${n}，隨機 5 次都適合，技能圖標 ${JSON.stringify(icons)}`;
+});
+
 await test("格鬥場：角色資料解讀（攻擊形式、缺資料、不支援的標示）", async (open) => {
   const p = await open(); await p.goto(BASE + "?app=fight");
   await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });

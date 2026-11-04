@@ -201,7 +201,7 @@
       const d = dur(k.clip, 0.4, 1.0), p = (pre.sk || [])[s];
       const o = { s, form: k.form, kind: FORM_KIND.sk[k.form], clip: k.clip, clipSub: k.clipSub, dur: d, hitAt: d * hitFrac(f, k.clip), dmg: s ? 200 : 120, sv: s ? FT.SV_SK2 : FT.SV_SK1,
         cd: s ? fclamp(k.cd.v || 12, 8, 15) : fclamp(k.cd.v || 6, 4, 10),
-        name: (f.skills && f.skills[s] && f.skills[s].name) || `技能${s + 1}`, bul: k.cfg && k.cfg.p && f.bul[k.cfg.p] ? k.cfg : null,
+        name: (f.skills && f.skills[s] && f.skills[s].name) || `技能${s + 1}`, icon: (f.skills && f.skills[s] && f.skills[s].icon) || null, bul: k.cfg && k.cfg.p && f.bul[k.cfg.p] ? k.cfg : null,
         range: k.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : k.form === "dash" ? fightDashRange(k) : fclamp(rg * FT.RG_CAST, FT.CAST_MIN, FT.CAST_MAX),
         width: k.effectRange.v ? fclamp(k.effectRange.v * FT.AR_WIDTH, FT.WIDTH_MIN, FT.WIDTH_MAX) : FT.WIDTH_DEF,
         speed: fSpeed(k.cfg), lobT: fLobT(k.cfg) };
@@ -230,6 +230,11 @@
   function fightFrames(k, melee) {
     const active = melee ? FT.ACTIVE : FT.STEP;
     return { startup: toFrames(k.hitAt), active: toFrames(active), recovery: Math.max(0, toFrames(k.dur - k.hitAt - active)) };
+  }
+  // 選角卡上的重點（圖示一行）；其他放進「詳細」（fightSummary）
+  function fightBrief(fs) {
+    const sk = fs.sk.map((k, s) => (k ? `✦${s + 1} ${k.dmg || (k.kind === "self" || k.kind === "buff" ? "自身" : "無傷害")}・${Math.round(k.cd)} 秒` : null)).filter(Boolean);
+    return [`❤ ${fs.hp}`, `🛡 ${Math.round(fs.dr * 100)}%`, `👟 ${Math.round(fs.walk)}`, `⚔ ${fs.atk.dmg}`, ...sk]; // 每一項各自不斷行
   }
   // 選角畫面用的說明
   function fightSummary(fs) {

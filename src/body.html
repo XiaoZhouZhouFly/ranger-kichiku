@@ -38,6 +38,7 @@
         </select></label>
       </div>
       <div class="chips" id="fElem" role="group" aria-label="屬性"></div>
+      <label class="check" id="libFeatBox" hidden><input type="checkbox" id="libFeat"> 只看精選（每種攻擊形式、每種效果的代表角色）</label>
       <label class="check"><input type="checkbox" id="fNamed" checked> 只顯示有中文名稱的角色（未命名的多半是敵人或測試資料）</label>
       <div class="lib-grid" id="libGrid" role="list"></div>
       <button class="btn" id="libMore" hidden>顯示更多</button>
@@ -257,24 +258,51 @@
         </div>
       </div>
       <div class="group fight-pick">
-        <label class="field">左方（玩家 1）<select id="fChar0"></select></label>
-        <p class="hint" id="fInfo0"></p>
-        <label class="field"><span id="fRight">右方</span><select id="fChar1"></select></label>
-        <p class="hint" id="fInfo1"></p>
-        <div class="row">
-          <input id="fOther" type="search" placeholder="其他角色：輸入名稱或 id" autocomplete="off">
-          <select id="fOtherSide" aria-label="放到哪一邊"><option value="0">左方</option><option value="1">右方</option></select>
-          <button class="btn small" id="fOtherGo" type="button">換上</button>
+        <div class="fighters">
+          <div class="fighter is-a">
+            <div class="f-head">
+              <span class="side-tag">左方（玩家 1）</span>
+              <div class="f-thumb" id="fthumb0"></div>
+              <strong class="f-name"><span id="fname0">未選擇</span> <span class="compat" id="fcomp0"></span></strong>
+            </div>
+            <div class="f-search">
+              <input id="fq0" type="search" placeholder="搜尋左方角色" autocomplete="off">
+              <button class="btn small" data-flib-side="0" type="button">角色庫</button>
+              <button class="btn small rand-btn" data-frand-side="0" type="button" title="隨機左方角色">🎲</button>
+            </div>
+            <div class="results" id="fr0" role="list"></div>
+            <p class="hint" id="fInfo0"></p>
+          </div>
+          <div class="mid-tools">
+            <button class="btn small swap" id="fSwap" type="button" aria-label="左右交換">⇄</button>
+            <button class="btn small rand-btn" id="fRandAll" type="button" title="兩邊都隨機">🎲 全部隨機</button>
+          </div>
+          <div class="fighter is-b">
+            <div class="f-head">
+              <span class="side-tag" id="fRight">右方</span>
+              <div class="f-thumb" id="fthumb1"></div>
+              <strong class="f-name"><span id="fname1">未選擇</span> <span class="compat" id="fcomp1"></span></strong>
+            </div>
+            <div class="f-search">
+              <input id="fq1" type="search" placeholder="搜尋右方角色" autocomplete="off">
+              <button class="btn small" data-flib-side="1" type="button">角色庫</button>
+              <button class="btn small rand-btn" data-frand-side="1" type="button" title="隨機右方角色">🎲</button>
+            </div>
+            <div class="results" id="fr1" role="list"></div>
+            <p class="hint" id="fInfo1"></p>
+          </div>
         </div>
-        <p class="hint" id="fOtherMsg"></p>
+        <p class="hint">標示：✓ 完整／？ 有推測（有欄位用預設值）／⚠ 部分不支援（有效果用代替做法）／灰色＝不適合格鬥場（點一下看原因）。</p>
       </div>
+      <div id="fLibHolder"></div>
       <div class="group" id="fRoundBox">
         <div class="row">
           <label class="field">回合數<select id="fRounds"><option value="1">1（一回合）</option><option value="3">3（三戰兩勝）</option><option value="5">5（五戰三勝）</option></select></label>
           <label class="field">每回合秒數<input type="number" id="fSecs" min="20" max="300" step="10" value="60"></label>
         </div>
       </div>
-      <div class="group">
+      <!-- v5.5：這兩個設定先藏起來，固定用「可移動」「跟前搖同步」（js-19-fight-ui.js 的 FIGHT_FIXED_OPTS）；要開回來把 hidden 拿掉、FIGHT_FIXED_OPTS 設成 null -->
+      <div class="group" id="fOptBox" hidden>
         <span class="lbl">按住招式時 ◀ ▶</span>
         <div class="chips" id="fHoldMove">
           <button class="chip" data-fhold="turn" aria-pressed="true">只轉身</button>

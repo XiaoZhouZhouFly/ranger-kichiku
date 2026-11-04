@@ -28,7 +28,7 @@
   window.__rk = Object.freeze({
     version: APP_VERSION,
     single: () => ({ unit: S.unit && S.unit.id, anim: S.animName, mode: S.mode, segs: S.segs.length, timeline: S.timeline.length, histAt: H.at, histLen: H.list.length, playing: S.playing, ready: !!(S.part && S.atlas) && $("overlay").hidden }),
-    fight: () => { const g = FG.g; return { inited: !!FG.inited, running: FG.running, ready: !!(FG.inited && $("fChar0").options.length), set: Object.assign({}, FG.set),
+    fight: () => { const g = FG.g; return { inited: !!FG.inited, running: FG.running, ready: !!(FG.inited && FG.ready), set: Object.assign({}, FG.set),
       phase: g && g.phase, round: g && g.round, wins: g && g.wins.slice(), hp: g && g.p.map((p) => Math.round(p.hp)), x: g && g.p.map((p) => Math.round(p.x)),
       stun: g && g.p.map((p) => +p.stun.toFixed(2)), inv: g && g.p.map((p) => +p.inv.toFixed(2)), gauge: g && g.p.map((p) => +p.gauge.toFixed(1)), sv: g && g.p.map((p) => +p.sv.toFixed(1)), state: g && g.p.map((p) => p.state), aim: g && g.p.map((p) => p.aim.map((a) => (a ? Math.round(a.d) : null))),
       face: g && g.p.map((p) => p.face), teles: g ? g.teles.length : 0, projs: g ? g.projs.length : 0, stats: g && Object.assign({}, g.stats), winner: g && g.winner, t: g && +g.t.toFixed(2),
@@ -40,9 +40,14 @@
     // 格鬥場：一隻角色的標準化結果（相容性）、全部角色的相容性報告
     fightNorm: async (id) => { await Promise.all([ensureStats(), ensureSkillFx()]); const f = await fightLoad(id), fs = fightStats(f); return { N: fs.N, atk: fs.atk.kind, sk: fs.sk.map((k) => k && k.kind), summary: fightSummary(fs) }; },
     fightCompat: () => normAll(),
+    // 對戰中技能按鈕畫的是什麼：img＝原作技能圖標、text＝文字（沒有圖標）、none＝沒有這招
+    fightIcons: () => (FG.fs || []).map((x) => x ? x.sk.map((k) => (!k ? "none" : fightSkillIcon(k) ? "img" : "text")) : null),
+    fightRoster: () => FIGHT_ROSTER.map(([id, note]) => { const r = S.index.find((x) => x.id === id); return r ? { id, name: `${r.name}（${note}）` } : null; }).filter(Boolean),
+    fightQuick: (id) => { const r = S.index.find((x) => x.id === id); return r ? fightCompatOf(r) : null; },
+    fightPick: (side, id) => fightSetChar(side, S.index.find((x) => x.id === id)),
     // 數值平衡檢查：兩隻 AI 對打一場（倒下或時間到就停）→ 勝方（-1＝平手）、秒數、雙方剩餘體力比例
     fightBout: async (c0, c1, seed, secs) => {
-      const r = await window.__rk.fightRun({ c0, c1, ai: ["normal", "normal"], seed, secs: secs || 60, steps: (secs || 60) * 60, stopKo: true });
+      const r = await window.__rk.fightRun({ c0, c1, ai: ["normal", "normal"], seed, secs: secs || 60, holdMove: true, teleMode: "sync", steps: (secs || 60) * 60, stopKo: true });
       const left = r.hp.map((h, i) => h / r.maxHp[i]);
       return { win: r.log.ko ? (r.hp[0] > 0 ? 0 : 1) : left[0] === left[1] ? -1 : left[0] > left[1] ? 0 : 1, t: r.log.koT || r.t, left: left.map((x) => +x.toFixed(2)), hits: r.log.hits };
     },

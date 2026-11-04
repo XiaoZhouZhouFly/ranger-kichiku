@@ -6,7 +6,7 @@
   const FW = 720;
   let FH = 1280;
   const FG = {
-    g: null, f: [null, null], fs: [null, null], acc: 0, cache: new Map(), ai: [{}, {}], running: false,
+    g: null, f: [null, null], fs: [null, null], acc: 0, cache: new Map(), compat: new Map(), ready: false, ai: [{}, {}], running: false,
     set: Object.assign({ mode: "dummy", level: "normal", dummy: "standing", c0: "x001-cube", c1: "x002-orb", rounds: 3, secs: 60, showRange: true, showBox: true, holdMove: false, teleMode: "dist" }, store.get("fight", {})),
     ctl: [null, null], keys: new Set(),
     // 測試用：網址加 ?fightbot=normal 讓左方也由電腦操作（看電腦互打）
@@ -38,21 +38,94 @@
   }
   const MOVE_SPLIT = 350; // 左邊這條線以左是移動區
 
-  /* ---------- 選角畫面 ---------- */
-  function fightCharOptions(sel, want) {
-    sel.textContent = "";
-    const have = (id) => S.index.some((r) => r.id === id);
-    for (const [id, note] of FIGHT_ROSTER) {
-      if (!have(id)) continue;
-      const r = S.index.find((x) => x.id === id), o = document.createElement("option");
-      o.value = id; o.textContent = `${r.name}（${note}）`; sel.appendChild(o);
-    }
-    if (want && !FIGHT_ROSTER.some(([id]) => id === want) && have(want)) {
-      const r = S.index.find((x) => x.id === want), o = document.createElement("option");
-      o.value = want; o.textContent = `${r.name}（${want}）`; sel.appendChild(o);
-    }
-    sel.value = want && [...sel.options].some((o) => o.value === want) ? want : sel.options[0] ? sel.options[0].value : "";
+  /* ---------- 按鈕圖案（v5.5）：程式畫的白色線條圖；技能用原作的技能圖標 ---------- */
+  // 盾牌（防禦）：x, y＝中心，s＝大小
+  function fightIconShield(c, x, y, s, ink) {
+    c.save(); c.strokeStyle = ink; c.lineWidth = Math.max(3, s * 0.09); c.lineJoin = "round";
+    c.beginPath(); c.moveTo(x, y - s * 0.5); c.lineTo(x + s * 0.4, y - s * 0.34); c.lineTo(x + s * 0.36, y + s * 0.08);
+    c.quadraticCurveTo(x + s * 0.28, y + s * 0.36, x, y + s * 0.52); c.quadraticCurveTo(x - s * 0.28, y + s * 0.36, x - s * 0.36, y + s * 0.08);
+    c.lineTo(x - s * 0.4, y - s * 0.34); c.closePath(); c.stroke();
+    c.beginPath(); c.moveTo(x, y - s * 0.32); c.lineTo(x, y + s * 0.34); c.stroke();
+    c.restore();
   }
+  // 朝上的箭頭（跳）
+  function fightIconUp(c, x, y, s, ink) {
+    c.save(); c.strokeStyle = ink; c.lineWidth = Math.max(4, s * 0.12); c.lineCap = "round"; c.lineJoin = "round";
+    c.beginPath(); c.moveTo(x, y + s * 0.45); c.lineTo(x, y - s * 0.4); c.moveTo(x - s * 0.36, y - s * 0.06); c.lineTo(x, y - s * 0.45); c.lineTo(x + s * 0.36, y - s * 0.06); c.stroke();
+    c.restore();
+  }
+  // 劍（普攻）：斜放，劍尖朝右上
+  function fightIconSword(c, x, y, s, ink) {
+    c.save(); c.translate(x, y); c.rotate(-Math.PI / 4); c.strokeStyle = ink; c.fillStyle = ink; c.lineCap = "round"; c.lineJoin = "round";
+    c.lineWidth = Math.max(3, s * 0.06);
+    c.beginPath(); c.moveTo(-s * 0.05, -s * 0.12); c.lineTo(-s * 0.05, -s * 0.5); c.lineTo(0, -s * 0.58); c.lineTo(s * 0.05, -s * 0.5); c.lineTo(s * 0.05, -s * 0.12); c.closePath(); c.stroke(); // 劍身
+    c.beginPath(); c.moveTo(-s * 0.2, -s * 0.1); c.lineTo(s * 0.2, -s * 0.1); c.stroke();                    // 護手
+    c.beginPath(); c.moveTo(0, -s * 0.08); c.lineTo(0, s * 0.14); c.stroke();                                  // 握柄
+    c.beginPath(); c.arc(0, s * 0.18, s * 0.045, 0, Math.PI * 2); c.fill();                                    // 柄頭
+    c.restore();
+  }
+  // 技能圖標：第一次用到時開始載入，載好之前回傳 null（先畫文字）
+  const FIGHT_ICON_IMG = new Map();
+  function fightSkillIcon(k) {
+    if (!k || !k.icon) return null;
+    let im = FIGHT_ICON_IMG.get(k.icon);
+    if (!im) { im = new Image(); im.src = skillIconUrl(k.icon); FIGHT_ICON_IMG.set(k.icon, im); }
+    return im.complete && im.naturalWidth ? im : null;
+  }
+
+  /* ---------- 選角畫面（v5.5：開放全部角色，跟雙人對打一樣用搜尋／角色庫／隨機） ---------- */
+  // 介面上藏起來的設定，固定用這兩個值（舊存檔、分享連結裡的值也不採用）；要開回來：body.html 的 fOptBox 拿掉 hidden，這裡設成 null
+  const FIGHT_FIXED_OPTS = { holdMove: true, teleMode: "sync" };
+  const COMPAT_LABEL = { ok: "✓ 完整", guess: "？ 有推測", unsup: "⚠ 部分不支援", unfit: "✕ 不適合" };
+  // 快速相容性判斷（不下載動畫檔）→ { lvl: ok／guess／unsup／unfit, why }；選好角色後的說明才用真正的動畫判斷
+  function fightCompatOf(r) {
+    if (FG.compat.has(r.id)) return FG.compat.get(r.id);
+    const N = normUnit(r, NORM_ALL_ANIMS), has = (l) => N.issues.filter((x) => x.lvl === l);
+    const bad = has("unfit"), uns = has("unsupported"), gs = has("guess");
+    const c = bad.length ? { lvl: "unfit", why: bad.map((x) => x.msg).join("、") } : uns.length ? { lvl: "unsup", why: uns.map((x) => `${x.where}：${x.msg}`).join("、") }
+      : gs.length ? { lvl: "guess", why: gs.map((x) => `${x.where}：${x.msg}`).join("、") } : { lvl: "ok", why: "" };
+    FG.compat.set(r.id, c);
+    return c;
+  }
+  // 卡片加上相容性標示；不適合的變灰、點了只顯示原因
+  function fightDeco(r, card) {
+    const c = fightCompatOf(r), tag = document.createElement("div");
+    tag.className = "compat " + c.lvl; tag.textContent = COMPAT_LABEL[c.lvl]; card.appendChild(tag);
+    if (c.why) card.title = `${r.name}：${c.why}`;
+    if (c.lvl === "unfit") {
+      card.classList.add("locked");
+      card.addEventListener("click", (e) => { e.stopImmediatePropagation(); tag.textContent = c.why; }, { capture: true });
+    }
+  }
+  const fightPool = (exclude) => S.index.filter((r) => r.id !== exclude && r.name && r.name !== r.id && fightCompatOf(r).lvl !== "unfit");
+  function fightPanel(i) {
+    const r = S.index.find((x) => x.id === FG.set["c" + i]);
+    $(`fname${i}`).textContent = r ? r.name : "未選擇";
+    const comp = $(`fcomp${i}`), c = r ? fightCompatOf(r) : null;
+    comp.className = "compat" + (c ? " " + c.lvl : ""); comp.textContent = c ? COMPAT_LABEL[c.lvl] : ""; comp.title = c ? c.why : "";
+    const th = $(`fthumb${i}`); th.textContent = "";
+    if (r) { const img = document.createElement("img"); img.alt = ""; const urls = thumbUrls(r.id); let n = 0; img.onerror = () => { if (++n < urls.length) img.src = urls[n]; }; img.src = urls[0]; th.appendChild(img); }
+  }
+  function fightSetChar(i, r) {
+    if (!r) return;
+    FG.set["c" + i] = r.id; fightSave(); fightPanel(i); fightInfo(i);
+  }
+  function fightSearch(i) {
+    const q = $(`fq${i}`).value.trim(), box = $(`fr${i}`);
+    box.textContent = "";
+    if (!q) return;
+    const list = S.index.filter((r) => (r.name || "").includes(q) || r.id.includes(q.toLowerCase())).slice(0, 40);
+    if (!list.length) { box.innerHTML = `<p class="hint">找不到「${escapeHtml(q)}」。</p>`; return; }
+    for (const r of list) {
+      const card = unitCard(r, () => { fightSetChar(i, r); box.textContent = ""; $(`fq${i}`).value = ""; }, { select: false });
+      fightDeco(r, card); box.appendChild(card);
+    }
+  }
+  function fightOpenLib(i) {
+    openLibPick($("fLibHolder"), i ? "角色庫・選擇右方" : "角色庫・選擇左方", (r) => fightSetChar(i, r),
+      { deco: fightDeco, featured: true, extra: (list) => ($("libFeat").checked ? FIGHT_ROSTER.map(([id]) => S.index.find((r) => r.id === id)).filter(Boolean) : list) });
+  }
+  function fightRandom(i) { const pool = fightPool(FG.set["c" + (1 - i)]); if (pool.length) fightSetChar(i, pool[Math.floor(Math.random() * pool.length)]); }
   async function fightLoad(id) {
     if (FG.cache.has(id)) return FG.cache.get(id);
     const r = S.index.find((x) => x.id === id);
@@ -73,9 +146,17 @@
     }));
   }
   async function fightInfo(i) {
-    const id = $(`fChar${i}`).value, box = $(`fInfo${i}`);
+    const id = FG.set["c" + i], box = $(`fInfo${i}`);
     box.textContent = "讀取中…";
-    try { const f = await fightLoad(id); box.textContent = fightSummary(fightStats(f)); }
+    try {
+      const f = await fightLoad(id), fs = fightStats(f);
+      if (FG.set["c" + i] !== id) return; // 讀取途中換了角色
+      box.textContent = "";
+      const brief = document.createElement("div"); brief.className = "f-brief"; for (const t of fightBrief(fs)) { const sp = document.createElement("span"); sp.textContent = t; brief.appendChild(sp); }
+      const det = document.createElement("details"), sum = document.createElement("summary"), body = document.createElement("div");
+      det.className = "f-detail"; sum.textContent = "詳細"; body.textContent = fightSummary(fs); det.append(sum, body);
+      box.append(brief, det);
+    }
     catch (e) { box.textContent = "讀取失敗：" + (e.message || e); }
   }
   function fightSetupUi() {
@@ -83,8 +164,9 @@
     document.querySelectorAll("#fMode .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.fmode === st.mode)));
     document.querySelectorAll("#fLevel .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.flevel === st.level)));
     document.querySelectorAll("#fDummy .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.fdummy === st.dummy)));
-    document.querySelectorAll("#fHoldMove .chip").forEach((c) => c.setAttribute("aria-pressed", String((c.dataset.fhold === "move") === !!st.holdMove)));
-    document.querySelectorAll("#fTeleMode .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.ftele === (st.teleMode === "sync" ? "sync" : "dist"))));
+    const opt = FIGHT_FIXED_OPTS || st;
+    document.querySelectorAll("#fHoldMove .chip").forEach((c) => c.setAttribute("aria-pressed", String((c.dataset.fhold === "move") === !!opt.holdMove)));
+    document.querySelectorAll("#fTeleMode .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.ftele === (opt.teleMode === "sync" ? "sync" : "dist"))));
     $("fCpuBox").hidden = st.mode !== "cpu"; $("fDummyBox").hidden = st.mode !== "dummy";
     $("fRoundBox").hidden = st.mode === "dummy";
     $("fRight").textContent = st.mode === "pvp" ? "右方（玩家 2）" : st.mode === "cpu" ? "右方（電腦）" : "右方（木樁）";
@@ -93,38 +175,39 @@
   async function initFight() {
     if (FG.inited) return; FG.inited = true;
     await Promise.all([ensureStats(), ensureSkillFx()]);
-    fightCharOptions($("fChar0"), FG.set.c0); fightCharOptions($("fChar1"), FG.set.c1);
-    fightSetupUi(); fightInfo(0); fightInfo(1);
+    // 存檔裡的角色不在資料裡（或不適合）就換回預設
+    for (const i of [0, 1]) { const r = S.index.find((x) => x.id === FG.set["c" + i]); if (!r || fightCompatOf(r).lvl === "unfit") FG.set["c" + i] = i ? "x002-orb" : "x001-cube"; }
+    FG.ready = true;
+    fightSetupUi(); for (const i of [0, 1]) { fightPanel(i); fightInfo(i); }
   }
   document.querySelectorAll("#fMode .chip").forEach((c) => (c.onclick = () => { FG.set.mode = c.dataset.fmode; fightSave(); fightSetupUi(); }));
   document.querySelectorAll("#fLevel .chip").forEach((c) => (c.onclick = () => { FG.set.level = c.dataset.flevel; fightSave(); fightSetupUi(); }));
   document.querySelectorAll("#fDummy .chip").forEach((c) => (c.onclick = () => { FG.set.dummy = c.dataset.fdummy; fightSave(); fightSetupUi(); }));
   document.querySelectorAll("#fHoldMove .chip").forEach((c) => (c.onclick = () => { FG.set.holdMove = c.dataset.fhold === "move"; fightSave(); fightSetupUi(); }));
   document.querySelectorAll("#fTeleMode .chip").forEach((c) => (c.onclick = () => { FG.set.teleMode = c.dataset.ftele; fightSave(); fightSetupUi(); }));
-  for (const i of [0, 1]) $(`fChar${i}`).onchange = () => { FG.set["c" + i] = $(`fChar${i}`).value; fightSave(); fightInfo(i); };
+  for (const i of [0, 1]) {
+    let t; $(`fq${i}`).addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => fightSearch(i), 250); });
+    $(`fq${i}`).addEventListener("keydown", (e) => { if (e.key === "Enter") fightSearch(i); });
+  }
+  document.querySelectorAll("[data-flib-side]").forEach((b) => (b.onclick = () => fightOpenLib(+b.dataset.flibSide)));
+  document.querySelectorAll("[data-frand-side]").forEach((b) => (b.onclick = () => fightRandom(+b.dataset.frandSide)));
+  $("fRandAll").onclick = () => { fightRandom(0); fightRandom(1); };
+  $("fSwap").onclick = () => { [FG.set.c0, FG.set.c1] = [FG.set.c1, FG.set.c0]; fightSave(); for (const i of [0, 1]) { fightPanel(i); fightInfo(i); } };
   $("fShowRange").onchange = () => { FG.set.showRange = $("fShowRange").checked; fightSave(); };
   $("fShowBox").onchange = () => { FG.set.showBox = $("fShowBox").checked; fightSave(); };
   $("fRounds").onchange = () => { FG.set.rounds = Math.max(1, Math.min(9, +$("fRounds").value || 3)); fightSave(); };
   $("fSecs").onchange = () => { FG.set.secs = Math.max(20, Math.min(300, Math.round(+$("fSecs").value || 60))); $("fSecs").value = FG.set.secs; fightSave(); };
-  $("fOtherGo").onclick = () => {
-    const q = $("fOther").value.trim(); if (!q) return;
-    const r = S.index.find((x) => x.id === q) || S.index.find((x) => x.name === q) || S.index.find((x) => (x.name || "").includes(q));
-    if (!r) { $("fOtherMsg").textContent = `找不到「${q}」`; return; }
-    const side = +$("fOtherSide").value;
-    FG.set["c" + side] = r.id; fightSave(); fightCharOptions($(`fChar${side}`), r.id); fightInfo(side);
-    $("fOtherMsg").textContent = `已放到${side ? "右方" : "左方"}：${r.name}`;
-  };
-
   /* ---------- 開始／結束 ---------- */
   async function fightStart() {
     $("fStart").disabled = true; $("fStartMsg").textContent = "載入角色中…";
     try {
       const f = await Promise.all([fightLoad(FG.set.c0), fightLoad(FG.set.c1)]);
       FG.f = f; FG.fs = f.map(fightStats);
+      for (const x of FG.fs) for (const k of x.sk) fightSkillIcon(k); // 先開始載入技能圖標
       const extra = await fightPrepareExtra(f);
       const mode = FG.set.mode;
       FG.g = fightNew({ f, fs: FG.fs, extra, rounds: mode === "dummy" ? 1 : FG.set.rounds, secs: mode === "dummy" ? 0 : FG.set.secs, mode, seed: newSeed(100000),
-        holdMove: !!FG.set.holdMove, teleMode: FG.set.teleMode === "sync" ? "sync" : "dist" });
+        holdMove: !!(FIGHT_FIXED_OPTS || FG.set).holdMove, teleMode: (FIGHT_FIXED_OPTS || FG.set).teleMode === "sync" ? "sync" : "dist" });
       FG.ai = [{}, {}]; FG.acc = 0; FG.ctl = [fightCtl(), fightCtl()];
       $("fStage").hidden = false; $("fOver").hidden = true; $("fStage").classList.toggle("pvp", mode === "pvp");
       $("fExit").textContent = mode === "pvp" ? "✕" : "✕ 離開";
@@ -583,13 +666,17 @@
     c.fillStyle = "#1a1e36"; c.fillRect(0, L.ctrl.y, FW, L.ctrl.h);
     if (!human) { c.restore(); return; }
     const held = new Set(ctl ? ctl.pads.values() : []);
-    const pad = (key, label) => {
-      const b = B[key], on = held.has(key), w = b.w || b.r * 2, h = b.h || b.r * 2;
+    const pad = (key, label, icon) => {
+      const b = B[key], on = held.has(key), w = b.w || b.r * 2, h = b.h || b.r * 2, ink = on ? "#1b2038" : "#fff";
       c.fillStyle = on ? "#ffd84a" : "rgba(255,255,255,0.12)"; c.strokeStyle = "rgba(255,255,255,0.55)"; c.lineWidth = 3;
       c.beginPath(); if (c.roundRect) c.roundRect(b.x - w / 2, b.y - h / 2, w, h, 14); else c.rect(b.x - w / 2, b.y - h / 2, w, h); c.fill(); c.stroke();
-      c.fillStyle = on ? "#1b2038" : "#fff"; c.font = canvasFont(900, 26); c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(label, b.x, b.y);
+      c.textAlign = "center"; c.textBaseline = "middle";
+      if (!icon) { c.fillStyle = ink; c.font = canvasFont(900, 26); c.fillText(label, b.x, b.y); return; }
+      const s = Math.min(w, h);
+      icon(c, b.x, b.y + s * 0.08, s * 0.5, ink);              // 圖案（往下一點，上面留給小字）
+      c.fillStyle = ink; c.font = canvasFont(900, 14); c.fillText(label, b.x, b.y - h / 2 + 12); // 原本的字（小字）
     };
-    pad("up", "跳"); pad("down", "防"); pad("left", "◀"); pad("right", "▶");
+    pad("up", "跳", fightIconUp); pad("down", "防", fightIconShield); pad("left", "◀"); pad("right", "▶");
     { // 防禦條（破防後要回到 GAUGE_REARM 才能再防：這段期間顯示灰色）
       const r = Math.max(0, p.gauge) / FT.GAUGE_MAX, b = B.down;
       // 放在「防」左邊
@@ -609,11 +696,20 @@
       }
       c.fillStyle = off ? "#3a3f5c" : held ? "#ffd84a" : key === "atk" ? "#e0323f" : "#7c5cff";
       c.beginPath(); c.arc(b.x, b.y, b.r, 0, Math.PI * 2); c.fill();
+      // 圖案：普攻＝劍；技能＝原作的技能圖標（載入失敗或沒有就用原本的文字）
+      const img = key !== "atk" && !off && fightSkillIcon(slot);
+      const hasIcon = key === "atk" || !!img;
+      if (img) { c.save(); c.beginPath(); c.arc(b.x, b.y, b.r - 5, 0, Math.PI * 2); c.clip(); c.drawImage(img, b.x - b.r + 5, b.y - b.r + 5, (b.r - 5) * 2, (b.r - 5) * 2); c.restore(); }
+      else if (key === "atk") fightIconSword(c, b.x, b.y + b.r * 0.12, b.r * 1.1, held ? "#1b2038" : "#fff");
       if (cdLeft > 0) { c.fillStyle = "rgba(0,0,0,0.55)"; c.beginPath(); c.moveTo(b.x, b.y); c.arc(b.x, b.y, b.r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (cdLeft / cdMax)); c.closePath(); c.fill(); }
-      c.strokeStyle = "#fff"; c.lineWidth = 3; c.beginPath(); c.arc(b.x, b.y, b.r, 0, Math.PI * 2); c.stroke();
-      c.fillStyle = "#fff"; c.font = canvasFont(900, key === "atk" ? 30 : 22); c.textAlign = "center"; c.textBaseline = "middle";
-      c.fillText(label, b.x, b.y - (cdLeft > 0 ? 10 : 0));
-      if (cdLeft > 0) { c.font = canvasFont(900, 22); c.fillText(cdLeft.toFixed(1), b.x, b.y + 16); }
+      c.strokeStyle = held ? "#ffd84a" : "#fff"; c.lineWidth = held && img ? 6 : 3; c.beginPath(); c.arc(b.x, b.y, b.r, 0, Math.PI * 2); c.stroke();
+      c.textAlign = "center"; c.textBaseline = "middle";
+      if (hasIcon) { // 原本的字：小字貼在圓的上緣（有底色比較看得清楚）
+        c.font = canvasFont(900, 14); const tw = c.measureText(label).width + 12, ty = b.y - b.r + 4;
+        c.fillStyle = "rgba(20,24,48,0.8)"; c.beginPath(); if (c.roundRect) c.roundRect(b.x - tw / 2, ty - 10, tw, 20, 10); else c.rect(b.x - tw / 2, ty - 10, tw, 20); c.fill();
+        c.fillStyle = "#fff"; c.fillText(label, b.x, ty);
+      } else { c.fillStyle = "#fff"; c.font = canvasFont(900, 22); c.fillText(label, b.x, b.y - (cdLeft > 0 ? 10 : 0)); }
+      if (cdLeft > 0) { c.font = canvasFont(900, 22); c.fillStyle = "#fff"; c.lineWidth = 4; c.strokeStyle = "rgba(0,0,0,0.7)"; const ty = b.y + (hasIcon ? 6 : 16); c.strokeText(cdLeft.toFixed(1), b.x, ty); c.fillText(cdLeft.toFixed(1), b.x, ty); }
     };
     btn("atk", { shot: "普攻↔", lob: "普攻⌒", dline: "普攻→" }[fs.atk.kind] || "普攻", p.atkCd, fs.atk.cd, false);
     for (const s of [0, 1]) {

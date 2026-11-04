@@ -65,9 +65,13 @@
       c.onclick = () => { lib.elem = e; eb.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.elem === e))); resetLib(); };
       eb.appendChild(c);
     }
-    ["fStar", "fType", "fSort", "fNamed"].forEach((id) => $(id).addEventListener("change", resetLib));
+    ["fStar", "fType", "fSort", "fNamed", "libFeat"].forEach((id) => $(id).addEventListener("change", resetLib));
   }
   function libList() {
+    if (lib.extra) return lib.extra(libListBase());
+    return libListBase();
+  }
+  function libListBase() {
     const star = $("fStar").value, type = $("fType").value, sort = $("fSort").value, named = $("fNamed").checked;
     let list = S.index.filter((r) => (!star || r.star === star) && (!type || r.type === type) && (!lib.elem || r.element === lib.elem) && (!named || r.name !== r.id));
     const d = (r) => r.date || "0000";
@@ -85,7 +89,11 @@
     $("libCount").textContent = `共 ${list.length} 隻`;
     if (!list.length) { grid.innerHTML = `<p class="hint">沒有符合條件的角色，試著放寬篩選。</p>`; }
     const pick = () => document.querySelector(".stage").scrollIntoView({ behavior: "smooth", block: "center" });
-    for (const r of list.slice(0, lib.shown)) grid.appendChild(lib.onPick ? unitCard(r, (rr) => lib.onPick(rr), { select: false }) : unitCard(r, pick));
+    for (const r of list.slice(0, lib.shown)) {
+      const card = lib.onPick ? unitCard(r, (rr) => lib.onPick(rr), { select: false }) : unitCard(r, pick);
+      if (lib.deco) lib.deco(r, card); // 格鬥場：相容性標示、不適合的變灰
+      grid.appendChild(card);
+    }
     $("libMore").hidden = list.length <= lib.shown;
     $("libMore").textContent = `顯示更多（還有 ${Math.max(0, list.length - lib.shown)} 隻）`;
     store.set("lib", { star: $("fStar").value, type: $("fType").value, sort: $("fSort").value, named: $("fNamed").checked, elem: lib.elem });
@@ -95,17 +103,21 @@
     // 角色庫放回單人模式的搜尋區
     const libEl = $("library");
     if (libEl.parentElement !== $("results").parentElement) $("results").after(libEl);
-    lib.onPick = null; $("libTitle").textContent = "角色庫";
+    lib.onPick = null; lib.deco = null; lib.extra = null; $("libTitle").textContent = "角色庫"; $("libFeatBox").hidden = true;
   }
-  function openLibFor(side) {
+  // 把角色庫搬到 holder 底下當選角用。opt.deco(r, card)：加標示；opt.extra(list)：額外篩選；opt.featured：顯示「只看精選」
+  function openLibPick(holder, title, onPick, opt = {}) {
     const libEl = $("library");
-    $("dLibHolder").appendChild(libEl);
-    $("libTitle").textContent = side === 0 ? "角色庫・選擇左方" : "角色庫・選擇右方";
-    lib.onPick = (r) => { setFighter(side, r, true); libEl.hidden = true; homeLib(); };
+    homeLib();
+    holder.appendChild(libEl);
+    $("libTitle").textContent = title;
+    lib.onPick = (r) => { onPick(r); libEl.hidden = true; homeLib(); };
+    lib.deco = opt.deco || null; lib.extra = opt.extra || null; $("libFeatBox").hidden = !opt.featured;
     libEl.hidden = false;
     buildLibFilters(); resetLib();
     libEl.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+  function openLibFor(side) { openLibPick($("dLibHolder"), side === 0 ? "角色庫・選擇左方" : "角色庫・選擇右方", (r) => setFighter(side, r, true)); }
   function toggleLib(open) {
     homeLib();
     $("library").hidden = !open; $("results").hidden = open;
