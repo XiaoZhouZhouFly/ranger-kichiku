@@ -406,7 +406,7 @@ body.fight-on { overflow: hidden; }
       <div class="seg-mode app-mode" role="group" aria-label="模式">
         <button id="appSingle" aria-pressed="true">單人</button>
         <button id="appDuel" aria-pressed="false">雙人對打</button>
-        <button id="appFight" aria-pressed="false">格鬥場<small>測試</small></button>
+        <button id="appFight" aria-pressed="false">格鬥場</button>
       </div>
     </div>
     <span class="mode-note" id="modeNote">正在連線資料庫…</span>
@@ -657,7 +657,7 @@ body.fight-on { overflow: hidden; }
         </div>
       </div>
       <div class="group" id="fOnlineBox" hidden>
-        <span class="lbl">線上對戰（測試中）</span>
+        <span class="lbl">線上對戰</span>
         <ol class="ol-steps" id="fOnSteps"><li>開房／加入</li><li>選角色</li><li>準備開打</li></ol>
         <div class="row">
           <button class="btn small primary" id="fOnCreate" type="button">建立房間</button>
@@ -982,7 +982,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v7.2";
+  const APP_VERSION = "v7.3";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -5184,8 +5184,9 @@ body.fight-on { overflow: hidden; }
     fightQuick: (id) => { const r = S.index.find((x) => x.id === id); return r ? fightCompatOf(r) : null; },
     fightPick: (side, id) => fightSetChar(side, S.index.find((x) => x.id === id)),
     // 數值平衡檢查：兩隻 AI 對打一場（倒下或時間到就停）→ 勝方（-1＝平手）、秒數、雙方剩餘體力比例
+    // v7.3：明確用一般對戰模式（cpu）；之前沒指定＝打木樁模式，右方不會倒、2 秒沒挨打會回滿血，勝率不準
     fightBout: async (c0, c1, seed, secs) => {
-      const r = await window.__rk.fightRun({ c0, c1, ai: ["normal", "normal"], seed, secs: secs || 60, holdMove: true, teleMode: "sync", steps: (secs || 60) * 60, stopKo: true });
+      const r = await window.__rk.fightRun({ c0, c1, mode: "cpu", ai: ["normal", "normal"], seed, secs: secs || 60, holdMove: true, teleMode: "sync", steps: (secs || 60) * 60, stopKo: true });
       const left = r.hp.map((h, i) => h / r.maxHp[i]);
       return { win: r.log.ko ? (r.hp[0] > 0 ? 0 : 1) : left[0] === left[1] ? -1 : left[0] > left[1] ? 0 : 1, t: r.log.koT || r.t, left: left.map((x) => +x.toFixed(2)), hits: r.log.hits };
     },
@@ -5426,7 +5427,7 @@ body.fight-on { overflow: hidden; }
     GRAV: 1700, JUMP_V: 800, AIR_CTRL: 0.85,          // 重力、起跳速度（約 188 高、滯空約 0.94 秒）、空中左右移動的比例
     DASH_T: 0.25, BUBBLE_H: 90,                       // 突進花的時間、泡泡浮起的高度
     DASH_K: 2, DASH_DEF: 300, DASH_MAX: 700,          // 突進距離＝效果自帶的數值（points）× 2；沒有數值用 300；最遠 700
-    SUM_HP: 0.15, SUM_DMG: 0.4, SUM_MAX: 2,           // 召喚物：體力＝施放者最大體力 × 0.15、傷害＝施放者普攻 × 0.4、每方場上最多 2 隻
+    SUM_HP: 0.15, SUM_DMG: 0.4, SUM_MAX: 3,           // 召喚物：體力＝施放者最大體力 × 0.15、傷害＝施放者普攻 × 0.4、每方場上最多 3 隻（v7.3：所有角色一樣，技能的 sumMax 不再使用）
     SUM_WALK: 0.8, SUM_CD: 1.5, SUM_H: 0.8,           // 召喚物：移動速度 × 0.8、普攻冷卻 × 1.5、受傷框高度＝身高 × 0.8
     PUSH_H: 0.5,                                      // 推擠：只有一方在空中時完全不推（跳得過對手）；兩人都在空中時，高度差超過身高 × 0.5 就不推
     // 出招
@@ -5488,8 +5489,6 @@ body.fight-on { overflow: hidden; }
     return [`u${num}${evo === "" || evo === "e" ? "" : evo}sk-${name}`, `u${num}sk-${name}`].find(has) || null;
   }
   // 召喚技能叫出來的召喚物 id（stats.json 的 sum／sums，跟雙人對戰同一份資料）
-  // 這個技能的召喚物上限（stats.json 技能的 sumMax，v7.2；沒寫＝每方 FT.SUM_MAX 隻）
-  const fightSumMax = (id, s) => { const sk = S.stats[id] && S.stats[id].sk && S.stats[id].sk[s]; return sk && +sk.sumMax > 0 ? Math.min(6, +sk.sumMax) : FT.SUM_MAX; };
   const fightSummonIds = (id, s) => { const sk = S.stats[id] && S.stats[id].sk && S.stats[id].sk[s]; return sk ? (sk.sums || (sk.sum ? [sk.sum] : [])).map((x) => x.id) : []; };
 
   // 測試用角色：涵蓋長短手、各種投射物與輔助技能
@@ -5530,23 +5529,6 @@ body.fight-on { overflow: hidden; }
     ["u1145h-brown", "效果：詛咒（隨機負面效果）"],
     ["u1004e-sally", "效果：召喚對手複製體"],
   ];
-
-  /* 體力、減傷依「在全部角色裡的排名」換算（折衷：有差異但不極端）。排名表第一次用到時算一次。 */
-  let fightRankCache = null;
-  function fightRanks() {
-    if (fightRankCache && fightRankCache.src === S.stats) return fightRankCache;
-    const base = (v) => (Array.isArray(v) ? +v[0] : +v) || 0;
-    const hp = [], def = [];
-    for (const id in S.stats) {
-      const st = S.stats[id]; if (!st) continue;
-      const h = base(st.hp); if (h > 1) { hp.push(h); def.push(base(st.pd) + base(st.md)); }
-    }
-    hp.sort((a, b) => a - b); def.sort((a, b) => a - b);
-    // 這個值在排序陣列裡的百分位（0～1）
-    const pct = (arr, v) => { if (!arr.length) return 0.5; let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m] < v) lo = m + 1; else hi = m; } return lo / arr.length; };
-    fightRankCache = { src: S.stats, hp: (v) => pct(hp, base(v)), def: (pd, md) => pct(def, base(pd) + base(md)) };
-    return fightRankCache;
-  }
 
   /* 角色 → 格鬥場數值（只讀標準化資料 N，見 js-18-fight-norm.js）
      回傳 { hp, dr（減傷）, bw（身體寬，用在推擠）, walk, atk, sk: [技能1, 技能2], N }
@@ -6478,7 +6460,7 @@ body.fight-on { overflow: hidden; }
   /* ---------- 召喚物（v5.3.1） ----------
      用召喚物自己的動畫與普攻：自動走向對手，進到攻擊距離就普攻（不放技能）。
      體力＝施放者最大體力 × SUM_HP、傷害＝施放者普攻 × SUM_DMG；會被對手的攻擊打到，也會擋下對手的投射物；
-     不跟角色推擠。持續時間到或被打倒就消失。每方場上最多 SUM_MAX 隻。 */
+     不跟角色推擠。持續時間到或被打倒就消失。每方場上最多 SUM_MAX 隻（v7.3：所有角色一樣）。 */
   const fightSummonFs = new Map(); // 召喚物的格鬥數值（同一隻只算一次）
   function fightSummonSpawn(g, src, s, T) {
     const o = g.p[1 - src.side], ex = g.cfg.extra && g.cfg.extra[src.side];
@@ -6486,7 +6468,7 @@ body.fight-on { overflow: hidden; }
     if (o.st.noCopy) { g.fx.push({ kind: "text", text: "召喚被封鎖", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
     const ids = fightSummonIds(g.cfg.f[src.side].r.id, s).filter((id) => ex && ex.sum[id]);
     if (!ids.length) { g.fx.push({ kind: "text", text: "召喚物讀取失敗", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
-    const cfs = fightFs(g, src), casterAtk = cfs.atk.dmg, cap = fightSumMax(g.cfg.f[src.side].r.id, s), sm = cfs.sum || { hp: FT.SUM_HP, dmg: FT.SUM_DMG };
+    const cfs = fightFs(g, src), casterAtk = cfs.atk.dmg, cap = FT.SUM_MAX, sm = cfs.sum || { hp: FT.SUM_HP, dmg: FT.SUM_DMG };
     ids.forEach((id, n) => {
       if (g.summons.filter((m) => m.side === src.side).length >= cap) { g.fx.push({ kind: "text", text: "召喚物已滿", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
       const f = ex.sum[id];

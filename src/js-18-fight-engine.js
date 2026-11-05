@@ -575,7 +575,7 @@
   /* ---------- 召喚物（v5.3.1） ----------
      用召喚物自己的動畫與普攻：自動走向對手，進到攻擊距離就普攻（不放技能）。
      體力＝施放者最大體力 × SUM_HP、傷害＝施放者普攻 × SUM_DMG；會被對手的攻擊打到，也會擋下對手的投射物；
-     不跟角色推擠。持續時間到或被打倒就消失。每方場上最多 SUM_MAX 隻。 */
+     不跟角色推擠。持續時間到或被打倒就消失。每方場上最多 SUM_MAX 隻（v7.3：所有角色一樣）。 */
   const fightSummonFs = new Map(); // 召喚物的格鬥數值（同一隻只算一次）
   function fightSummonSpawn(g, src, s, T) {
     const o = g.p[1 - src.side], ex = g.cfg.extra && g.cfg.extra[src.side];
@@ -583,7 +583,7 @@
     if (o.st.noCopy) { g.fx.push({ kind: "text", text: "召喚被封鎖", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
     const ids = fightSummonIds(g.cfg.f[src.side].r.id, s).filter((id) => ex && ex.sum[id]);
     if (!ids.length) { g.fx.push({ kind: "text", text: "召喚物讀取失敗", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
-    const cfs = fightFs(g, src), casterAtk = cfs.atk.dmg, cap = fightSumMax(g.cfg.f[src.side].r.id, s), sm = cfs.sum || { hp: FT.SUM_HP, dmg: FT.SUM_DMG };
+    const cfs = fightFs(g, src), casterAtk = cfs.atk.dmg, cap = FT.SUM_MAX, sm = cfs.sum || { hp: FT.SUM_HP, dmg: FT.SUM_DMG };
     ids.forEach((id, n) => {
       if (g.summons.filter((m) => m.side === src.side).length >= cap) { g.fx.push({ kind: "text", text: "召喚物已滿", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
       const f = ex.sum[id];

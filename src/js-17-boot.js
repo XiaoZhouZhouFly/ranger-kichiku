@@ -59,8 +59,9 @@
     fightQuick: (id) => { const r = S.index.find((x) => x.id === id); return r ? fightCompatOf(r) : null; },
     fightPick: (side, id) => fightSetChar(side, S.index.find((x) => x.id === id)),
     // 數值平衡檢查：兩隻 AI 對打一場（倒下或時間到就停）→ 勝方（-1＝平手）、秒數、雙方剩餘體力比例
+    // v7.3：明確用一般對戰模式（cpu）；之前沒指定＝打木樁模式，右方不會倒、2 秒沒挨打會回滿血，勝率不準
     fightBout: async (c0, c1, seed, secs) => {
-      const r = await window.__rk.fightRun({ c0, c1, ai: ["normal", "normal"], seed, secs: secs || 60, holdMove: true, teleMode: "sync", steps: (secs || 60) * 60, stopKo: true });
+      const r = await window.__rk.fightRun({ c0, c1, mode: "cpu", ai: ["normal", "normal"], seed, secs: secs || 60, holdMove: true, teleMode: "sync", steps: (secs || 60) * 60, stopKo: true });
       const left = r.hp.map((h, i) => h / r.maxHp[i]);
       return { win: r.log.ko ? (r.hp[0] > 0 ? 0 : 1) : left[0] === left[1] ? -1 : left[0] > left[1] ? 0 : 1, t: r.log.koT || r.t, left: left.map((x) => +x.toFixed(2)), hits: r.log.hits };
     },

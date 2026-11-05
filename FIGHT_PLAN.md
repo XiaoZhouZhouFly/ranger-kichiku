@@ -210,8 +210,13 @@ js-19-fight-ui.js     觸控、畫面、回合流程
 
 ## v7.2（已交付）：自製惡搞角色富檸那
 - `stats.json` 的 `fight`（`preD`，js-18-fight-data.js `fightStats`）：自製角色手寫格鬥場數值，只蓋過有寫的欄位；`op`＝超模標示、`sum`＝召喚物體力／傷害倍率（預設 `FT.SUM_HP` 0.15、`FT.SUM_DMG` 0.4）。程式裡的 `FIGHT_PRESET` 優先。
-- 技能的 `sumMax`（`fightSumMax`）：這招的召喚物上限（預設 `FT.SUM_MAX` 2，最多 6）；`sums` 一次叫多隻。
+- 技能的 `sumMax`（`fightSumMax`）：這招的召喚物上限（預設 `FT.SUM_MAX` 2，最多 6）；`sums` 一次叫多隻。（v7.3 廢止，見下）
 - `units.json` 的 `hidden`：角色庫、搜尋、隨機、格鬥場選角都排除（召喚物用）。
 - 富檸那 `x102-funingna`：數值 hp 920、減傷 10%、走路 250、近戰普攻 48／0.5 秒、技能 1 召喚三隻（冷卻 6）、技能 2 傷害 150（冷卻 9）＋泡泡 1.5 秒＋攻擊 +60%；召喚物 hp 0.14、傷害 0.35。勝率約 62%（目標 60～65%）。
 - 芙寧娜（`x101-furina`）不放進網站，另外做成擴充包 `furina-pack.zip`（不放進 repo）：角色檔、要合併的資料片段、加入說明，以及產生工具 `tools/make_furina.py`＋零件表（富檸那也是用這支產生的：`--variant A --id x102-funingna --name 【自製】富檸那 --parody`）。
 - 健檢 33 項全過；同步檢查代碼不變（65F1-55AA）。
+
+## v7.3（已交付）：召喚上限統一、原則補充
+- 召喚物上限：所有角色一樣，每方場上最多 `FT.SUM_MAX` ＝ 3 隻；技能的 `sumMax` 與 `fightSumMax` 刪除。
+- **原則補充**（「三、設計原則」原文不變）：一般角色照公式換算、追求強度相同；選角畫面標「⚠ 超模」的自製惡搞角色（`stats.json` 的 `fight` 寫 `op: true`）是刻意的例外，不受「強度相同」限制。
+- 刪除沒用到的 `fightRanks`。拿掉介面上的「測試」字樣。

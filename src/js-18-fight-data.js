@@ -12,7 +12,7 @@
     GRAV: 1700, JUMP_V: 800, AIR_CTRL: 0.85,          // 重力、起跳速度（約 188 高、滯空約 0.94 秒）、空中左右移動的比例
     DASH_T: 0.25, BUBBLE_H: 90,                       // 突進花的時間、泡泡浮起的高度
     DASH_K: 2, DASH_DEF: 300, DASH_MAX: 700,          // 突進距離＝效果自帶的數值（points）× 2；沒有數值用 300；最遠 700
-    SUM_HP: 0.15, SUM_DMG: 0.4, SUM_MAX: 2,           // 召喚物：體力＝施放者最大體力 × 0.15、傷害＝施放者普攻 × 0.4、每方場上最多 2 隻
+    SUM_HP: 0.15, SUM_DMG: 0.4, SUM_MAX: 3,           // 召喚物：體力＝施放者最大體力 × 0.15、傷害＝施放者普攻 × 0.4、每方場上最多 3 隻（v7.3：所有角色一樣，技能的 sumMax 不再使用）
     SUM_WALK: 0.8, SUM_CD: 1.5, SUM_H: 0.8,           // 召喚物：移動速度 × 0.8、普攻冷卻 × 1.5、受傷框高度＝身高 × 0.8
     PUSH_H: 0.5,                                      // 推擠：只有一方在空中時完全不推（跳得過對手）；兩人都在空中時，高度差超過身高 × 0.5 就不推
     // 出招
@@ -74,8 +74,6 @@
     return [`u${num}${evo === "" || evo === "e" ? "" : evo}sk-${name}`, `u${num}sk-${name}`].find(has) || null;
   }
   // 召喚技能叫出來的召喚物 id（stats.json 的 sum／sums，跟雙人對戰同一份資料）
-  // 這個技能的召喚物上限（stats.json 技能的 sumMax，v7.2；沒寫＝每方 FT.SUM_MAX 隻）
-  const fightSumMax = (id, s) => { const sk = S.stats[id] && S.stats[id].sk && S.stats[id].sk[s]; return sk && +sk.sumMax > 0 ? Math.min(6, +sk.sumMax) : FT.SUM_MAX; };
   const fightSummonIds = (id, s) => { const sk = S.stats[id] && S.stats[id].sk && S.stats[id].sk[s]; return sk ? (sk.sums || (sk.sum ? [sk.sum] : [])).map((x) => x.id) : []; };
 
   // 測試用角色：涵蓋長短手、各種投射物與輔助技能
@@ -116,23 +114,6 @@
     ["u1145h-brown", "效果：詛咒（隨機負面效果）"],
     ["u1004e-sally", "效果：召喚對手複製體"],
   ];
-
-  /* 體力、減傷依「在全部角色裡的排名」換算（折衷：有差異但不極端）。排名表第一次用到時算一次。 */
-  let fightRankCache = null;
-  function fightRanks() {
-    if (fightRankCache && fightRankCache.src === S.stats) return fightRankCache;
-    const base = (v) => (Array.isArray(v) ? +v[0] : +v) || 0;
-    const hp = [], def = [];
-    for (const id in S.stats) {
-      const st = S.stats[id]; if (!st) continue;
-      const h = base(st.hp); if (h > 1) { hp.push(h); def.push(base(st.pd) + base(st.md)); }
-    }
-    hp.sort((a, b) => a - b); def.sort((a, b) => a - b);
-    // 這個值在排序陣列裡的百分位（0～1）
-    const pct = (arr, v) => { if (!arr.length) return 0.5; let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m] < v) lo = m + 1; else hi = m; } return lo / arr.length; };
-    fightRankCache = { src: S.stats, hp: (v) => pct(hp, base(v)), def: (pd, md) => pct(def, base(pd) + base(md)) };
-    return fightRankCache;
-  }
 
   /* 角色 → 格鬥場數值（只讀標準化資料 N，見 js-18-fight-norm.js）
      回傳 { hp, dr（減傷）, bw（身體寬，用在推擠）, walk, atk, sk: [技能1, 技能2], N }
