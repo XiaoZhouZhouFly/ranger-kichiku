@@ -292,6 +292,9 @@ def main():
         {"id": "x001-cube", "name": "【自製】方塊騎士", "star": "自製測試", "type": "力量型", "element": "無", "date": "2026/11/02", "custom": True},
         {"id": "x002-orb", "name": "【自製】圓圓法師", "star": "自製測試", "type": "魔法型", "element": "無", "date": "2026/11/02", "custom": True},
     ]
+    # 合併（v7.2）：清單檔是所有自製角色共用的，只換掉這兩隻，其他角色（例如富檸那）留著
+    old = json.loads((OUT / "units.json").read_text("utf-8")) if (OUT / "units.json").exists() else []
+    units = units + [r for r in old if r.get("id") not in ("x001-cube", "x002-orb")]
     (OUT / "units.json").write_text(json.dumps(units, ensure_ascii=False, indent=1), encoding="utf-8")
     skills = {
         "x001-cube": [
@@ -303,6 +306,8 @@ def main():
             {"name": "治癒光環", "rate": "20.0%", "trigger": "自己", "cooldown": "12.0秒", "desc": "展開治癒光環，恢復自己的體力。\n（自製測試角色）"},
         ],
     }
+    old = json.loads((OUT / "skills.json").read_text("utf-8")) if (OUT / "skills.json").exists() else {}
+    skills = {**old, **skills}
     (OUT / "skills.json").write_text(json.dumps(skills, ensure_ascii=False, indent=1), encoding="utf-8")
     stats = {
         "x001-cube": {"s": "自製測試", "hp": [32000.0, 3200.0, 3200.0], "pa": [5200.0, 520.0, 0.0], "ma": [0.0, 0.0, 0.0], "pd": [3000.0, 300.0, 300.0], "md": [1500.0, 150.0, 150.0],
@@ -312,6 +317,8 @@ def main():
                      "cr": 5.0, "cd": 100.0, "hit": 0.0, "dg": 0.0, "sh": 0.0, "sdg": 10.0, "ai": 2.2, "mv": 80.0, "rg": 380.0, "sr": 10.0,
                      "sk": [{"r": 35.0, "cd": 5.0, "e": [{"t": "hit", "c": 2.4, "b": "atk", "d": 0.0}]}, {"r": 20.0, "cd": 12.0, "e": []}]},
     }
+    old = json.loads((OUT / "stats.json").read_text("utf-8")) if (OUT / "stats.json").exists() else {}
+    stats = {**old, **stats}
     (OUT / "stats.json").write_text(json.dumps(stats, ensure_ascii=False, indent=1), encoding="utf-8")
     print("done:", sorted(str(p.relative_to(ROOT)) for p in OUT.rglob("*") if p.is_file()))
 

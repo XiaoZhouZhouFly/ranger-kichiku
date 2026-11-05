@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v7.1-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v7.1"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v7.2-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v7.2"></a>
 </p>
 
 <p align="center">
@@ -49,8 +49,9 @@
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v7.1）
+## 最近更新（v7.2）
 
+- 格鬥場新增自製惡搞角色「富檸那」：一次召喚三隻沙龍成員、泡泡困住對手，是刻意做強的「超模」角色。自製角色的格鬥場數值也可以直接寫在資料檔。
 - 為角色編輯器做準備：自製角色可以自帶投射物設定與技能圖標；新增角色檔案格式說明（[CHARACTER_FORMAT.md](CHARACTER_FORMAT.md)）。
 - 格鬥場大改版：手機轉橫就是寬螢幕的格鬥畫面；地圖變大、鏡頭跟著角色移動縮放；新增衝刺（方向鍵快速點兩下並按住）。
 - 格鬥場：達文西莎莉這類「將敵人召喚為隊友」改成技能打中才會叫出複製體。

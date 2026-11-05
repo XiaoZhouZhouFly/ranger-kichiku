@@ -207,3 +207,11 @@ js-19-fight-ui.js     觸控、畫面、回合流程
 - 新文件 `CHARACTER_FORMAT.md`：角色檔案格式完整說明（給另一個聊天室做角色編輯器用）。
 - 開發包 `character-editor-kit.zip`（不放進 repo）：格式說明＋FIGHT_BALANCE＋FIGHT_EFFECTS＋10 個範例角色（自製 2、官方 8，含召喚物與變形外觀）。
 - 打包時寫進 CHANGELOG v7.1。
+
+## v7.2（已交付）：自製惡搞角色富檸那
+- `stats.json` 的 `fight`（`preD`，js-18-fight-data.js `fightStats`）：自製角色手寫格鬥場數值，只蓋過有寫的欄位；`op`＝超模標示、`sum`＝召喚物體力／傷害倍率（預設 `FT.SUM_HP` 0.15、`FT.SUM_DMG` 0.4）。程式裡的 `FIGHT_PRESET` 優先。
+- 技能的 `sumMax`（`fightSumMax`）：這招的召喚物上限（預設 `FT.SUM_MAX` 2，最多 6）；`sums` 一次叫多隻。
+- `units.json` 的 `hidden`：角色庫、搜尋、隨機、格鬥場選角都排除（召喚物用）。
+- 富檸那 `x102-funingna`：數值 hp 920、減傷 10%、走路 250、近戰普攻 48／0.5 秒、技能 1 召喚三隻（冷卻 6）、技能 2 傷害 150（冷卻 9）＋泡泡 1.5 秒＋攻擊 +60%；召喚物 hp 0.14、傷害 0.35。勝率約 62%（目標 60～65%）。
+- 芙寧娜（`x101-furina`）不放進網站，另外做成擴充包 `furina-pack.zip`（不放進 repo）：角色檔、要合併的資料片段、加入說明，以及產生工具 `tools/make_furina.py`＋零件表（富檸那也是用這支產生的：`--variant A --id x102-funingna --name 【自製】富檸那 --parody`）。
+- 健檢 33 項全過；同步檢查代碼不變（65F1-55AA）。

@@ -9,7 +9,7 @@
     q = (q || "").trim();
     let list;
     if (!q) { box.innerHTML = `<p class="hint">輸入角色名稱開始搜尋。</p>`; return; }
-    list = S.index.filter((r) => (r.name || "").includes(q) || r.id.includes(q.toLowerCase()));
+    list = S.index.filter((r) => !r.hidden && ((r.name || "").includes(q) || r.id.includes(q.toLowerCase())));
     list.sort((a, b) => (b.name === q) - (a.name === q) || (a.name === a.id) - (b.name === b.id));
     if (!list.length) { box.innerHTML = `<p class="hint">找不到「${escapeHtml(q)}」。試試較短的關鍵字。</p>`; return; }
     for (const r of list.slice(0, 80)) box.appendChild(unitCard(r));
@@ -73,7 +73,7 @@
   }
   function libListBase() {
     const star = $("fStar").value, type = $("fType").value, sort = $("fSort").value, named = $("fNamed").checked;
-    let list = S.index.filter((r) => (!star || r.star === star) && (!type || r.type === type) && (!lib.elem || r.element === lib.elem) && (!named || r.name !== r.id));
+    let list = S.index.filter((r) => !r.hidden && (!star || r.star === star) && (!type || r.type === type) && (!lib.elem || r.element === lib.elem) && (!named || r.name !== r.id));
     const d = (r) => r.date || "0000";
     const cmp = {
       new: (a, b) => d(b).localeCompare(d(a)) || b.id.localeCompare(a.id),

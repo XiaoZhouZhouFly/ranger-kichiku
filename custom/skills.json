@@ -30,5 +30,26 @@
    "cooldown": "12.0秒",
    "desc": "展開治癒光環，恢復自己的體力。\n（自製測試角色）"
   }
- ]
+ ],
+ "x102-funingna": [
+  {
+   "name": "咕嚕沙龍",
+   "rate": "30.0%",
+   "trigger": "自己",
+   "cooldown": "6.0秒",
+   "icon": "res/x102-funingna/x102-funingna-icon1.png",
+   "desc": "召喚沙龍成員：海胃馬夫人（吐水泡）、蟹貝雷達小姐（鉗擊）、烏賊勳爵（觸手拍打）三隻一起上場，各自追擊對手。\n（自製惡搞角色・超模）"
+  },
+  {
+   "name": "萬種狂哈",
+   "rate": "20.0%",
+   "trigger": "前方敵人",
+   "cooldown": "9.0秒",
+   "icon": "res/x102-funingna/x102-funingna-icon2.png",
+   "desc": "在指定位置掀起水之舞台：造成傷害並把對手困進泡泡浮空，同時提升自己的攻擊力。\n（自製惡搞角色・超模）"
+  }
+ ],
+ "x102sk1-funingna": [],
+ "x102sk2-funingna": [],
+ "x102sk3-funingna": []
 }

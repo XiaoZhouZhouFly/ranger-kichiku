@@ -185,7 +185,7 @@
   }
   // 隨機挑角色：排除召喚物與沒有名字的資料
   function randomUnit(excludeId) {
-    const pool = S.index.filter((r) => r.name && r.name !== r.id && !/sk-/.test(r.id) && r.id !== excludeId);
+    const pool = S.index.filter((r) => !r.hidden && r.name && r.name !== r.id && !/sk-/.test(r.id) && r.id !== excludeId);
     return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
   }
   document.querySelectorAll(".share-btn").forEach((b) => (b.onclick = openShare));

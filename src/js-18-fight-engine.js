@@ -583,13 +583,13 @@
     if (o.st.noCopy) { g.fx.push({ kind: "text", text: "召喚被封鎖", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
     const ids = fightSummonIds(g.cfg.f[src.side].r.id, s).filter((id) => ex && ex.sum[id]);
     if (!ids.length) { g.fx.push({ kind: "text", text: "召喚物讀取失敗", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
-    const casterAtk = fightFs(g, src).atk.dmg;
+    const cfs = fightFs(g, src), casterAtk = cfs.atk.dmg, cap = fightSumMax(g.cfg.f[src.side].r.id, s), sm = cfs.sum || { hp: FT.SUM_HP, dmg: FT.SUM_DMG };
     ids.forEach((id, n) => {
-      if (g.summons.filter((m) => m.side === src.side).length >= FT.SUM_MAX) { g.fx.push({ kind: "text", text: "召喚物已滿", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
+      if (g.summons.filter((m) => m.side === src.side).length >= cap) { g.fx.push({ kind: "text", text: "召喚物已滿", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
       const f = ex.sum[id];
       if (!fightSummonFs.has(id)) fightSummonFs.set(id, fightStats(f));
-      const base = fightSummonFs.get(id), fs = Object.assign({}, base, { atk: Object.assign({}, base.atk, { dmg: Math.round(casterAtk * FT.SUM_DMG), enemyFx: [] }) });
-      const hp = Math.round(src.maxHp * FT.SUM_HP), x = fclamp(src.x + src.face * (fightFs(g, src).bw / 2 + fs.bw / 2 + 10 + n * 40), -FT.AW / 2 + fs.bw / 2, FT.AW / 2 - fs.bw / 2);
+      const base = fightSummonFs.get(id), fs = Object.assign({}, base, { atk: Object.assign({}, base.atk, { dmg: Math.round(casterAtk * sm.dmg), enemyFx: [] }) });
+      const hp = Math.round(src.maxHp * sm.hp), x = fclamp(src.x + src.face * (fightFs(g, src).bw / 2 + fs.bw / 2 + 10 + n * 40), -FT.AW / 2 + fs.bw / 2, FT.AW / 2 - fs.bw / 2);
       g.summons.push({ summon: true, side: src.side, id, f, fs, x, y: 0, face: src.face, hp, maxHp: hp, life: 0, T, atkCd: 0, act: null, st: {}, buff: 0, dr: 0, anim: { clip: null, t: 0 }, moving: false });
     });
     g.fx.push({ kind: "text", text: "召喚！", x: src.x, y: FT.CH * 1.3, t: 0, life: 0.8, color: "#7dff9a" });

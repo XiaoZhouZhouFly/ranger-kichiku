@@ -74,12 +74,15 @@
     return [`u${num}${evo === "" || evo === "e" ? "" : evo}sk-${name}`, `u${num}sk-${name}`].find(has) || null;
   }
   // 召喚技能叫出來的召喚物 id（stats.json 的 sum／sums，跟雙人對戰同一份資料）
+  // 這個技能的召喚物上限（stats.json 技能的 sumMax，v7.2；沒寫＝每方 FT.SUM_MAX 隻）
+  const fightSumMax = (id, s) => { const sk = S.stats[id] && S.stats[id].sk && S.stats[id].sk[s]; return sk && +sk.sumMax > 0 ? Math.min(6, +sk.sumMax) : FT.SUM_MAX; };
   const fightSummonIds = (id, s) => { const sk = S.stats[id] && S.stats[id].sk && S.stats[id].sk[s]; return sk ? (sk.sums || (sk.sum ? [sk.sum] : [])).map((x) => x.id) : []; };
 
   // 測試用角色：涵蓋長短手、各種投射物與輔助技能
   const FIGHT_ROSTER = [
     ["x001-cube", "自製・近戰＋兩招矩形（近、遠）"],
     ["x002-orb", "自製・遠程＋直線投射物＋拋物線"],
+    ["x102-funingna", "自製惡搞・超模：召喚三隻＋泡泡定點"],
     ["u1001u-brown", "近戰短手＋矩形技能"],
     ["u434u-edward", "長手＋普攻投射物＋矩形技能"],
     ["u1164h-moon", "中距離＋直線投射物技能（冰球）"],
@@ -185,7 +188,9 @@
     return Math.round(fclamp(x, BAL.SK_CLAMP[0], BAL.SK_CLAMP[1]));
   }
   function fightStats(f) {
-    const N = normUnit(f.r, animNames(f.part)), pre = FIGHT_PRESET[f.r.id] || {}, F = N.f;
+    // 手寫數值：程式裡的 FIGHT_PRESET（方塊騎士、圓圓法師），或資料檔 stats.json 的 "fight"（v7.2 起，自製角色用；只蓋過有寫的欄位）
+    const preD = !FIGHT_PRESET[f.r.id] && S.stats[f.r.id] && S.stats[f.r.id].fight ? S.stats[f.r.id].fight : null;
+    const N = normUnit(f.r, animNames(f.part)), pre = FIGHT_PRESET[f.r.id] || preD || {}, F = N.f;
     const rg = F.rg.v, ai = F.ai.v || 1.2;
     const dur = (clip, lo, hi) => fclamp(clip && f.part.animations[clip] ? f.part.animations[clip].frame_count / (f.part.anim_rate || 24) : lo, lo, hi);
     // 普攻
@@ -194,7 +199,7 @@
       hitAt: ad * (atkClip ? hitFrac(f, atkClip) : 0.5), sv: FT.SV_ATK, bul: a.form === "line" || a.form === "lob" ? a.cfg : null,
       reach: fclamp(rg * FT.RG_REACH, FT.REACH_MIN, FT.REACH_MAX), range: a.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : fclamp(rg * FT.RG_REACH, FT.DLINE_MIN, FT.DLINE_MAX),
       speed: fSpeed(a.cfg), lobT: fLobT(a.cfg) }, pre.atk || {});
-    if (pre.atk) atk.kind = pre.atk.kind;
+    if (pre.atk && pre.atk.kind) atk.kind = pre.atk.kind;
     atk.cd = Math.max(atk.cd, atk.dur);
     // 技能
     const sk = N.sk.map((k, s) => {
@@ -212,7 +217,7 @@
       const hitFx = (e) => FIGHT_FX[e.c].to === "enemy" || (FIGHT_FX[e.c].onHit && k.form !== "self" && k.form !== "buff");
       o.enemyFx = sup.filter(hitFx); o.selfFx = sup.filter((e) => !hitFx(e));
       o.damaging = k.damaging; o.mul = (k.fx.find((e) => e.c === "DMG" && e.val > 0) || {}).val || 0;
-      if (p) Object.assign(o, { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
+      if (p) Object.assign(o, preD ? {} : { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
       return o;
     });
     // 總預算制：攻、守、機動、射程、控制五種能力分一份預算
@@ -227,7 +232,9 @@
     return {
       hp: pre.hp || Math.round(BAL.EHP * B.dur * (1 - dr) * (1 - BAL.DR_TAX * dr)), dr,
       bw: fclamp(f.w / f.h * FT.CH, 56, 120), walk: pre.walk || Math.round(fclamp(B.walk, 150, 345)), atk, sk, N, // walk 取整數：不同瀏覽器的 Math.pow 可能差一點點，線上對戰要兩邊完全一樣
-      B: FIGHT_PRESET[f.r.id] ? null : B, // 自製角色是手寫數值，不顯示預算
+      B: FIGHT_PRESET[f.r.id] || preD ? null : B, // 自製角色是手寫數值，不顯示預算
+      op: !!pre.op,                                // 超模角色（故意不平衡，選角畫面標示）
+      sum: pre.sum ? { hp: +pre.sum.hp || FT.SUM_HP, dmg: +pre.sum.dmg || FT.SUM_DMG } : null, // 召喚物體力、傷害倍率（沒寫用預設）
     };
   }
   // 招式的「前搖／有效／後搖」（格）。有效：近戰＝持續判定、投射物＝射出那一格、矩形＝預告結束那一格
@@ -238,7 +245,7 @@
   // 選角卡上的重點（圖示一行）；其他放進「詳細」（fightSummary）
   function fightBrief(fs) {
     const sk = fs.sk.map((k, s) => (k ? `✦${s + 1} ${k.dmg || (k.kind === "self" || k.kind === "buff" ? "自身" : "無傷害")}・${Math.round(k.cd)} 秒` : null)).filter(Boolean);
-    return [`❤ ${fs.hp}`, `🛡 ${Math.round(fs.dr * 100)}%`, `👟 ${Math.round(fs.walk)}`, `⚔ ${fs.atk.dmg}`, ...sk]; // 每一項各自不斷行
+    return [...(fs.op ? ["⚠ 超模"] : []), `❤ ${fs.hp}`, `🛡 ${Math.round(fs.dr * 100)}%`, `👟 ${Math.round(fs.walk)}`, `⚔ ${fs.atk.dmg}`, ...sk]; // 每一項各自不斷行
   }
   // 選角畫面用的說明
   function fightSummary(fs) {
@@ -251,5 +258,6 @@
       const extra = k.kind === "dash" ? `，距離 ${Math.round(k.range)}（左右都可以）` : k.kind === "rect" ? `，射程 ${Math.round(k.range)}、寬 ${Math.round(k.width)}` : k.kind === "lob" ? `，射程 ${Math.round(k.range)}` : "";
       parts.push(`技能${s + 1} ${SK_KIND_LABEL[k.kind]}${k.kind === "buff" || k.kind === "self" ? "" : "・" + (k.dmg || "無傷害")}${extra}・冷卻 ${k.cd.toFixed(1)} 秒（${fr(k, false)}）`);
     });
+    if (fs.op) parts.unshift("⚠ 超模角色：數值故意超出平衡預算");
     return parts.join("｜") + "　※ 前搖／有效／後搖\n" + normSummary(fs.N);
   }

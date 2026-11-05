@@ -16,5 +16,44 @@
   "element": "無",
   "date": "2026/11/02",
   "custom": true
+ },
+ {
+  "id": "x102-funingna",
+  "name": "【自製】富檸那",
+  "star": "自製惡搞",
+  "type": "智慧型",
+  "element": "水",
+  "date": "2026/11/05",
+  "custom": true
+ },
+ {
+  "id": "x102sk1-funingna",
+  "name": "【召喚物】海胃馬夫人",
+  "star": "自製惡搞",
+  "type": "智慧型",
+  "element": "水",
+  "date": "2026/11/05",
+  "custom": true,
+  "hidden": true
+ },
+ {
+  "id": "x102sk2-funingna",
+  "name": "【召喚物】蟹貝雷達小姐",
+  "star": "自製惡搞",
+  "type": "智慧型",
+  "element": "水",
+  "date": "2026/11/05",
+  "custom": true,
+  "hidden": true
+ },
+ {
+  "id": "x102sk3-funingna",
+  "name": "【召喚物】烏賊勳爵",
+  "star": "自製惡搞",
+  "type": "智慧型",
+  "element": "水",
+  "date": "2026/11/05",
+  "custom": true,
+  "hidden": true
  }
 ]

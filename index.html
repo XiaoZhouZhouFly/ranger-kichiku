@@ -631,7 +631,6 @@ body.fight-on { overflow: hidden; }
 
   <section class="fight" data-app="fight" hidden aria-label="格鬥場">
     <div class="panel fight-setup">
-      <p class="hint warn">格鬥場測試版：用手指操作的一對一格鬥。手感還在調整；官方角色的招式與數值目前是暫時的自動換算，之後會大改（例如遠程角色的普攻、技能的暈眩擊退等效果、新舊角色強度拉平），歡迎回報感想。</p>
       <div class="group">
         <span class="lbl">模式</span>
         <div class="chips" id="fMode">
@@ -974,7 +973,7 @@ body.fight-on { overflow: hidden; }
 
   <footer>
     <p><strong>非官方粉絲工具・完全免費・非營利。</strong>本站與 LINE、LY Corporation 及 LINE Rangers 官方沒有任何關係，也未獲得其授權或背書。</p>
-    <p>LINE Rangers 的角色名稱、圖片、動畫與音效等權利皆屬 LY Corporation 及其授權方所有。動畫資料每日同步自 <a href="https://rangerbook.warmycat.com/" target="_blank" rel="noopener">LINE Rangers 資料站</a>（蚯蚓貓）的公開素材庫；名稱前標有「【自製】」的角色是本站自己畫的測試角色，不含官方素材。</p>
+    <p>LINE Rangers 的角色名稱、圖片、動畫與音效等權利皆屬 LY Corporation 及其授權方所有。動畫資料每日同步自 <a href="https://rangerbook.warmycat.com/" target="_blank" rel="noopener">LINE Rangers 資料站</a>（蚯蚓貓）的公開素材庫；名稱前標有「【自製】」的角色是本站的自製角色，不含官方素材；其中「富檸那」是致敬《原神》角色的惡搞二創，與官方無關。</p>
     <p>權利人如認為本站內容有不當之處，請到 <a href="https://github.com/XiaoZhouZhouFly/ranger-kichiku/issues" target="_blank" rel="noopener">GitHub Issues</a> 聯絡，我們會立即配合移除或下架。輸出的影片請勿用於商業用途。</p>
     <p class="ver-line">版本 <strong id="appVer"></strong> ・ <button class="linklike" id="reportBtn" type="button">複製回報資訊</button>（遇到問題時，把這段資訊貼給開發者）</p>
   </footer>
@@ -983,7 +982,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v7.1";
+  const APP_VERSION = "v7.2";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -1140,7 +1139,7 @@ body.fight-on { overflow: hidden; }
     q = (q || "").trim();
     let list;
     if (!q) { box.innerHTML = `<p class="hint">輸入角色名稱開始搜尋。</p>`; return; }
-    list = S.index.filter((r) => (r.name || "").includes(q) || r.id.includes(q.toLowerCase()));
+    list = S.index.filter((r) => !r.hidden && ((r.name || "").includes(q) || r.id.includes(q.toLowerCase())));
     list.sort((a, b) => (b.name === q) - (a.name === q) || (a.name === a.id) - (b.name === b.id));
     if (!list.length) { box.innerHTML = `<p class="hint">找不到「${escapeHtml(q)}」。試試較短的關鍵字。</p>`; return; }
     for (const r of list.slice(0, 80)) box.appendChild(unitCard(r));
@@ -1204,7 +1203,7 @@ body.fight-on { overflow: hidden; }
   }
   function libListBase() {
     const star = $("fStar").value, type = $("fType").value, sort = $("fSort").value, named = $("fNamed").checked;
-    let list = S.index.filter((r) => (!star || r.star === star) && (!type || r.type === type) && (!lib.elem || r.element === lib.elem) && (!named || r.name !== r.id));
+    let list = S.index.filter((r) => !r.hidden && (!star || r.star === star) && (!type || r.type === type) && (!lib.elem || r.element === lib.elem) && (!named || r.name !== r.id));
     const d = (r) => r.date || "0000";
     const cmp = {
       new: (a, b) => d(b).localeCompare(d(a)) || b.id.localeCompare(a.id),
@@ -4569,7 +4568,7 @@ body.fight-on { overflow: hidden; }
     const q = $(`dq${i}`).value.trim(), box = $(`dr${i}`);
     box.textContent = "";
     if (!q) return;
-    const list = S.index.filter((r) => (r.name || "").includes(q) || r.id.includes(q.toLowerCase())).slice(0, 40);
+    const list = S.index.filter((r) => !r.hidden && ((r.name || "").includes(q) || r.id.includes(q.toLowerCase()))).slice(0, 40);
     if (!list.length) { box.innerHTML = `<p class="hint">找不到「${escapeHtml(q)}」。</p>`; return; }
     for (const r of list) box.appendChild(unitCard(r, () => { setFighter(i, r, true); box.textContent = ""; $(`dq${i}`).value = ""; }, { select: false }));
   }
@@ -5090,7 +5089,7 @@ body.fight-on { overflow: hidden; }
   }
   // 隨機挑角色：排除召喚物與沒有名字的資料
   function randomUnit(excludeId) {
-    const pool = S.index.filter((r) => r.name && r.name !== r.id && !/sk-/.test(r.id) && r.id !== excludeId);
+    const pool = S.index.filter((r) => !r.hidden && r.name && r.name !== r.id && !/sk-/.test(r.id) && r.id !== excludeId);
     return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
   }
   document.querySelectorAll(".share-btn").forEach((b) => (b.onclick = openShare));
@@ -5489,12 +5488,15 @@ body.fight-on { overflow: hidden; }
     return [`u${num}${evo === "" || evo === "e" ? "" : evo}sk-${name}`, `u${num}sk-${name}`].find(has) || null;
   }
   // 召喚技能叫出來的召喚物 id（stats.json 的 sum／sums，跟雙人對戰同一份資料）
+  // 這個技能的召喚物上限（stats.json 技能的 sumMax，v7.2；沒寫＝每方 FT.SUM_MAX 隻）
+  const fightSumMax = (id, s) => { const sk = S.stats[id] && S.stats[id].sk && S.stats[id].sk[s]; return sk && +sk.sumMax > 0 ? Math.min(6, +sk.sumMax) : FT.SUM_MAX; };
   const fightSummonIds = (id, s) => { const sk = S.stats[id] && S.stats[id].sk && S.stats[id].sk[s]; return sk ? (sk.sums || (sk.sum ? [sk.sum] : [])).map((x) => x.id) : []; };
 
   // 測試用角色：涵蓋長短手、各種投射物與輔助技能
   const FIGHT_ROSTER = [
     ["x001-cube", "自製・近戰＋兩招矩形（近、遠）"],
     ["x002-orb", "自製・遠程＋直線投射物＋拋物線"],
+    ["x102-funingna", "自製惡搞・超模：召喚三隻＋泡泡定點"],
     ["u1001u-brown", "近戰短手＋矩形技能"],
     ["u434u-edward", "長手＋普攻投射物＋矩形技能"],
     ["u1164h-moon", "中距離＋直線投射物技能（冰球）"],
@@ -5600,7 +5602,9 @@ body.fight-on { overflow: hidden; }
     return Math.round(fclamp(x, BAL.SK_CLAMP[0], BAL.SK_CLAMP[1]));
   }
   function fightStats(f) {
-    const N = normUnit(f.r, animNames(f.part)), pre = FIGHT_PRESET[f.r.id] || {}, F = N.f;
+    // 手寫數值：程式裡的 FIGHT_PRESET（方塊騎士、圓圓法師），或資料檔 stats.json 的 "fight"（v7.2 起，自製角色用；只蓋過有寫的欄位）
+    const preD = !FIGHT_PRESET[f.r.id] && S.stats[f.r.id] && S.stats[f.r.id].fight ? S.stats[f.r.id].fight : null;
+    const N = normUnit(f.r, animNames(f.part)), pre = FIGHT_PRESET[f.r.id] || preD || {}, F = N.f;
     const rg = F.rg.v, ai = F.ai.v || 1.2;
     const dur = (clip, lo, hi) => fclamp(clip && f.part.animations[clip] ? f.part.animations[clip].frame_count / (f.part.anim_rate || 24) : lo, lo, hi);
     // 普攻
@@ -5609,7 +5613,7 @@ body.fight-on { overflow: hidden; }
       hitAt: ad * (atkClip ? hitFrac(f, atkClip) : 0.5), sv: FT.SV_ATK, bul: a.form === "line" || a.form === "lob" ? a.cfg : null,
       reach: fclamp(rg * FT.RG_REACH, FT.REACH_MIN, FT.REACH_MAX), range: a.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : fclamp(rg * FT.RG_REACH, FT.DLINE_MIN, FT.DLINE_MAX),
       speed: fSpeed(a.cfg), lobT: fLobT(a.cfg) }, pre.atk || {});
-    if (pre.atk) atk.kind = pre.atk.kind;
+    if (pre.atk && pre.atk.kind) atk.kind = pre.atk.kind;
     atk.cd = Math.max(atk.cd, atk.dur);
     // 技能
     const sk = N.sk.map((k, s) => {
@@ -5627,7 +5631,7 @@ body.fight-on { overflow: hidden; }
       const hitFx = (e) => FIGHT_FX[e.c].to === "enemy" || (FIGHT_FX[e.c].onHit && k.form !== "self" && k.form !== "buff");
       o.enemyFx = sup.filter(hitFx); o.selfFx = sup.filter((e) => !hitFx(e));
       o.damaging = k.damaging; o.mul = (k.fx.find((e) => e.c === "DMG" && e.val > 0) || {}).val || 0;
-      if (p) Object.assign(o, { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
+      if (p) Object.assign(o, preD ? {} : { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
       return o;
     });
     // 總預算制：攻、守、機動、射程、控制五種能力分一份預算
@@ -5642,7 +5646,9 @@ body.fight-on { overflow: hidden; }
     return {
       hp: pre.hp || Math.round(BAL.EHP * B.dur * (1 - dr) * (1 - BAL.DR_TAX * dr)), dr,
       bw: fclamp(f.w / f.h * FT.CH, 56, 120), walk: pre.walk || Math.round(fclamp(B.walk, 150, 345)), atk, sk, N, // walk 取整數：不同瀏覽器的 Math.pow 可能差一點點，線上對戰要兩邊完全一樣
-      B: FIGHT_PRESET[f.r.id] ? null : B, // 自製角色是手寫數值，不顯示預算
+      B: FIGHT_PRESET[f.r.id] || preD ? null : B, // 自製角色是手寫數值，不顯示預算
+      op: !!pre.op,                                // 超模角色（故意不平衡，選角畫面標示）
+      sum: pre.sum ? { hp: +pre.sum.hp || FT.SUM_HP, dmg: +pre.sum.dmg || FT.SUM_DMG } : null, // 召喚物體力、傷害倍率（沒寫用預設）
     };
   }
   // 招式的「前搖／有效／後搖」（格）。有效：近戰＝持續判定、投射物＝射出那一格、矩形＝預告結束那一格
@@ -5653,7 +5659,7 @@ body.fight-on { overflow: hidden; }
   // 選角卡上的重點（圖示一行）；其他放進「詳細」（fightSummary）
   function fightBrief(fs) {
     const sk = fs.sk.map((k, s) => (k ? `✦${s + 1} ${k.dmg || (k.kind === "self" || k.kind === "buff" ? "自身" : "無傷害")}・${Math.round(k.cd)} 秒` : null)).filter(Boolean);
-    return [`❤ ${fs.hp}`, `🛡 ${Math.round(fs.dr * 100)}%`, `👟 ${Math.round(fs.walk)}`, `⚔ ${fs.atk.dmg}`, ...sk]; // 每一項各自不斷行
+    return [...(fs.op ? ["⚠ 超模"] : []), `❤ ${fs.hp}`, `🛡 ${Math.round(fs.dr * 100)}%`, `👟 ${Math.round(fs.walk)}`, `⚔ ${fs.atk.dmg}`, ...sk]; // 每一項各自不斷行
   }
   // 選角畫面用的說明
   function fightSummary(fs) {
@@ -5666,6 +5672,7 @@ body.fight-on { overflow: hidden; }
       const extra = k.kind === "dash" ? `，距離 ${Math.round(k.range)}（左右都可以）` : k.kind === "rect" ? `，射程 ${Math.round(k.range)}、寬 ${Math.round(k.width)}` : k.kind === "lob" ? `，射程 ${Math.round(k.range)}` : "";
       parts.push(`技能${s + 1} ${SK_KIND_LABEL[k.kind]}${k.kind === "buff" || k.kind === "self" ? "" : "・" + (k.dmg || "無傷害")}${extra}・冷卻 ${k.cd.toFixed(1)} 秒（${fr(k, false)}）`);
     });
+    if (fs.op) parts.unshift("⚠ 超模角色：數值故意超出平衡預算");
     return parts.join("｜") + "　※ 前搖／有效／後搖\n" + normSummary(fs.N);
   }
   /* ---------- 格鬥場：技能效果模組（Effect Registry） ----------
@@ -6479,13 +6486,13 @@ body.fight-on { overflow: hidden; }
     if (o.st.noCopy) { g.fx.push({ kind: "text", text: "召喚被封鎖", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
     const ids = fightSummonIds(g.cfg.f[src.side].r.id, s).filter((id) => ex && ex.sum[id]);
     if (!ids.length) { g.fx.push({ kind: "text", text: "召喚物讀取失敗", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
-    const casterAtk = fightFs(g, src).atk.dmg;
+    const cfs = fightFs(g, src), casterAtk = cfs.atk.dmg, cap = fightSumMax(g.cfg.f[src.side].r.id, s), sm = cfs.sum || { hp: FT.SUM_HP, dmg: FT.SUM_DMG };
     ids.forEach((id, n) => {
-      if (g.summons.filter((m) => m.side === src.side).length >= FT.SUM_MAX) { g.fx.push({ kind: "text", text: "召喚物已滿", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
+      if (g.summons.filter((m) => m.side === src.side).length >= cap) { g.fx.push({ kind: "text", text: "召喚物已滿", x: src.x, y: FT.CH * 1.25, t: 0, life: 0.8 }); return; }
       const f = ex.sum[id];
       if (!fightSummonFs.has(id)) fightSummonFs.set(id, fightStats(f));
-      const base = fightSummonFs.get(id), fs = Object.assign({}, base, { atk: Object.assign({}, base.atk, { dmg: Math.round(casterAtk * FT.SUM_DMG), enemyFx: [] }) });
-      const hp = Math.round(src.maxHp * FT.SUM_HP), x = fclamp(src.x + src.face * (fightFs(g, src).bw / 2 + fs.bw / 2 + 10 + n * 40), -FT.AW / 2 + fs.bw / 2, FT.AW / 2 - fs.bw / 2);
+      const base = fightSummonFs.get(id), fs = Object.assign({}, base, { atk: Object.assign({}, base.atk, { dmg: Math.round(casterAtk * sm.dmg), enemyFx: [] }) });
+      const hp = Math.round(src.maxHp * sm.hp), x = fclamp(src.x + src.face * (fightFs(g, src).bw / 2 + fs.bw / 2 + 10 + n * 40), -FT.AW / 2 + fs.bw / 2, FT.AW / 2 - fs.bw / 2);
       g.summons.push({ summon: true, side: src.side, id, f, fs, x, y: 0, face: src.face, hp, maxHp: hp, life: 0, T, atkCd: 0, act: null, st: {}, buff: 0, dr: 0, anim: { clip: null, t: 0 }, moving: false });
     });
     g.fx.push({ kind: "text", text: "召喚！", x: src.x, y: FT.CH * 1.3, t: 0, life: 0.8, color: "#7dff9a" });
@@ -6704,7 +6711,7 @@ body.fight-on { overflow: hidden; }
   /* 一隻角色 → N
      r＝角色（id、name），anims＝有影格的動畫名稱（Set）。preset＝FIGHT_PRESET 的覆寫（有寫的部分不算問題）。 */
   function normUnit(r, anims) {
-    const id = r.id, st = S.stats[id], pj = S.proj[id] || null, fxAll = (S.fx || {})[id] || null, pre = FIGHT_PRESET[id] || null;
+    const id = r.id, st = S.stats[id], pj = S.proj[id] || null, fxAll = (S.fx || {})[id] || null, pre = FIGHT_PRESET[id] || null, preD = !pre && st && st.fight ? st.fight : null; // preD：資料檔裡的手寫數值（v7.2）
     const N = { id, name: r.name || "", issues: [], f: {}, clips: normClips(anims), atk: null, sk: [], preset: !!pre };
     // 星數＋進化型態 → 最大等級（效果時間寫成「每級幾秒」時用）
     const grade = S.fx && S.fx._grade && S.fx._grade[id];
@@ -6728,7 +6735,7 @@ body.fight-on { overflow: hidden; }
     // 普攻
     const d = normDelivery(pj && pj.n, rg, true);
     N.atk = { form: d.form, src: d.src, cfg: (pj && pj.n) || null, clip: N.clips.attack };
-    if (pre && pre.atk) N.atk.form = { melee: "melee", shot: "line", lob: "lob", dline: "dline" }[pre.atk.kind] || N.atk.form;
+    if ((pre || preD) && (pre || preD).atk && (pre || preD).atk.kind) N.atk.form = { melee: "melee", shot: "line", lob: "lob", dline: "dline" }[(pre || preD).atk.kind] || N.atk.form;
     else if (d.note) issue(d.unsupported ? "unsupported" : "guess", "普攻", d.note);
     if (!N.atk.clip) issue("guess", "普攻", "沒有普攻動作（用待機動作代替）");
 
@@ -7447,7 +7454,7 @@ body.fight-on { overflow: hidden; }
       card.addEventListener("click", (e) => { e.stopImmediatePropagation(); tag.textContent = c.why; }, { capture: true });
     }
   }
-  const fightPool = (exclude) => S.index.filter((r) => r.id !== exclude && r.name && r.name !== r.id && fightCompatOf(r).lvl !== "unfit");
+  const fightPool = (exclude) => S.index.filter((r) => !r.hidden && r.id !== exclude && r.name && r.name !== r.id && fightCompatOf(r).lvl !== "unfit");
   // 卡片 i 上的角色：線上對戰時右邊卡片＝對手選的角色
   const fightCardId = (i) => (FG.set.mode === "online" && i === 1 ? FG.olOpp || null : FG.set["c" + i]);
   function fightPanel(i) {
@@ -7468,7 +7475,7 @@ body.fight-on { overflow: hidden; }
     const q = $(`fq${i}`).value.trim(), box = $(`fr${i}`);
     box.textContent = "";
     if (!q) return;
-    const list = S.index.filter((r) => (r.name || "").includes(q) || r.id.includes(q.toLowerCase())).slice(0, 40);
+    const list = S.index.filter((r) => !r.hidden && ((r.name || "").includes(q) || r.id.includes(q.toLowerCase()))).slice(0, 40);
     if (!list.length) { box.innerHTML = `<p class="hint">找不到「${escapeHtml(q)}」。</p>`; return; }
     for (const r of list) {
       const card = unitCard(r, () => { fightSetChar(i, r); box.textContent = ""; $(`fq${i}`).value = ""; }, { select: false });

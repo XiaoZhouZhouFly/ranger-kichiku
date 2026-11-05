@@ -145,7 +145,7 @@
     const q = $(`dq${i}`).value.trim(), box = $(`dr${i}`);
     box.textContent = "";
     if (!q) return;
-    const list = S.index.filter((r) => (r.name || "").includes(q) || r.id.includes(q.toLowerCase())).slice(0, 40);
+    const list = S.index.filter((r) => !r.hidden && ((r.name || "").includes(q) || r.id.includes(q.toLowerCase()))).slice(0, 40);
     if (!list.length) { box.innerHTML = `<p class="hint">找不到「${escapeHtml(q)}」。</p>`; return; }
     for (const r of list) box.appendChild(unitCard(r, () => { setFighter(i, r, true); box.textContent = ""; $(`dq${i}`).value = ""; }, { select: false }));
   }

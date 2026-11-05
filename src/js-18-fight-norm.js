@@ -89,7 +89,7 @@
   /* 一隻角色 → N
      r＝角色（id、name），anims＝有影格的動畫名稱（Set）。preset＝FIGHT_PRESET 的覆寫（有寫的部分不算問題）。 */
   function normUnit(r, anims) {
-    const id = r.id, st = S.stats[id], pj = S.proj[id] || null, fxAll = (S.fx || {})[id] || null, pre = FIGHT_PRESET[id] || null;
+    const id = r.id, st = S.stats[id], pj = S.proj[id] || null, fxAll = (S.fx || {})[id] || null, pre = FIGHT_PRESET[id] || null, preD = !pre && st && st.fight ? st.fight : null; // preD：資料檔裡的手寫數值（v7.2）
     const N = { id, name: r.name || "", issues: [], f: {}, clips: normClips(anims), atk: null, sk: [], preset: !!pre };
     // 星數＋進化型態 → 最大等級（效果時間寫成「每級幾秒」時用）
     const grade = S.fx && S.fx._grade && S.fx._grade[id];
@@ -113,7 +113,7 @@
     // 普攻
     const d = normDelivery(pj && pj.n, rg, true);
     N.atk = { form: d.form, src: d.src, cfg: (pj && pj.n) || null, clip: N.clips.attack };
-    if (pre && pre.atk) N.atk.form = { melee: "melee", shot: "line", lob: "lob", dline: "dline" }[pre.atk.kind] || N.atk.form;
+    if ((pre || preD) && (pre || preD).atk && (pre || preD).atk.kind) N.atk.form = { melee: "melee", shot: "line", lob: "lob", dline: "dline" }[(pre || preD).atk.kind] || N.atk.form;
     else if (d.note) issue(d.unsupported ? "unsupported" : "guess", "普攻", d.note);
     if (!N.atk.clip) issue("guess", "普攻", "沒有普攻動作（用待機動作代替）");
 

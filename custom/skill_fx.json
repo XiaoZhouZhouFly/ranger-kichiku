@@ -1,0 +1,51 @@
+{
+ "x102-funingna": [
+  {
+   "cd": 6,
+   "rate": 30,
+   "trig": "SELF",
+   "fx": [
+    {
+     "c": "SUMMON",
+     "d": {
+      "kind": "fixed",
+      "seconds": 8
+     }
+    }
+   ]
+  },
+  {
+   "cd": 9,
+   "rate": 20,
+   "trig": "SEARCH",
+   "fx": [
+    {
+     "c": "DMG",
+     "m": {
+      "kind": "statPercent",
+      "stat": "ATK",
+      "percent": 3000
+     }
+    },
+    {
+     "c": "BUBBLE",
+     "d": {
+      "kind": "fixed",
+      "seconds": 1.5
+     }
+    },
+    {
+     "c": "BUFF-ATK",
+     "m": {
+      "kind": "percent",
+      "percent": 60
+     },
+     "d": {
+      "kind": "fixed",
+      "seconds": 5
+     }
+    }
+   ]
+  }
+ ]
+}

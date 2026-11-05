@@ -143,7 +143,7 @@
       card.addEventListener("click", (e) => { e.stopImmediatePropagation(); tag.textContent = c.why; }, { capture: true });
     }
   }
-  const fightPool = (exclude) => S.index.filter((r) => r.id !== exclude && r.name && r.name !== r.id && fightCompatOf(r).lvl !== "unfit");
+  const fightPool = (exclude) => S.index.filter((r) => !r.hidden && r.id !== exclude && r.name && r.name !== r.id && fightCompatOf(r).lvl !== "unfit");
   // 卡片 i 上的角色：線上對戰時右邊卡片＝對手選的角色
   const fightCardId = (i) => (FG.set.mode === "online" && i === 1 ? FG.olOpp || null : FG.set["c" + i]);
   function fightPanel(i) {
@@ -164,7 +164,7 @@
     const q = $(`fq${i}`).value.trim(), box = $(`fr${i}`);
     box.textContent = "";
     if (!q) return;
-    const list = S.index.filter((r) => (r.name || "").includes(q) || r.id.includes(q.toLowerCase())).slice(0, 40);
+    const list = S.index.filter((r) => !r.hidden && ((r.name || "").includes(q) || r.id.includes(q.toLowerCase()))).slice(0, 40);
     if (!list.length) { box.innerHTML = `<p class="hint">找不到「${escapeHtml(q)}」。</p>`; return; }
     for (const r of list) {
       const card = unitCard(r, () => { fightSetChar(i, r); box.textContent = ""; $(`fq${i}`).value = ""; }, { select: false });
