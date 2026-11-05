@@ -11,18 +11,18 @@
 
   // 輸入整數化：線上對戰要把輸入原封不動送給對方，拖曳距離不能帶小數（各裝置螢幕不同）
   function netQuant(inp) {
-    return { mx: inp.mx | 0, jump: !!inp.jump, guard: !!inp.guard, atk: !!inp.atk, skDown: inp.skDown.map(Boolean), skUp: inp.skUp.map(Boolean),
+    return { mx: inp.mx | 0, run: !!inp.run, jump: !!inp.jump, guard: !!inp.guard, atk: !!inp.atk, skDown: inp.skDown.map(Boolean), skUp: inp.skUp.map(Boolean),
       skCancel: inp.skCancel.map(Boolean), skAim: inp.skAim.map((v) => (v == null ? null : Math.round(v))) };
   }
-  /* 輸入壓成小陣列再送出：[mx, 按鍵位元, 拖曳0, 拖曳1, 拖曳2]（位元：跳、防、普攻、按下×3、放開×3、取消×3） */
+  /* 輸入壓成小陣列再送出：[mx, 按鍵位元, 拖曳0, 拖曳1, 拖曳2]（位元：跳、防、普攻、按下×3、放開×3、取消×3、衝刺） */
   function netPack(i) {
-    let b = (i.jump ? 1 : 0) | (i.guard ? 2 : 0) | (i.atk ? 4 : 0);
+    let b = (i.jump ? 1 : 0) | (i.guard ? 2 : 0) | (i.atk ? 4 : 0) | (i.run ? 4096 : 0); // 4096＝衝刺（v7.0）
     for (let s = 0; s < 3; s++) b |= (i.skDown[s] ? 8 << s : 0) | (i.skUp[s] ? 64 << s : 0) | (i.skCancel[s] ? 512 << s : 0);
     return [i.mx, b, ...i.skAim];
   }
   function netUnpack(a) {
     const b = a[1], i = fightBlankInput();
-    i.mx = a[0]; i.jump = !!(b & 1); i.guard = !!(b & 2); i.atk = !!(b & 4);
+    i.mx = a[0]; i.run = !!(b & 4096); i.jump = !!(b & 1); i.guard = !!(b & 2); i.atk = !!(b & 4);
     for (let s = 0; s < 3; s++) { i.skDown[s] = !!(b & (8 << s)); i.skUp[s] = !!(b & (64 << s)); i.skCancel[s] = !!(b & (512 << s)); i.skAim[s] = a[2 + s] ?? null; }
     return netQuant(i);
   }

@@ -33,7 +33,7 @@
   /* 一步的按鍵：mx 左右（-1／0／1）、jump 起跳（按下那一步）、guard 防禦（按住）、atk 近戰普攻（按下那一步）；
      「按住」的按鈕用三格陣列：0、1＝技能，2＝普攻（投射物角色）。skDown／skUp＝按下、放開那一步，
      skAim＝從按下位置往前拖了多少場地單位（只有矩形、拋物線會用），skCancel＝手指在取消圈外 */
-  const fightBlankInput = () => ({ mx: 0, jump: false, guard: false, atk: false, skDown: [false, false, false], skUp: [false, false, false], skCancel: [false, false, false], skAim: [null, null, null] });
+  const fightBlankInput = () => ({ mx: 0, run: false, jump: false, guard: false, atk: false, skDown: [false, false, false], skUp: [false, false, false], skCancel: [false, false, false], skAim: [null, null, null] });
   const FT_EMPTY = fightBlankInput();
   const fightSlot = (fs, s) => (s === 2 ? fs.atk : fs.sk[s]); // 第 s 格按鈕對應的招式（2＝普攻）
   const FT_AIMED = { rect: true, lob: true, line: true, shot: true, dash: true }; // 按住才出招的種類（放開時出招）
@@ -45,7 +45,7 @@
   // 矩形預告時間：依距離（近快遠慢）或跟這招的前搖一樣長
   const fightTeleDelay = (g, k, d) => (g.cfg.teleMode === "sync" ? Math.max(FT.TELE_SYNC_MIN, k.hitAt) : FT.TELE_MIN + (FT.TELE_MAX - FT.TELE_MIN) * (d / k.range));
   // 目前狀態（給畫面顯示與測試用；規則本身看各個計時器）
-  const FT_STATE_LABEL = { idle: "待機", walk: "走路", jump: "跳", aim: "瞄準", attack: "攻擊", skill: "技能", guard: "防禦", block: "防禦硬直", hit: "硬直", break: "破防", down: "倒地", stunfx: "暈眩", bubble: "泡泡", ko: "倒下" };
+  const FT_STATE_LABEL = { idle: "待機", walk: "走路", run: "衝刺", jump: "跳", aim: "瞄準", attack: "攻擊", skill: "技能", guard: "防禦", block: "防禦硬直", hit: "硬直", break: "破防", down: "倒地", stunfx: "暈眩", bubble: "泡泡", ko: "倒下" };
   function fightStateOf(p) {
     if (p.ko) return "ko";
     if (p.stun > 0) return p.stunKind || "hit";
@@ -53,6 +53,7 @@
     if (p.aim.some(Boolean)) return "aim";
     if (p.guard) return "guard";
     if (!fOnGround(p)) return "jump";
+    if (p.running) return "run";
     return Math.abs(p.vx) > 1 ? "walk" : "idle";
   }
 
@@ -123,6 +124,7 @@
     fxTick(g, p);
     fightSlideStep(g, p);
     if (p.ko) { p.x += p.kbv * dt; p.kbv *= 0.9; fightPhysics(g, p); return; }
+    if (p.stun > 0 || p.act) p.running = false; // 被打、出招就停止衝刺
     if (p.stun > 0) { fightStunned(g, p); return; }
     p.x += p.kbv * dt; p.kbv *= 0.8; // 擋下攻擊後的小滑行
     const ground = fOnGround(p);
@@ -144,7 +146,7 @@
 
   function fightTimers(p, inp) {
     const dt = FT.STEP;
-    p.anim.t += dt;
+    p.anim.t += dt * (p.running ? FT.RUN_ANIM : 1); // 衝刺：跑步動畫加快
     p.cd = p.cd.map((c) => Math.max(0, c - dt * fxCdRate(p))); p.atkCd = Math.max(0, p.atkCd - dt);
     p.inv = Math.max(0, p.inv - dt); p.buff = Math.max(0, p.buff - dt);
     p.quiet += dt;
@@ -183,7 +185,7 @@
   function fightGuard(g, p, inp, ground) {
     const dt = FT.STEP;
     if (p.guardLock && p.gauge >= FT.GAUGE_REARM) p.guardLock = false;
-    p.guard = !!inp.guard && !p.act && p.gauge > 0 && !p.guardLock && !fxCantAct(p); // 恐懼、變形時不能防
+    p.guard = !!inp.guard && !(inp.run && inp.mx) && !p.act && p.gauge > 0 && !p.guardLock && !fxCantAct(p); // 恐懼、變形時不能防；衝刺中不能防（v7.0）
     if (ground) p.airGuarded = false; else if (p.guard) p.airGuarded = true;
     if (p.guard) {
       p.guardIdle = 0;
@@ -258,9 +260,16 @@
     if (p.st.fear) mx = p.x >= p.st.fear.from ? 1 : -1;
     if (mx && !p.guard) p.face = mx > 0 ? 1 : -1;
     const walk = aiming && !g.cfg.holdMove ? 0 : mx;
-    p.vx = walk * fs.walk * fxSpdMul(p) * (ground ? 1 : FT.AIR_CTRL);
+    // 衝刺（v7.0）：連點兩下方向鍵（inp.run），在地上、沒在瞄準時速度 ×RUN_MUL；起跑時腳邊揚起塵土
+    // 衝刺：瞄準技能時照樣衝（v7.0 調整）；衝刺中起跳，空中維持衝刺速度直到落地（airRun）
+    if (ground) p.airRun = false;
+    const run = !!(inp.run && walk && (ground || p.airRun) && !p.st.fear && !p.st.charm);
+    if (!ground) { /* 空中不揚塵 */ } else if (run && !p.running) g.fx.push({ kind: "dust", x: p.x, dir: walk, t: 0, life: 0.5, big: true });
+    else if (run && Math.floor(p.anim.t * 8) !== Math.floor((p.anim.t - dt * FT.RUN_ANIM) * 8)) g.fx.push({ kind: "dust", x: p.x - walk * 20, dir: walk, t: 0, life: 0.35 });
+    p.running = run;
+    p.vx = walk * fs.walk * fxSpdMul(p) * (run ? FT.RUN_MUL : ground ? 1 : FT.AIR_CTRL); // 衝刺跳：空中不打折
     p.x += p.vx * dt;
-    if (inp.jump && ground && !p.guard && !p.aim[0] && !p.aim[1] && !fxCantAct(p)) p.vy = FT.JUMP_V; // 瞄準技能時不能跳（技能只能在地上放）
+    if (inp.jump && ground && !p.guard && !p.aim[0] && !p.aim[1] && !fxCantAct(p)) { p.vy = FT.JUMP_V; if (run) p.airRun = true; } // 瞄準技能時不能跳（技能只能在地上放）；衝刺中起跳＝衝刺跳
     if (p.guard || fxCantAct(p) || p.airGuarded) return; // 恐懼、變形：只能移動；空中防禦過：落地前不能出招
     // 開始新招：普攻（地上、空中都可以），技能（只能在地上；投射物技能每人場上最多一顆）
     for (const s of [2, 0, 1]) {
@@ -338,7 +347,7 @@
     // 直線（技能與普攻投射物）：朝面向一直飛，飛出場地或打中才消失
     line(g, p, o, a, k) {
       const b = fightProjBase(g, p, a, k), y = p.y + FT.CH * (a.s === 2 ? 0.35 : 0.28);
-      g.projs.push(Object.assign(b, { kind: "line", y, py: y, vx: p.face * (k.speed || FT.SPEED_DEF), vy: 0 }));
+      g.projs.push(Object.assign(b, { kind: "line", y, py: y, vx: p.face * (k.speed || FT.SPEED_DEF), vy: 0, x0: b.x })); // x0：起點（最多飛 SHOT_MAX）
     },
     // 瞬間直線（遠程直接命中的普攻）：不產生飛行物，這一刻檢查身體前緣往前 range 內、同一高度有沒有對手
     dline(g, p, o, a, k) {
@@ -401,6 +410,7 @@
         if (!o.ko && fOverlapX(q.x - FT.LOB_R * (q.box || 1), q.x + FT.LOB_R * (q.box || 1), h.x0, h.x1) && o.y < FT.AIR_SAFE * (q.box || 1)) fightHit(g, q.src || g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx, q.bul);
       }
       if (Math.abs(q.x) > FT.AW / 2 + 80) q.dead = true; // 飛出場地
+      if (q.kind === "line" && q.x0 != null && Math.abs(q.x - q.x0) > FT.SHOT_MAX) { q.dead = true; g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.25 }); } // v7.0：直線投射物最多飛 SHOT_MAX
     }
     g.projs = g.projs.filter((q) => !q.dead);
   }
@@ -638,9 +648,9 @@
     const P = FIGHT_AI[level] || FIGHT_AI.normal, rnd = g.rng;
     // 按住招式中：不拖（瞄準按下當下的位置），下一次思考時放開
     mem.think = (mem.think || 0) - FT.STEP;
-    if (mem.think > 0) { inp.mx = mem.mx || 0; inp.guard = !!mem.guard; if (mem.aimS != null) inp.skAim[mem.aimS] = 0; return inp; }
+    if (mem.think > 0) { inp.mx = mem.mx || 0; inp.run = !!mem.run; inp.guard = !!mem.guard; if (mem.aimS != null) inp.skAim[mem.aimS] = 0; return inp; }
     mem.think = P.react * (0.7 + rnd() * 0.6);
-    mem.guard = false; mem.mx = 0;
+    mem.guard = false; mem.mx = 0; mem.run = false;
     if (mem.aimS != null) { inp.skUp[mem.aimS] = true; mem.aimS = null; return inp; }
     const gap = Math.abs(o.x - p.x) - (fs.bw + ofs.bw) / 2, toward = o.x >= p.x ? 1 : -1;
     const far = gap + ofs.bw / 2;
@@ -671,9 +681,9 @@
     const a = fs.atk, tap = AIM_MODE[a.kind] === "tap";
     const reach = a.kind === "melee" ? a.reach : a.kind === "shot" ? 420 : a.range, want = a.kind === "shot" ? 260 : reach * 0.8;
     if (gap <= reach && p.atkCd <= 0 && rnd() > P.err) { if (tap) inp.atk = true; else return press(2); }
-    if (gap > want + 10) inp.mx = toward;
+    if (gap > want + 10) { inp.mx = toward; inp.run = gap > want + 260; } // v7.0：離很遠就衝刺過去
     else if (a.kind !== "melee" && gap < want * 0.5) inp.mx = -toward;
-    mem.mx = inp.mx;
+    mem.mx = inp.mx; mem.run = inp.run;
     return inp;
   }
 

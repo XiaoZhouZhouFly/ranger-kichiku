@@ -41,6 +41,7 @@
     fightNorm: async (id) => { await Promise.all([ensureStats(), ensureSkillFx()]); const f = await fightLoad(id), fs = fightStats(f); return { N: fs.N, atk: fs.atk.kind, sk: fs.sk.map((k) => k && k.kind), summary: fightSummary(fs) }; },
     fightCompat: () => normAll(),
     fightSync: () => netSyncCheck(),
+    fightView: () => ({ land: !!FG.land, w: FW, h: FH, camX: FG.cam ? Math.round(FG.cam.x) : null, view: FG.cam ? Math.round(FG.cam.view) : null, scale: +fScale.toFixed(3) }), // v7.0：畫面方向與鏡頭
     // v6：連線層自我測試（不連網）：第 0 格按的跳，延遲 d 格後才出現；假網路延遲時會卡住等待
     fightNetTest: (d) => {
       const n = netNew(d, 0, 0); let k = 0; const out = [];
@@ -82,7 +83,7 @@
           if (spec.ai && spec.ai[side]) return fightAi(g, side, spec.ai[side], mem[side]);
           for (const s of spec.script || []) {
             if (s.side !== side || k < (s.from || 0) || k >= (s.to ?? 1e9)) continue;
-            if (s.mx) inp.mx = s.mx; if (s.guard) inp.guard = true;
+            if (s.mx) inp.mx = s.mx; if (s.run) inp.run = true; if (s.guard) inp.guard = true;
             if (s.atk && (k - (s.from || 0)) % s.atk === 0) inp.atk = true;
             if (s.jump && k === s.from) inp.jump = true;
             if (s.sk) { const [n, down, up, drag] = s.sk; if (k === down) inp.skDown[n] = true; if (k > down && k < up) inp.skAim[n] = drag || 0; if (k === up) { inp.skUp[n] = true; inp.skAim[n] = drag || 0; } }

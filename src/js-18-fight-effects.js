@@ -125,9 +125,11 @@
     // 擊飛撞牆（v5.4）：對手往後滑到牆邊、撞牆暈眩；施放者同時衝到對手面前（霸體，不會被打斷）
     wall: { apply(g, src, t, e, P) {
       if (t.ko) return;
-      const dir = Math.sign(t.x - src.x) || src.face, wx = dir * (FT.AW / 2 - 30), T = FX_NUM.WALL_T, stun = (P.dur && P.dur[0]) || 1;
+      // v7.0：最多推 WALL_MAX；推得到牆才撞牆暈眩，到不了牆就只有擊飛（飛行期間不能動）
+      const dir = Math.sign(t.x - src.x) || src.face, edge = FT.AW / 2 - 30, wx = fclamp(t.x + dir * FT.WALL_MAX, -edge, edge), hitWall = Math.abs(wx) >= edge - 1;
+      const T = FX_NUM.WALL_T, stun = hitWall ? (P.dur && P.dur[0]) || 1 : 0;
       if (t.stunKind !== "down") { t.stun = Math.max(t.stun, T + stun); t.stunKind = "stunfx"; t.act = null; t.aim = [null, null, null]; }
-      fightSlide(t, wx, T, () => fxText(g, t, "撞牆暈眩", "#ffd84a"));
+      fightSlide(t, wx, T, () => hitWall && fxText(g, t, "撞牆暈眩", "#ffd84a"));
       fxText(g, t, "擊飛", "#ff8a3d");
       if (!g.p.includes(src) || src.ko) return; // 複製體、召喚物不跟上
       src.armor = true;

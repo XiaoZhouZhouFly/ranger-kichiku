@@ -290,6 +290,7 @@
       const extra = await fightPrepareExtra(f), cfg = room.cfg || {};
       FG.g = fightNew({ f, fs: FG.fs, extra, rounds: cfg.rounds || 3, secs: cfg.secs || 60, mode: "online", seed: (cfg.seed || 1) + room.go.n,
         holdMove: !!(FIGHT_FIXED_OPTS || FG.set).holdMove, teleMode: (FIGHT_FIXED_OPTS || FG.set).teleMode === "sync" ? "sync" : "dist" });
+      FG.cam = null; FG.pauseUntil = 0;
       FG.me = OL.side; FG.mirror = OL.side === 1; FG.ai = [{}, {}]; FG.acc = 0; FG.ctl = [fightCtl(), fightCtl()]; FG.olGone = false;
       /* 每則訊息標上第幾場（g）：對方可能比自己早開打，先到的訊息先存在 OL.pend，自己這場建好再補進去 */
       const link = OL.link, gn = room.go.n;

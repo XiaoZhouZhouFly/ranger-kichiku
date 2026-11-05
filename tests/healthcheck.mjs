@@ -498,6 +498,29 @@ await test("格鬥場：線上對戰（假資料庫、兩個分頁：開房、�
   return `房號 ${code}，${link}，結果 ${JSON.stringify(na.hp)}`;
 });
 
+await test("格鬥場：橫向、鏡頭、轉向（v7.0）", async (open) => {
+  const p = await open({ width: 390, height: 844 });
+  await p.goto(BASE + "?app=fight"); await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
+  await p.click("#fStart"); await p.waitForFunction(() => window.__rk.fight().running);
+  await p.waitForFunction(() => window.__rk.fight().phase === "fight", null, { timeout: 15000 }).catch(() => {});
+  const v0 = await p.evaluate(() => window.__rk.fightView());
+  check(!v0.land && v0.w === 720 && v0.camX !== null, `直向：畫布寬 720、鏡頭有運作：${JSON.stringify(v0)}`);
+  // 按住往右走，再轉成橫向：按住的方向鍵要被放開（不會一直走）
+  await p.keyboard.down("d"); await p.waitForTimeout(400);
+  await p.setViewportSize({ width: 844, height: 390 }); await p.keyboard.up("d"); await p.waitForTimeout(900);
+  const v1 = await p.evaluate(() => window.__rk.fightView());
+  check(v1.land && v1.h === 720 && v1.w > 1000, `轉橫後應該是橫向版面：${JSON.stringify(v1)}`);
+  const xa = (await p.evaluate(() => window.__rk.fightNet().x))[0]; await p.waitForTimeout(400);
+  const xb = (await p.evaluate(() => window.__rk.fightNet().x))[0];
+  check(xa === xb, `轉向後不應該自己一直走：${xa} → ${xb}`);
+  // 鏡頭：兩人拉開時鏡頭會縮小（看得到更寬），把兩個人都放進畫面
+  await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(600);
+  await p.keyboard.down("a"); await p.waitForTimeout(2500); await p.keyboard.up("a"); await p.waitForTimeout(800);
+  const v2 = await p.evaluate(() => window.__rk.fightView());
+  check(v2.view > v0.view + 200, `兩人拉開，鏡頭應該縮小（看得更寬）：${v0.view} → ${v2.view}`);
+  return `直向 ${v0.w}×${v0.h}、橫向 ${v1.w}×${v1.h}、鏡頭 ${v2.camX}`;
+});
+
 await test("格鬥場：角色資料解讀（攻擊形式、缺資料、不支援的標示）", async (open) => {
   const p = await open(); await p.goto(BASE + "?app=fight");
   await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
@@ -559,6 +582,17 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   const [gG, gA] = [await gd(false), await gd(true)];
   check(gA.log.guards >= 1 && gA.hp[0] === gA.maxHp[0], `空中防禦應該擋得下：擋 ${gA.log.guards}、體力 ${gA.hp[0]}`);
   check(gA.gauge[0] < gG.gauge[0] && gA.x[0] > gG.x[0], `空中防禦應該扣比較多防禦條、不被推回去：防禦條 ${gA.gauge[0]}／${gG.gauge[0]}、位置 ${gA.x[0]}／${gG.x[0]}`);
+  // v7.0：衝刺（速度 ×1.8、不能防禦）、直線投射物最多飛 900、擊飛撞牆最多推 800（到不了牆不暈眩）
+  const walk = await R({ c0: "x001-cube", c1: "x002-orb", steps: 60, script: [{ side: 0, from: 0, to: 60, mx: -1 }] });
+  const sprint = await R({ c0: "x001-cube", c1: "x002-orb", steps: 60, script: [{ side: 0, from: 0, to: 60, mx: -1, run: true }, { side: 0, from: 0, to: 60, guard: true }] });
+  const dw = -220 - walk.x[0], ds = -220 - sprint.x[0];
+  check(ds > dw * 1.6 && sprint.log.guards === 0 && sprint.state[0] !== "guard", `衝刺應該比走路快約 1.8 倍、衝刺中不能防禦：走 ${dw}、衝 ${ds}、狀態 ${sprint.state[0]}`);
+  // 衝刺跳、衝刺中瞄準技能：照樣維持衝刺速度（實際遊戲固定「按住招式可移動」）
+  const rj = await R({ c0: "x001-cube", c1: "x002-orb", steps: 60, holdMove: true, script: [{ side: 0, from: 0, to: 60, mx: -1, run: true }, { side: 0, from: 5, to: 6, jump: true }] });
+  const ra = await R({ c0: "x001-cube", c1: "x002-orb", steps: 60, holdMove: true, script: [{ side: 0, from: 0, to: 60, mx: -1, run: true }, { side: 0, sk: [0, 5, 59, 0] }] });
+  check(-220 - rj.x[0] > dw * 1.6 && -220 - ra.x[0] > dw * 1.6, `衝刺跳、衝刺中瞄準都要維持衝刺速度：走 ${dw}、衝刺跳 ${-220 - rj.x[0]}、瞄準 ${-220 - ra.x[0]}`);
+  const far = await R({ c0: "x002-orb", c1: "x001-cube", steps: 240, script: [{ side: 1, from: 0, to: 240, mx: 1, run: true }, { side: 0, from: 100, to: 101, atk: 1 }] });
+  check(far.log.hits === 0, `直線投射物最多飛 900，對手在 900 以外應該打不到：命中 ${far.log.hits}、距離 ${far.x[1] - far.x[0]}`);
   // v6.0.2：技能前搖被普攻打中不中斷（預告照樣打下來）；被暈眩打中會中斷（預告消失）
   const armor = await R({ c0: "x001-cube", c1: "x001-cube", steps: 160, script: [{ side: 0, from: 0, to: 40, mx: 1 }, { side: 1, from: 0, to: 40, mx: -1 }, sk(0, 60, 1), { side: 0, from: 62, to: 63, atk: 1 }] });
   check(armor.hp[1] < armor.maxHp[1] && armor.hp[0] < armor.maxHp[0], `前搖被普攻打中，技能應該照樣打中對手：${armor.hp}`);
