@@ -21,7 +21,8 @@
       showOverlay(`讀取 ${r.name} 失敗：${e.message || e}`, true);
     } finally { S.swapping = false; markDirty(); }
   }
-  const skillIconUrl = (icon) => icon ? `${LOCAL}res/skill_icon/${icon}` : "";
+  // 技能圖標：官方＝檔名（放在 data/res/skill_icon/）；自製角色可以寫路徑（含「/」，相對於 custom/，例如 res/x003-dragon/x003-dragon-icon1.png）
+  const skillIconUrl = (icon) => (!icon ? "" : icon.includes("/") ? CUSTOM + icon : `${LOCAL}res/skill_icon/${icon}`);
   function unitSkills() { return (S.unit && S.skills[S.unit.id]) || []; }
   function renderSkills() {
     const box = $("skills"); box.textContent = "";

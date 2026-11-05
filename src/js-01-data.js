@@ -51,8 +51,9 @@
     // 幾份索引同時下載；原始數值（stats.json）等第一次進雙人對戰才下載
     const get = (name, fb) => fetchData(LOCAL + name, "json").catch(() => fb);
     const getC = (name, fb) => fetchData(CUSTOM + name, "json").catch(() => fb);
-    const [idx, skills, proj, st, cIdx, cSkills] = await Promise.all([get("units.json", []), get("skills.json", {}), get("projectiles.json", {}), get("sync_state.json", {}), getC("units.json", []), getC("skills.json", {})]);
-    S.index = Array.isArray(idx) ? idx : []; S.skills = skills || {}; S.proj = proj || {};
+    const [idx, skills, proj, st, cIdx, cSkills, cProj] = await Promise.all([get("units.json", []), get("skills.json", {}), get("projectiles.json", {}), get("sync_state.json", {}), getC("units.json", []), getC("skills.json", {}), getC("projectiles.json", {})]);
+    // 自製角色的投射物設定（v7.1，custom/projectiles.json；沒有這個檔也沒關係）：格式跟官方的 projectiles.json 一樣
+    S.index = Array.isArray(idx) ? idx : []; S.skills = skills || {}; S.proj = Object.assign(proj || {}, cProj || {});
     if (Array.isArray(cIdx)) for (const r of cIdx) if (r && r.id && !S.index.some((x) => x.id === r.id)) { customIds.add(r.id); S.index.push(r); }
     Object.assign(S.skills, cSkills || {});
     S.index.forEach((r) => { if (!r.name) r.name = r.id; });

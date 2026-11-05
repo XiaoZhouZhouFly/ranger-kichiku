@@ -983,7 +983,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v7.0";
+  const APP_VERSION = "v7.1";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -1081,8 +1081,9 @@ body.fight-on { overflow: hidden; }
     // 幾份索引同時下載；原始數值（stats.json）等第一次進雙人對戰才下載
     const get = (name, fb) => fetchData(LOCAL + name, "json").catch(() => fb);
     const getC = (name, fb) => fetchData(CUSTOM + name, "json").catch(() => fb);
-    const [idx, skills, proj, st, cIdx, cSkills] = await Promise.all([get("units.json", []), get("skills.json", {}), get("projectiles.json", {}), get("sync_state.json", {}), getC("units.json", []), getC("skills.json", {})]);
-    S.index = Array.isArray(idx) ? idx : []; S.skills = skills || {}; S.proj = proj || {};
+    const [idx, skills, proj, st, cIdx, cSkills, cProj] = await Promise.all([get("units.json", []), get("skills.json", {}), get("projectiles.json", {}), get("sync_state.json", {}), getC("units.json", []), getC("skills.json", {}), getC("projectiles.json", {})]);
+    // 自製角色的投射物設定（v7.1，custom/projectiles.json；沒有這個檔也沒關係）：格式跟官方的 projectiles.json 一樣
+    S.index = Array.isArray(idx) ? idx : []; S.skills = skills || {}; S.proj = Object.assign(proj || {}, cProj || {});
     if (Array.isArray(cIdx)) for (const r of cIdx) if (r && r.id && !S.index.some((x) => x.id === r.id)) { customIds.add(r.id); S.index.push(r); }
     Object.assign(S.skills, cSkills || {});
     S.index.forEach((r) => { if (!r.name) r.name = r.id; });
@@ -1280,7 +1281,8 @@ body.fight-on { overflow: hidden; }
       showOverlay(`讀取 ${r.name} 失敗：${e.message || e}`, true);
     } finally { S.swapping = false; markDirty(); }
   }
-  const skillIconUrl = (icon) => icon ? `${LOCAL}res/skill_icon/${icon}` : "";
+  // 技能圖標：官方＝檔名（放在 data/res/skill_icon/）；自製角色可以寫路徑（含「/」，相對於 custom/，例如 res/x003-dragon/x003-dragon-icon1.png）
+  const skillIconUrl = (icon) => (!icon ? "" : icon.includes("/") ? CUSTOM + icon : `${LOCAL}res/skill_icon/${icon}`);
   function unitSkills() { return (S.unit && S.skills[S.unit.id]) || []; }
   function renderSkills() {
     const box = $("skills"); box.textContent = "";
