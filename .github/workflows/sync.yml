@@ -51,9 +51,18 @@ jobs:
 
       - uses: actions/configure-pages@v6
 
+      # 只發布網站會用到的檔案：網站包太大（曾到 605 MB）時 GitHub Pages 會處理超過 10 分鐘而逾時
+      - name: 組出要發布的網站
+        run: |
+          mkdir -p ../_site
+          rsync -a --exclude='.git' --exclude='.github' --exclude='_archive' --exclude='tools' --exclude='tests' \
+            --exclude='__pycache__' --exclude='data/balance/raw' --exclude='*.md' ./ ../_site/
+          mv ../_site ./_site
+          du -sh _site
+
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: .
+          path: _site
 
   # 自動健檢：測試「即將發布的那一份網站」，沒過就不發布（網站維持上一個正常版本）
   healthcheck:
@@ -112,4 +121,4 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v5
         with:
-          timeout: 1800000
+          timeout: 600000
