@@ -600,7 +600,9 @@
         const anim = pickAnim(dr.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
         if (anim) {
           const n = dr.part.animations[anim].frame_count, idx = Math.floor(q.t * (dr.part.anim_rate || 24)) % Math.max(1, n);
-          const rot = q.kind === "lob" && q.bul.r ? Math.atan2(-q.vy, Math.abs(q.vx)) * 180 / Math.PI * -1 : 0;
+          /* 拋物線：圖片轉向（原始資料 r＝1）。原生曲線（v7.5.1）照遊戲：角度從 a0 漸變到 a1（跟雙人對打同一個做法）；
+             沒有原始曲線的照舊跟著飛行方向轉 */
+          const rot = q.kind === "lob" && q.bul.r ? (q.bz ? (q.bul.a0 || 0) + ((q.bul.a1 || 0) - (q.bul.a0 || 0)) * Math.min(1, q.t / q.bz.T) : Math.atan2(-q.vy, Math.abs(q.vx)) * 180 / Math.PI * -1) : 0;
           c.save(); c.translate(X(q.x), Y(q.y)); c.scale(k, k); drawPartCtx(c, dr, anim, idx, 0, 0, fightFlip(q.face), rot); c.restore();
           continue;
         }
@@ -791,6 +793,12 @@
       for (let n = 0; n < (e.big ? 5 : 2); n++) { const sp = (12 + n * 9) * pr * fScale * 3; c.beginPath(); c.arc(X(e.x - e.dir * (sp / fScale)), Y(6 + n * 7 * pr), (e.big ? 12 : 7) * fScale * (1 + pr), 0, Math.PI * 2); c.fill(); }
     }
     else if (e.kind === "boom") { c.fillStyle = "#ffb14a"; c.beginPath(); c.arc(X(e.x), Y(20), 20 + 60 * pr, 0, Math.PI * 2); c.fill(); }
+    else if (e.kind === "pfin") { // v7.5.1：投射物的命中動畫（原作 finish），畫在投射物結束的位置
+      const f = e.drawF || g.cfg.f[e.own], dr = e.bul && f.bul[e.bul.p], anim = dr && pickAnim(dr.part, ["finish", "hit", "end"]);
+      if (anim) { const A = dr.part.animations[anim], n = A.frame_count, idx = Math.floor(e.t * (dr.part.anim_rate || 24));
+        if (idx < n) { c.globalAlpha = 1; c.translate(X(e.x), Y(e.y)); const k = fScale * FT.CH / f.h; c.scale(k, k); drawPartCtx(c, dr, anim, idx, 0, 0, fightFlip(e.face), 0); } }
+      else { c.strokeStyle = "#fff6a8"; c.lineWidth = 5; c.beginPath(); c.arc(X(e.x), Y(e.y), 10 + 40 * pr, 0, Math.PI * 2); c.stroke(); }
+    }
     else if (e.kind === "impact") {
       const h = FT.CH * 0.95 * fScale, f = g.cfg.f[e.own], dr = e.bul && f.bul[e.bul.p];
       c.fillStyle = "rgba(255,240,200,0.6)"; c.fillRect(X(e.x) - e.w * fScale / 2, gy - h, e.w * fScale, h);

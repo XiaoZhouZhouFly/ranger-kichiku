@@ -24,7 +24,7 @@
     LOB_TIME: 0.8, LOB_R: 60, LOB_GRAV_MUL: 2,                         // 拋物線基準飛行時間（資料速度 LOB_V0 時）、落地爆炸半徑、拋物線的重力倍數（v7.4：×2＝拋得高，不跳也能從底下穿過）
     // 原始資料 → 場地（射程、速度是遊戲單位；換算係數集中在這裡）
     MELEE_RG: 200,                                    // 普攻沒有飛行過程時：射程小於這個＝近戰，以上＝瞬間直線
-    VIS_MELEE_MAX: 400, VIS_DLINE_MAX: 560, VIS_LUNGE_MAX: 700, PBOX_FRONT: 120, FRONT_FAR: 400, // v7.5：身體衝刺型的上限；投射物碰撞只取圖的最前面 PBOX_FRONT
+    VIS_MELEE_MAX: 400, VIS_DLINE_MAX: 560, VIS_LUNGE_MAX: 1100, PBOX_FRONT: 120, FRONT_FAR: 400, // v7.5：身體衝刺型的上限；投射物碰撞只取圖的最前面 PBOX_FRONT
     FX_W_MAX: 400, FRONT_OVER: 30, FRONT_MIN: 100, // v7.4：技能動作要比普攻動作多伸出 FRONT_OVER、離身體前緣至少 FRONT_MIN 才算「身前範圍」（否則是施法動作，維持定點）
                                        // v7.4：技能特效圖太寬時等比縮小到這個寬度（判定跟著）
     SK_VS_ATK: 1.2, SK_WIDTH_K: 0.45, SK_WIDTH_MAX: 360, // v7.4：技能範圍至少是普攻判定的 1.2 倍；矩形寬＝技能伸到距離 × 0.45（最寬 360）           // v7.4：判定跟著畫面——攻擊動作實際伸到多遠（從身體中心算）的上限：近戰、瞬間直線
@@ -194,6 +194,15 @@
     const fr = (clip && f.part.animations[clip] && f.part.animations[clip].frames) || []; if (!fr.length) return 0;
     return fr.filter((x) => !fItems(f, x).some((t) => t.alpha >= 0.3)).length / fr.length;
   }
+  /* v7.5.1 投射物出發位置：原始資料的 x、y（projectiles.json，跟角色圖同一套原始座標、y 往上）換成
+     [離身體中心往前多遠, 離地多高]（場地單位）。投射物圖就畫在這個位置，跟原作一樣（之前一律從身體前緣、固定高度發射，
+     圖片的位置會跑掉：例如庫拉麗絲的投射物畫在地底下）。高度限制在 10～0.9 身高（太高的斜射投射物打不到人） */
+  function fightSpawn(f, cfg) {
+    if (!cfg || cfg.x == null) return null;
+    const kk = FT.CH / f.h;
+    // 原始的 x、y 要乘 0.5 才是角色圖的座標（雙人對打 js-11 也是這個比例，畫面跟原作一致）
+    return [Math.round(fclamp((cfg.x * 0.5 + f.ox) * kk, -200, 400)), Math.round(fclamp((f.lb.y1 + (cfg.y || 0) * 0.5) * kk, 10, FT.CH * 0.9))];
+  }
   // 技能特效圖的左右範圍（以落點為 0、往右為正，場地單位）：優先用同步算好的；沒有就用部件外框現場算（較粗略）
   function fightEffectExtent(f, s, bulCfg) {
     const r = S.reach && S.reach[f.r.id];
@@ -217,6 +226,10 @@
       reach: fclamp(rg * FT.RG_REACH, FT.REACH_MIN, FT.REACH_MAX), range: a.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : fclamp(rg * FT.RG_REACH, FT.DLINE_MIN, FT.DLINE_MAX),
       speed: fSpeed(a.cfg), lobT: fLobT(a.cfg) }, pre.atk || {});
     if (pre.atk && pre.atk.kind) atk.kind = pre.atk.kind;
+    /* v7.5.1：普攻投射物飛行中完全看不到（原作是直接在對手身上爆開，例如華美巫女兔兔、名人氣球藝術家兔兔）
+       → 不當成會飛的子彈：照射程改成近戰／瞬間直線，打中時在對手身上播命中動畫（hitBul） */
+    const RR = S.reach && S.reach[f.r.id];
+    if (RR && RR.inv && RR.inv[0] && atk.kind === "shot" && !(pre.atk && pre.atk.kind)) { atk.kind = rg < FT.MELEE_RG ? "melee" : "dline"; atk.hitBul = atk.bul; atk.bul = null; }
     /* v7.4：判定跟著畫面。近戰＝攻擊動作實際伸到的距離（減掉半個身體，因為判定從身體前緣算）；
        瞬間直線＝畫面比原本的判定長才放長（不縮短）。手寫數值有寫 reach／range 就照手寫。 */
     if (atkClip && !(pre.atk && (pre.atk.reach != null || pre.atk.range != null))) {
@@ -227,6 +240,7 @@
     }
     if (atk.kind === "shot" && !(pre.atk && pre.atk.pbox)) atk.pbox = fightProjBox(f, 0); // v7.5：投射物碰撞框跟著圖
     if ((atk.kind === "shot" || atk.kind === "lob") && !(pre.atk && pre.atk.hideBody != null)) atk.hideBody = fightHideFrac(f, atkClip) >= 0.25;
+    if ((atk.kind === "shot" || atk.kind === "lob" || atk.hitBul) && !(pre.atk && pre.atk.spawn)) atk.spawn = fightSpawn(f, atk.bul || atk.hitBul);
     atk.cd = Math.max(atk.cd, atk.dur);
     // 普攻的判定前緣（從身體前緣算）：技能範圍至少要比它遠（v7.4）
     const bwF = fclamp(f.w / f.h * FT.CH, 56, 120), atkFront = atk.kind === "melee" ? atk.reach : atk.kind === "dline" || atk.kind === "lob" ? atk.range : 0;
@@ -253,6 +267,8 @@
         const base = Math.max(vs - bwF / 2, atkFront * FT.SK_VS_ATK);
         if (o.kind === "dash") o.ahead = Math.round(fclamp(vs - bwF / 2, o.width / 2, FT.CAST_MAX)); // 突進落地後往前打多遠（照技能動畫）
         const has = (key) => p && p[key] != null;
+        // v7.5.1：技能投射物飛行中完全看不到 → 改成指定位置打擊（判定照命中動畫的範圍，下面的特效圖規則處理）
+        if (RR && RR.inv && RR.inv[s + 1] && o.kind === "line" && !has("kind")) o.kind = "rect";
         if (o.kind === "rect") {
           if (!has("range")) o.range = Math.round(fclamp(Math.max(o.range, base), FT.CAST_MIN, FT.CAST_MAX));
           if (!has("width")) o.width = Math.round(fclamp(Math.max(o.width, base * FT.SK_WIDTH_K), FT.WIDTH_MIN, FT.SK_WIDTH_MAX));
@@ -264,16 +280,16 @@
           const ex = fightEffectExtent(f, s, o.bul);
           /* v7.5：有特效圖，但技能動作本身就一路伸到很遠（例如巫女桔梗的技能 2：靈蛇從身上一路飛出去，特效圖只是最後的命中）
              → 畫面上整條路都在攻擊，改成身前範圍（打到動作伸到的地方），特效圖照樣當命中特效 */
-          if (ex && !o.enemyFx.some((e) => ["pull", "swap", "summon", "copy"].includes(FIGHT_FX[e.c].b)) && vs - bwF / 2 >= FT.FRONT_FAR) { o.kind = "front"; o.ahead = Math.round(fclamp(vs - bwF / 2, 60, FT.CAST_MAX)); o.range = o.ahead; o.width = o.ahead; }
+          if (ex && !o.enemyFx.some((e) => ["pull", "swap", "summon", "copy"].includes(FIGHT_FX[e.c].b)) && vs - bwF / 2 >= FT.FRONT_FAR) { o.kind = "front"; o.ahead = Math.round(fclamp(vs - bwF / 2, 60, fightVisDash(f, s + 1) > 0 ? FT.VIS_LUNGE_MAX : FT.CAST_MAX)); o.range = o.ahead; o.width = o.ahead; }
           else if (ex) { const w = Math.max(1, ex[1] - ex[0]), sc = w > FT.FX_W_MAX ? FT.FX_W_MAX / w : 1; o.width = Math.max(FT.WIDTH_MIN, Math.round(w * sc)); o.off = Math.round((ex[0] + ex[1]) / 2 * sc); o.fxs = sc; }
           // 拉近、換位、召喚、複製這類「要打到遠處對手才有用」的技能維持定點（改成身前範圍就失去意義）
           // 施法動作（技能動作沒有比普攻伸得更遠、或幾乎沒伸出去：效果其實出現在對手身上，例如原地揮杖、瞬移到對手身邊）也維持定點
           else if (!o.bul && !o.enemyFx.some((e) => ["pull", "swap", "summon", "copy"].includes(FIGHT_FX[e.c].b))
-            && vs >= Math.min(fightVisReach(f, "a", atk.clip), FT.VIS_MELEE_MAX) + FT.FRONT_OVER && vs - bwF / 2 >= FT.FRONT_MIN) { o.kind = "front"; o.ahead = Math.round(fclamp(vs - bwF / 2, 60, FT.CAST_MAX)); o.range = o.ahead; o.width = o.ahead; }
+            && vs >= Math.min(fightVisReach(f, "a", atk.clip), FT.VIS_MELEE_MAX) + FT.FRONT_OVER && vs - bwF / 2 >= FT.FRONT_MIN) { o.kind = "front"; o.ahead = Math.round(fclamp(vs - bwF / 2, 60, fightVisDash(f, s + 1) > 0 ? FT.VIS_LUNGE_MAX : FT.CAST_MAX)); o.range = o.ahead; o.width = o.ahead; }
         }
       }
       if (o.kind === "line" && !k.clipSub) o.pbox = fightProjBox(f, s + 1); // v7.5：投射物碰撞框跟著圖
-      if (o.kind === "line" || o.kind === "lob") o.hideBody = fightHideFrac(f, k.clip) >= 0.25;
+      if (o.kind === "line" || o.kind === "lob") { o.hideBody = fightHideFrac(f, k.clip) >= 0.25; o.spawn = fightSpawn(f, o.bul); }
       if (p) Object.assign(o, preD ? {} : { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
       return o;
     });

@@ -588,7 +588,7 @@ def sync_stats(rows, summons=None) -> None:
 # 網站格鬥場用它決定判定距離（js-18-fight-data.js fightStats）；沒有這個檔或沒有這隻角色時，網站會在開打時自己量（較粗略）。
 # 需要 Pillow；沒有就跳過（網站照樣能用）。結果依動畫檔內容的雜湊快取，只有角色資料變了才重算。
 FIGHT_REACH = DATA / "fight_reach.json"
-REACH_VER = 3  # v7.5：加上身體衝刺（d）與投射物大小（p）
+REACH_VER = 6  # v7.5：加上身體衝刺（d）與投射物大小（p）；v7.5.1：衝刺改用不透明像素判斷、inv（看不見的投射物）、lb（不透明的待機身體範圍）
 REACH_CLIPS = {
     "a": ["attack_all", "attack", "attack_a", "attack_b"],
     "s1": ["s_attack_all", "s_action_attack_all", "s_attack", "s_attack_a", "s_attack_b", "s_action_attack_2", "s_action_attack_3"],
@@ -692,11 +692,11 @@ def _reach(part, anim, atlas, cache, cx, y0, y1, bw):
     h = y1 - y0
     tol, best, dash = h * 0.15, 0.0, 0.0
     for fr in part["animations"][anim]["frames"]:
-        c = _cluster(part, fr)
+        c = _opaque_cluster(part, fr, atlas, cache)  # 只算不透明像素（殘影、拖尾的半透明部分不算，v7.5.1）
         mc = (c[0] + c[2]) / 2 if c else cx
-        # 衝出去的要「像身體」：高度 0.6～1.6 個身高、寬度不超過 3 倍（避免把召喚出來的大型生物、大特效當成身體）；
+        # 衝出去的要「像身體」：高度 0.6～2 個身高、寬度不超過 4 倍（避免把召喚出來的大型生物、大特效當成身體）；
         # 衝超過 8 個身高的不算（那是瞬移到畫面外、不是攻擊）
-        like = c and h * 0.6 <= c[3] - c[1] <= h * 1.6 and c[2] - c[0] <= bw * 3
+        like = c and h * 0.6 <= c[3] - c[1] <= h * 2.0 and c[2] - c[0] <= bw * 4
         moved = bool(like) and h * 1.0 < mc - cx <= h * 8
         if moved:
             dash = max(dash, mc - cx)
@@ -774,6 +774,16 @@ def fight_reach_of(meta, png_path, proj=None):
     if not lb or lb[3] - lb[1] <= 0:
         return None
     atlas = Image.open(png_path).convert("RGBA")
+    # v7.5.1：待機身體改用不透明像素量（很大的半透明光暈、透明邊不算，例如招黃金貓莎莉），跟部件外框差超過 1 成就記在 lb，
+    #   網站畫角色時用它決定大小與站位（js-11）
+    olb, oc = None, {}
+    for fr in anims[idle]["frames"]:
+        c = _opaque_cluster(part, fr, atlas, oc)
+        if c:
+            olb = c if olb is None else [min(olb[0], c[0]), min(olb[1], c[1]), max(olb[2], c[2]), max(olb[3], c[3])]
+    lb_out = None
+    if olb and olb[3] - olb[1] > 0 and max(abs(a - b) for a, b in zip(olb, lb)) > (lb[3] - lb[1]) * 0.1:
+        lb, lb_out = olb, [round(v, 1) for v in olb]
     bh = lb[3] - lb[1]
     # v7.5：待機時身體很扁（寬 > 高 × 1.3，例如利姆路的史萊姆型態）→ 身高改用攻擊動作的身體高度（比較高的話）；網站 js-11 同一套
     flat_h = None
@@ -792,10 +802,20 @@ def fight_reach_of(meta, png_path, proj=None):
         r, d = _reach(part, n, atlas, cache, cx, lb[1], lb[3], lb[2] - lb[0])
         dash[key] = round(d * k)
         return round(r * k)
-    eff = []
-    for key in ("s1", "s2"):
+    # v7.5.1：會飛、但飛行動畫（normal）完全是空的投射物＝原作「直接在對手身上爆開」（inv），特效範圍照命中動畫量
+    parts = meta.get("parts") or {}
+    def invisible(cfg):
+        bp = parts.get(cfg.get("p")) if cfg else None
+        fr = ((bp or {}).get("animations") or {}).get("normal", {}).get("frames") or []
+        return bool(bp) and not any(any(True for _ in _items(bp, x)) for x in fr)
+    inv = []
+    for key in ("n", "s1", "s2"):
         cfg = (proj or {}).get(key)
-        moving = cfg and (cfg.get("v") or 0) > 0 and cfg.get("e")
+        inv.append(bool(cfg and (cfg.get("v") or 0) > 0 and cfg.get("e") and invisible(cfg)))
+    eff = []
+    for i, key in enumerate(("s1", "s2")):
+        cfg = (proj or {}).get(key)
+        moving = cfg and (cfg.get("v") or 0) > 0 and cfg.get("e") and not inv[i + 1]
         bp = (meta.get("parts") or {}).get(cfg.get("p")) if cfg and not moving else None
         r = None
         if bp and bp.get("png"):
@@ -806,9 +826,9 @@ def fight_reach_of(meta, png_path, proj=None):
                 r = None
         eff.append(r)
     pbox = []
-    for key in ("n", "s1", "s2"):
+    for i, key in enumerate(("n", "s1", "s2")):
         cfg = (proj or {}).get(key)
-        moving = cfg and (cfg.get("v") or 0) > 0 and cfg.get("e")
+        moving = cfg and (cfg.get("v") or 0) > 0 and cfg.get("e") and not inv[i]
         bp = (meta.get("parts") or {}).get(cfg.get("p")) if moving else None
         r = None
         if bp and bp.get("png"):
@@ -820,6 +840,10 @@ def fight_reach_of(meta, png_path, proj=None):
         pbox.append(r)
     a, s1, s2 = one("a"), one("s1"), one("s2")
     out = {"a": a, "s": [s1, s2], "e": eff, "d": [dash["a"], dash["s1"], dash["s2"]], "p": pbox}
+    if any(inv):
+        out["inv"] = inv
+    if lb_out:
+        out["lb"] = lb_out  # 待機身體範圍（原始座標，只算不透明像素）
     if flat_h:
         out["bh"] = round(flat_h, 1)  # 身高（原始座標）：待機太扁時改用的身高，網站畫角色時用（js-11）
     return out

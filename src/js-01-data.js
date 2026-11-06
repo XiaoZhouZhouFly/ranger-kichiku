@@ -71,14 +71,20 @@
     return statsPromise;
   }
   /* 技能的完整效果清單（只有格鬥場用；單人、雙人不讀）。沒有這個檔（例如還沒同步過）時當作空的，格鬥場改看 stats.json 的傷害欄位 */
-  let fxPromise = null;
+  let fxPromise = null, reachPromise = null;
   function ensureSkillFx() {
     if (!fxPromise) fxPromise = Promise.all([
       fetchData(LOCAL + "skill_fx.json", "json").catch(() => ({})),
       fetchData(CUSTOM + "skill_fx.json", "json").catch(() => ({})),
-      fetchData(LOCAL + "fight_reach.json", "json").catch(() => ({})), // v7.4：格鬥場判定距離（每日同步先算好，見 sync.py）
-    ]).then(([x, c, r]) => { S.fx = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); S.reach = r && typeof r === "object" ? r : {}; });
+      ensureReach(),
+    ]).then(([x, c]) => { S.fx = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); });
     return fxPromise;
+  }
+  /* 判定距離與體型資料 data/fight_reach.json（每日同步先算好，見 sync.py）：格鬥場的判定（v7.4）＋各模式的體型校正（v7.5.1，loadFighter）。
+     沒有這個檔時當作空的（照舊用部件外框） */
+  function ensureReach() {
+    if (!reachPromise) reachPromise = fetchData(LOCAL + "fight_reach.json", "json").catch(() => ({})).then((r) => { S.reach = r && typeof r === "object" ? r : {}; });
+    return reachPromise;
   }
   /* 角色的動畫資料（單人、雙人共用）：官方角色是壓縮檔 .json.gz（找不到才讀 .json），自製角色是 .json */
   async function loadUnitMeta(id) {

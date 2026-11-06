@@ -417,6 +417,11 @@ await test("格鬥場（測試版）：矩形、防禦條、硬直值倒地、�
   check(kk.sk[1].ahead >= 600, `技能動作很長：巫女桔梗技能 2 應該是身前範圍、打到 600 以上：${JSON.stringify(kk.sk[1])}`);
   check(rim.scale > 1.3 && rim.scale < 2.2, `體型：利姆路（待機是史萊姆）不該被放大成巨大史萊姆：縮放 ${rim.scale}`);
   check(riza.atk > 0 && riza.scale > 0.5 && riza.scale < 1.5, `體型：莉莎（上游部件寬高是 0）要能正常顯示：普攻 ${riza.atk}、縮放 ${riza.scale}`);
+  // v7.5.1：投射物照原始出發位置（庫拉麗絲不再在地上）；飛行中看不到的投射物改成直接命中（華美巫女兔兔）；招黃金貓莎莉不被光暈縮小
+  const cla = await H("u1116h-claris"), cony = await p.evaluate(() => window.__rk.fightStatsOf("u1014u-cony")), cat = await H("u418u-sally");
+  check(cla.atkSpawn && cla.atkSpawn[1] >= 30, `出發位置：庫拉麗絲的普攻要從身體高度出發：${JSON.stringify(cla.atkSpawn)}`);
+  check(cony.hit.atkHitAnim && cony.atk[0] !== "shot", `看不見的投射物：華美巫女兔兔的普攻要改成直接命中：${JSON.stringify(cony.atk)}`);
+  check(cat.scale > 0.6, `體型：招黃金貓莎莉不該被光暈縮得太小：縮放 ${cat.scale}`);
   // 輸入緩衝：普攻快結束時按技能，結束後自動接上
   const buf = await R({ c0: "x001-cube", c1: "x002-orb", steps: 40, trace: true, script: [{ side: 0, from: 0, to: 1, atk: 1 }, { side: 0, sk: [0, 30, 31, 0] }] });
   check(buf.trace[36][0][3] === "aim", `緩衝：普攻結束時應該接上技能，實際狀態 ${buf.trace[36][0][3]}`);
@@ -587,8 +592,8 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   if (!st(stun, 1, "stunfx")) return "skip:沒有技能效果資料（skill_fx.json 還沒同步）";
   const kb = await R({ c0: "u1003e-jessica", c1: "x001-cube", steps: 300, script: [...W, sk(0, 95)] });
   check(kb.log.downs >= 1, "擊退應該讓對手倒地");
-  const si = await R({ c0: "u023e-sindy", c1: "x001-cube", steps: 300, script: [...W, sk(0, 95), sk(0, 175, 1), sk(0, 215, 1)] }); // v7.4：沉默大約在第 141～201 步
-  check(has(si, 1, "silence") && si.trace[180][1][3] === "idle" && ["aim", "skill"].includes(si.trace[218][1][3]), "沉默期間不能用技能，結束後可以");
+  const si = await R({ c0: "u023e-sindy", c1: "x001-cube", steps: 300, script: [...W, sk(0, 95), sk(0, 175, 1), sk(0, 232, 1)] }); // v7.5.1：辛蒂的拋物線照原生曲線飛，沉默大約在第 158～217 步
+  check(has(si, 1, "silence") && !["aim", "skill"].includes(si.trace[180][1][3]) && ["aim", "skill"].includes(si.trace[235][1][3]), "沉默期間不能用技能，結束後可以");
   const dot = await R({ c0: "u010e-clara", c1: "x001-cube", steps: 400, script: [sk(0, 50)] });
   const hp = dot.trace.map((t) => t[1][2]), drops = hp.filter((v, i) => i && v < hp[i - 1]).length;
   check(drops >= 5, `持續傷害應該分好幾次扣血，實際 ${drops} 次`);

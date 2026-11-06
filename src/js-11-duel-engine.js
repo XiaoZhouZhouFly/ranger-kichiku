@@ -15,9 +15,13 @@
     // 讓角色以身體中心站位、腳踩在地面上（原始素材的原點不在腳底中央）
     f.ox = -(f.lb.x0 + f.lb.x1) / 2; f.oy = -f.lb.y1;
     f.w = f.lb.x1 - f.lb.x0; f.h = f.lb.y1 - f.lb.y0;
-    /* v7.5：待機時身體很扁（例如利姆路的史萊姆型態）不拿待機的高度當身高，不然會被放大成一般人的身高、變成巨大史萊姆。
-       每日同步量好的身高（data/fight_reach.json 的 bh：攻擊動作身體高度的中位數，只算不透明像素）優先；沒有就照舊 */
-    const rr = S.reach && S.reach[r.id]; if (rr && rr.bh) f.h = rr.bh;
+    /* 體型校正（v7.5.1，雙人對打與格鬥場都用；資料先讀好才不會因為先後順序不同而大小不一）：
+       每日同步量好的「不透明」待機身體範圍 lb（很大的半透明光暈不算，例如招黃金貓莎莉）決定大小與站位；
+       待機太扁的角色（例如利姆路的史萊姆型態）用 bh 當身高，不會被放大成巨大史萊姆 */
+    await ensureReach();
+    const rr = S.reach[r.id];
+    if (rr && rr.lb) { f.lb = { x0: rr.lb[0], y0: rr.lb[1], x1: rr.lb[2], y1: rr.lb[3] }; f.ox = -(f.lb.x0 + f.lb.x1) / 2; f.oy = -f.lb.y1; f.w = f.lb.x1 - f.lb.x0; f.h = f.lb.y1 - f.lb.y0; }
+    if (rr && rr.bh) f.h = rr.bh;
     return f;
   }
   function pickAnim(part, names) { return names.find((n) => part.animations[n]?.frames?.length) || null; }

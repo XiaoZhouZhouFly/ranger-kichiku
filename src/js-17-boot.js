@@ -79,7 +79,7 @@
       return { id, hp: fs.hp, dr: fs.dr, walk: Math.round(fs.walk), atk: [fs.atk.kind, fs.atk.dmg, +fs.atk.cd.toFixed(2)], sk: fs.sk.map((k) => k && [k.kind, k.dmg, +k.cd.toFixed(1)]),
         // v7.5：判定（健檢用）—普攻距離、技能範圍／往前距離、投射物碰撞框、本人變成投射物、身高縮放
         hit: { atk: Math.round(fs.atk.kind === "melee" ? fs.atk.reach : fs.atk.range || 0), atkBox: fs.atk.pbox || null, atkHide: !!fs.atk.hideBody,
-          sk: fs.sk.map((k) => k && { ahead: k.ahead || null, range: Math.round(k.range || 0), box: k.pbox || null, hide: !!k.hideBody }), scale: +(FT.CH / (await fightLoad(id)).h).toFixed(3) },
+          sk: fs.sk.map((k) => k && { ahead: k.ahead || null, range: Math.round(k.range || 0), box: k.pbox || null, hide: !!k.hideBody }), scale: +(FT.CH / (await fightLoad(id)).h).toFixed(3), atkSpawn: fs.atk.spawn || null, atkHitAnim: !!fs.atk.hitBul },
         B: fs.B && { off: +fs.B.off.toFixed(2), dur: +fs.B.dur.toFixed(2), ctl: fs.B.ctl, sum: +fs.B.sum.toFixed(2) } }; },
     fightPolyForm: (id) => fightPolyFormId(id), // 變形外觀的角色 id
     // 標準化的小零件（健檢用；都不改任何狀態）

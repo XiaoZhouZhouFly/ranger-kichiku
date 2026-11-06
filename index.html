@@ -982,7 +982,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v7.5";
+  const APP_VERSION = "v7.5.1";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -1100,14 +1100,20 @@ body.fight-on { overflow: hidden; }
     return statsPromise;
   }
   /* 技能的完整效果清單（只有格鬥場用；單人、雙人不讀）。沒有這個檔（例如還沒同步過）時當作空的，格鬥場改看 stats.json 的傷害欄位 */
-  let fxPromise = null;
+  let fxPromise = null, reachPromise = null;
   function ensureSkillFx() {
     if (!fxPromise) fxPromise = Promise.all([
       fetchData(LOCAL + "skill_fx.json", "json").catch(() => ({})),
       fetchData(CUSTOM + "skill_fx.json", "json").catch(() => ({})),
-      fetchData(LOCAL + "fight_reach.json", "json").catch(() => ({})), // v7.4：格鬥場判定距離（每日同步先算好，見 sync.py）
-    ]).then(([x, c, r]) => { S.fx = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); S.reach = r && typeof r === "object" ? r : {}; });
+      ensureReach(),
+    ]).then(([x, c]) => { S.fx = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); });
     return fxPromise;
+  }
+  /* 判定距離與體型資料 data/fight_reach.json（每日同步先算好，見 sync.py）：格鬥場的判定（v7.4）＋各模式的體型校正（v7.5.1，loadFighter）。
+     沒有這個檔時當作空的（照舊用部件外框） */
+  function ensureReach() {
+    if (!reachPromise) reachPromise = fetchData(LOCAL + "fight_reach.json", "json").catch(() => ({})).then((r) => { S.reach = r && typeof r === "object" ? r : {}; });
+    return reachPromise;
   }
   /* 角色的動畫資料（單人、雙人共用）：官方角色是壓縮檔 .json.gz（找不到才讀 .json），自製角色是 .json */
   async function loadUnitMeta(id) {
@@ -3431,9 +3437,13 @@ body.fight-on { overflow: hidden; }
     // 讓角色以身體中心站位、腳踩在地面上（原始素材的原點不在腳底中央）
     f.ox = -(f.lb.x0 + f.lb.x1) / 2; f.oy = -f.lb.y1;
     f.w = f.lb.x1 - f.lb.x0; f.h = f.lb.y1 - f.lb.y0;
-    /* v7.5：待機時身體很扁（例如利姆路的史萊姆型態）不拿待機的高度當身高，不然會被放大成一般人的身高、變成巨大史萊姆。
-       每日同步量好的身高（data/fight_reach.json 的 bh：攻擊動作身體高度的中位數，只算不透明像素）優先；沒有就照舊 */
-    const rr = S.reach && S.reach[r.id]; if (rr && rr.bh) f.h = rr.bh;
+    /* 體型校正（v7.5.1，雙人對打與格鬥場都用；資料先讀好才不會因為先後順序不同而大小不一）：
+       每日同步量好的「不透明」待機身體範圍 lb（很大的半透明光暈不算，例如招黃金貓莎莉）決定大小與站位；
+       待機太扁的角色（例如利姆路的史萊姆型態）用 bh 當身高，不會被放大成巨大史萊姆 */
+    await ensureReach();
+    const rr = S.reach[r.id];
+    if (rr && rr.lb) { f.lb = { x0: rr.lb[0], y0: rr.lb[1], x1: rr.lb[2], y1: rr.lb[3] }; f.ox = -(f.lb.x0 + f.lb.x1) / 2; f.oy = -f.lb.y1; f.w = f.lb.x1 - f.lb.x0; f.h = f.lb.y1 - f.lb.y0; }
+    if (rr && rr.bh) f.h = rr.bh;
     return f;
   }
   function pickAnim(part, names) { return names.find((n) => part.animations[n]?.frames?.length) || null; }
@@ -5247,7 +5257,7 @@ body.fight-on { overflow: hidden; }
       return { id, hp: fs.hp, dr: fs.dr, walk: Math.round(fs.walk), atk: [fs.atk.kind, fs.atk.dmg, +fs.atk.cd.toFixed(2)], sk: fs.sk.map((k) => k && [k.kind, k.dmg, +k.cd.toFixed(1)]),
         // v7.5：判定（健檢用）—普攻距離、技能範圍／往前距離、投射物碰撞框、本人變成投射物、身高縮放
         hit: { atk: Math.round(fs.atk.kind === "melee" ? fs.atk.reach : fs.atk.range || 0), atkBox: fs.atk.pbox || null, atkHide: !!fs.atk.hideBody,
-          sk: fs.sk.map((k) => k && { ahead: k.ahead || null, range: Math.round(k.range || 0), box: k.pbox || null, hide: !!k.hideBody }), scale: +(FT.CH / (await fightLoad(id)).h).toFixed(3) },
+          sk: fs.sk.map((k) => k && { ahead: k.ahead || null, range: Math.round(k.range || 0), box: k.pbox || null, hide: !!k.hideBody }), scale: +(FT.CH / (await fightLoad(id)).h).toFixed(3), atkSpawn: fs.atk.spawn || null, atkHitAnim: !!fs.atk.hitBul },
         B: fs.B && { off: +fs.B.off.toFixed(2), dur: +fs.B.dur.toFixed(2), ctl: fs.B.ctl, sum: +fs.B.sum.toFixed(2) } }; },
     fightPolyForm: (id) => fightPolyFormId(id), // 變形外觀的角色 id
     // 標準化的小零件（健檢用；都不改任何狀態）
@@ -5496,7 +5506,7 @@ body.fight-on { overflow: hidden; }
     LOB_TIME: 0.8, LOB_R: 60, LOB_GRAV_MUL: 2,                         // 拋物線基準飛行時間（資料速度 LOB_V0 時）、落地爆炸半徑、拋物線的重力倍數（v7.4：×2＝拋得高，不跳也能從底下穿過）
     // 原始資料 → 場地（射程、速度是遊戲單位；換算係數集中在這裡）
     MELEE_RG: 200,                                    // 普攻沒有飛行過程時：射程小於這個＝近戰，以上＝瞬間直線
-    VIS_MELEE_MAX: 400, VIS_DLINE_MAX: 560, VIS_LUNGE_MAX: 700, PBOX_FRONT: 120, FRONT_FAR: 400, // v7.5：身體衝刺型的上限；投射物碰撞只取圖的最前面 PBOX_FRONT
+    VIS_MELEE_MAX: 400, VIS_DLINE_MAX: 560, VIS_LUNGE_MAX: 1100, PBOX_FRONT: 120, FRONT_FAR: 400, // v7.5：身體衝刺型的上限；投射物碰撞只取圖的最前面 PBOX_FRONT
     FX_W_MAX: 400, FRONT_OVER: 30, FRONT_MIN: 100, // v7.4：技能動作要比普攻動作多伸出 FRONT_OVER、離身體前緣至少 FRONT_MIN 才算「身前範圍」（否則是施法動作，維持定點）
                                        // v7.4：技能特效圖太寬時等比縮小到這個寬度（判定跟著）
     SK_VS_ATK: 1.2, SK_WIDTH_K: 0.45, SK_WIDTH_MAX: 360, // v7.4：技能範圍至少是普攻判定的 1.2 倍；矩形寬＝技能伸到距離 × 0.45（最寬 360）           // v7.4：判定跟著畫面——攻擊動作實際伸到多遠（從身體中心算）的上限：近戰、瞬間直線
@@ -5666,6 +5676,15 @@ body.fight-on { overflow: hidden; }
     const fr = (clip && f.part.animations[clip] && f.part.animations[clip].frames) || []; if (!fr.length) return 0;
     return fr.filter((x) => !fItems(f, x).some((t) => t.alpha >= 0.3)).length / fr.length;
   }
+  /* v7.5.1 投射物出發位置：原始資料的 x、y（projectiles.json，跟角色圖同一套原始座標、y 往上）換成
+     [離身體中心往前多遠, 離地多高]（場地單位）。投射物圖就畫在這個位置，跟原作一樣（之前一律從身體前緣、固定高度發射，
+     圖片的位置會跑掉：例如庫拉麗絲的投射物畫在地底下）。高度限制在 10～0.9 身高（太高的斜射投射物打不到人） */
+  function fightSpawn(f, cfg) {
+    if (!cfg || cfg.x == null) return null;
+    const kk = FT.CH / f.h;
+    // 原始的 x、y 要乘 0.5 才是角色圖的座標（雙人對打 js-11 也是這個比例，畫面跟原作一致）
+    return [Math.round(fclamp((cfg.x * 0.5 + f.ox) * kk, -200, 400)), Math.round(fclamp((f.lb.y1 + (cfg.y || 0) * 0.5) * kk, 10, FT.CH * 0.9))];
+  }
   // 技能特效圖的左右範圍（以落點為 0、往右為正，場地單位）：優先用同步算好的；沒有就用部件外框現場算（較粗略）
   function fightEffectExtent(f, s, bulCfg) {
     const r = S.reach && S.reach[f.r.id];
@@ -5689,6 +5708,10 @@ body.fight-on { overflow: hidden; }
       reach: fclamp(rg * FT.RG_REACH, FT.REACH_MIN, FT.REACH_MAX), range: a.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : fclamp(rg * FT.RG_REACH, FT.DLINE_MIN, FT.DLINE_MAX),
       speed: fSpeed(a.cfg), lobT: fLobT(a.cfg) }, pre.atk || {});
     if (pre.atk && pre.atk.kind) atk.kind = pre.atk.kind;
+    /* v7.5.1：普攻投射物飛行中完全看不到（原作是直接在對手身上爆開，例如華美巫女兔兔、名人氣球藝術家兔兔）
+       → 不當成會飛的子彈：照射程改成近戰／瞬間直線，打中時在對手身上播命中動畫（hitBul） */
+    const RR = S.reach && S.reach[f.r.id];
+    if (RR && RR.inv && RR.inv[0] && atk.kind === "shot" && !(pre.atk && pre.atk.kind)) { atk.kind = rg < FT.MELEE_RG ? "melee" : "dline"; atk.hitBul = atk.bul; atk.bul = null; }
     /* v7.4：判定跟著畫面。近戰＝攻擊動作實際伸到的距離（減掉半個身體，因為判定從身體前緣算）；
        瞬間直線＝畫面比原本的判定長才放長（不縮短）。手寫數值有寫 reach／range 就照手寫。 */
     if (atkClip && !(pre.atk && (pre.atk.reach != null || pre.atk.range != null))) {
@@ -5699,6 +5722,7 @@ body.fight-on { overflow: hidden; }
     }
     if (atk.kind === "shot" && !(pre.atk && pre.atk.pbox)) atk.pbox = fightProjBox(f, 0); // v7.5：投射物碰撞框跟著圖
     if ((atk.kind === "shot" || atk.kind === "lob") && !(pre.atk && pre.atk.hideBody != null)) atk.hideBody = fightHideFrac(f, atkClip) >= 0.25;
+    if ((atk.kind === "shot" || atk.kind === "lob" || atk.hitBul) && !(pre.atk && pre.atk.spawn)) atk.spawn = fightSpawn(f, atk.bul || atk.hitBul);
     atk.cd = Math.max(atk.cd, atk.dur);
     // 普攻的判定前緣（從身體前緣算）：技能範圍至少要比它遠（v7.4）
     const bwF = fclamp(f.w / f.h * FT.CH, 56, 120), atkFront = atk.kind === "melee" ? atk.reach : atk.kind === "dline" || atk.kind === "lob" ? atk.range : 0;
@@ -5725,6 +5749,8 @@ body.fight-on { overflow: hidden; }
         const base = Math.max(vs - bwF / 2, atkFront * FT.SK_VS_ATK);
         if (o.kind === "dash") o.ahead = Math.round(fclamp(vs - bwF / 2, o.width / 2, FT.CAST_MAX)); // 突進落地後往前打多遠（照技能動畫）
         const has = (key) => p && p[key] != null;
+        // v7.5.1：技能投射物飛行中完全看不到 → 改成指定位置打擊（判定照命中動畫的範圍，下面的特效圖規則處理）
+        if (RR && RR.inv && RR.inv[s + 1] && o.kind === "line" && !has("kind")) o.kind = "rect";
         if (o.kind === "rect") {
           if (!has("range")) o.range = Math.round(fclamp(Math.max(o.range, base), FT.CAST_MIN, FT.CAST_MAX));
           if (!has("width")) o.width = Math.round(fclamp(Math.max(o.width, base * FT.SK_WIDTH_K), FT.WIDTH_MIN, FT.SK_WIDTH_MAX));
@@ -5736,16 +5762,16 @@ body.fight-on { overflow: hidden; }
           const ex = fightEffectExtent(f, s, o.bul);
           /* v7.5：有特效圖，但技能動作本身就一路伸到很遠（例如巫女桔梗的技能 2：靈蛇從身上一路飛出去，特效圖只是最後的命中）
              → 畫面上整條路都在攻擊，改成身前範圍（打到動作伸到的地方），特效圖照樣當命中特效 */
-          if (ex && !o.enemyFx.some((e) => ["pull", "swap", "summon", "copy"].includes(FIGHT_FX[e.c].b)) && vs - bwF / 2 >= FT.FRONT_FAR) { o.kind = "front"; o.ahead = Math.round(fclamp(vs - bwF / 2, 60, FT.CAST_MAX)); o.range = o.ahead; o.width = o.ahead; }
+          if (ex && !o.enemyFx.some((e) => ["pull", "swap", "summon", "copy"].includes(FIGHT_FX[e.c].b)) && vs - bwF / 2 >= FT.FRONT_FAR) { o.kind = "front"; o.ahead = Math.round(fclamp(vs - bwF / 2, 60, fightVisDash(f, s + 1) > 0 ? FT.VIS_LUNGE_MAX : FT.CAST_MAX)); o.range = o.ahead; o.width = o.ahead; }
           else if (ex) { const w = Math.max(1, ex[1] - ex[0]), sc = w > FT.FX_W_MAX ? FT.FX_W_MAX / w : 1; o.width = Math.max(FT.WIDTH_MIN, Math.round(w * sc)); o.off = Math.round((ex[0] + ex[1]) / 2 * sc); o.fxs = sc; }
           // 拉近、換位、召喚、複製這類「要打到遠處對手才有用」的技能維持定點（改成身前範圍就失去意義）
           // 施法動作（技能動作沒有比普攻伸得更遠、或幾乎沒伸出去：效果其實出現在對手身上，例如原地揮杖、瞬移到對手身邊）也維持定點
           else if (!o.bul && !o.enemyFx.some((e) => ["pull", "swap", "summon", "copy"].includes(FIGHT_FX[e.c].b))
-            && vs >= Math.min(fightVisReach(f, "a", atk.clip), FT.VIS_MELEE_MAX) + FT.FRONT_OVER && vs - bwF / 2 >= FT.FRONT_MIN) { o.kind = "front"; o.ahead = Math.round(fclamp(vs - bwF / 2, 60, FT.CAST_MAX)); o.range = o.ahead; o.width = o.ahead; }
+            && vs >= Math.min(fightVisReach(f, "a", atk.clip), FT.VIS_MELEE_MAX) + FT.FRONT_OVER && vs - bwF / 2 >= FT.FRONT_MIN) { o.kind = "front"; o.ahead = Math.round(fclamp(vs - bwF / 2, 60, fightVisDash(f, s + 1) > 0 ? FT.VIS_LUNGE_MAX : FT.CAST_MAX)); o.range = o.ahead; o.width = o.ahead; }
         }
       }
       if (o.kind === "line" && !k.clipSub) o.pbox = fightProjBox(f, s + 1); // v7.5：投射物碰撞框跟著圖
-      if (o.kind === "line" || o.kind === "lob") o.hideBody = fightHideFrac(f, k.clip) >= 0.25;
+      if (o.kind === "line" || o.kind === "lob") { o.hideBody = fightHideFrac(f, k.clip) >= 0.25; o.spawn = fightSpawn(f, o.bul); }
       if (p) Object.assign(o, preD ? {} : { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
       return o;
     });
@@ -6364,6 +6390,7 @@ body.fight-on { overflow: hidden; }
     if (fightHitSummons(g, p.side, x0, x1, p.y, p.y + FT.CH * 0.8 * m, k.dmg)) return true; // 召喚物擋在前面就打到召喚物
     if (o.ko || !fOverlapX(x0, x1, h.x0, h.x1) || h.y0 > p.y + FT.CH * 0.8 * m || h.y1 < p.y - FT.CH * 0.1 * (m - 1)) return false;
     fightHit(g, p, o, k.dmg, k.sv, false, a.id, null);
+    if (k.hitBul) fightHitAnim(g, p, o, k); // v7.5.1：原作直接在對手身上爆開的普攻
     g.events.push({ type: "swing", side: p.side });
     return true;
   }
@@ -6377,21 +6404,27 @@ body.fight-on { overflow: hidden; }
     },
     // 拋物線：k.lobT 秒後落在拖曳的距離（從身體前緣算）；畫面會在落點畫預告
     lob(g, p, o, a, k) {
-      const b = fightProjBase(g, p, a, k), T = k.lobT || FT.LOB_TIME, h0 = FT.CH * 0.6 + p.y, land = b.x + p.face * a.aimD;
+      const b = fightProjBase(g, p, a, k), T = k.lobT || FT.LOB_TIME, h0 = (k.spawn ? k.spawn[1] : FT.CH * 0.6) + p.y, land = p.x + p.face * (fightFs(g, p).bw / 2 + a.aimD); // 落點照舊從身體前緣算
       const gm = FT.LOB_GRAV_MUL; // v7.4：同樣飛行時間、重力 ×2＝弧線更高（跟直線做出區別：不跳也能從底下穿過，只有快落地時打得到）
-      g.projs.push(Object.assign(b, { kind: "lob", hideOwner: !!k.hideBody, y: h0, py: h0, gm, vx: (land - b.x) / T, vy: (0.5 * FT.GRAV * gm * T * T - h0) / T, landX: land }));
+      /* v7.5.1：原始資料是曲線飛行（CURVE）的，照遊戲原生的軌跡飛：三次貝茲曲線，控制點在起點與落點中間、往前上方 0.4 倍距離
+         （跟雙人對打 js-13 的畫法同一個公式；這裡自己算，不呼叫雙人對打的程式），飛行時間照舊 T。沒有原始資料的照舊用重力 ×2 */
+      const bz = k.bul && k.bul.m === "CURVE" ? { sx: b.x, sy: h0, ex: land, ey: 0, h: Math.hypot(land - b.x, h0) * 0.4, T } : null;
+      g.projs.push(Object.assign(b, { kind: "lob", hideOwner: !!k.hideBody, y: h0, py: h0, gm, bz, T, vx: (land - b.x) / T, vy: (0.5 * FT.GRAV * gm * T * T - h0) / T, landX: land }));
     },
     // 直線（技能與普攻投射物）：朝面向一直飛，飛出場地或打中才消失
     line(g, p, o, a, k) {
-      const b = fightProjBase(g, p, a, k), y = p.y + FT.CH * (a.s === 2 ? 0.35 : 0.28);
-      g.projs.push(Object.assign(b, { kind: "line", y, py: y, vx: p.face * (k.speed || FT.SPEED_DEF), vy: 0, x0: b.x, pb: k.pbox || null, face: p.face, hideOwner: !!k.hideBody })); // x0：起點（最多飛 SHOT_MAX）；pb：碰撞框（v7.5）
+      const b = fightProjBase(g, p, a, k), y = p.y + (k.spawn ? k.spawn[1] : FT.CH * (a.s === 2 ? 0.35 : 0.28)), sp = k.speed || FT.SPEED_DEF;
+      /* v7.5.1：有原始資料的直線投射物，跟遊戲原生一樣朝「出手當下對手身上 0.3 身高」直直飛過去（從出發高度斜著飛，跟雙人對打同一個做法）；
+         沒有原始資料的照舊水平飛 */
+      const vy = k.bul && k.spawn ? fclamp((o.y + FT.CH * 0.3 - y) / (Math.max(60, Math.abs(o.x - b.x)) / sp), -sp, sp) : 0;
+      g.projs.push(Object.assign(b, { kind: "line", y, py: y, vx: p.face * sp, vy, x0: b.x, pb: k.pbox || null, face: p.face, hideOwner: !!k.hideBody })); // x0：起點（最多飛 SHOT_MAX）；pb：碰撞框（v7.5）
     },
     // 瞬間直線（遠程直接命中的普攻）：不產生飛行物，這一刻檢查身體前緣往前 range 內、同一高度有沒有對手
     dline(g, p, o, a, k) {
       const fs = fightFs(g, p), m = fxBoxMul(p, a.s < 2), x0 = p.x + p.face * fs.bw / 2, x1 = x0 + p.face * k.range * m, h = fHurt(o);
       g.fx.push({ kind: "dline", own: p.side, x0, x1, y: p.y + FT.CH * 0.4, t: 0, life: 0.25 });
       fightHitSummons(g, p.side, x0, x1, p.y, p.y + FT.CH * 0.8 * m, k.dmg);
-      if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && h.y0 <= p.y + FT.CH * 0.8 * m && h.y1 >= p.y) fightHit(g, p, o, k.dmg, k.sv, a.s < 2, a.id, k.enemyFx);
+      if (!o.ko && fOverlapX(x0, x1, h.x0, h.x1) && h.y0 <= p.y + FT.CH * 0.8 * m && h.y1 >= p.y) { fightHit(g, p, o, k.dmg, k.sv, a.s < 2, a.id, k.enemyFx); if (k.hitBul) fightHitAnim(g, p, o, k); }
     },
     // 突進：衝到拖曳的位置（0.25 秒），到了再判定落點附近（寬 k.width）有沒有對手
     // a.aimD 是場地上的位移（正＝往右）：先轉向衝的方向；突進途中不會被打斷（p.armor，見 fightHit）
@@ -6422,7 +6455,8 @@ body.fight-on { overflow: hidden; }
     if (!o.ko && fOverlapX(lo, hi, h.x0, h.x1) && o.y < FT.CH * 0.8) fightHit(g, p, o, k.dmg, k.sv, true, a.id, k.enemyFx, k.bul);
   };
   FIGHT_RELEASE.self = () => {}; // 自身：效果在前搖結束時套用（fightActing → fxCastSelf）
-  const fightProjBase = (g, p, a, k) => { const x = p.x + p.face * fightFs(g, p).bw / 2; return { own: p.side, x, px: x, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id, fx: k.enemyFx, box: fxBoxMul(p, a.s < 2) }; };
+  // v7.5.1：從原始資料的出發位置發射（k.spawn）；第一步的掃描從身體前緣開始，對手站在身體和出發點之間也打得到
+  const fightProjBase = (g, p, a, k) => { const front = p.x + p.face * fightFs(g, p).bw / 2, x = k.spawn ? p.x + p.face * k.spawn[0] : front; return { own: p.side, x, px: front, face: p.face, dmg: k.dmg, sv: k.sv, heavy: a.s < 2, skill: a.s < 2, bul: k.bul, t: 0, id: a.id, fx: k.enemyFx, box: fxBoxMul(p, a.s < 2) }; };
   // 突進衝完停在對手身上：只把突進的人往前進方向推出去（撞牆就改退到另一邊），不推對手
   function fightDashExit(g, p, o) {
     const minD = (fightFs(g, p).bw + g.cfg.fs[o.side].bw) / 2, lim = FT.AW / 2 - fightFs(g, p).bw / 2;
@@ -6436,32 +6470,49 @@ body.fight-on { overflow: hidden; }
     if (fn) fn(g, p, o, a, k);
     else { g.events.push({ type: "unsupported", side: p.side, kind: k.kind }); g.fx.push({ kind: "text", text: "不支援", x: p.x, y: FT.CH * 1.2, t: 0, life: 0.6 }); }
   }
+  // v7.5.1：直接命中的普攻在對手身上播命中動畫（高度＝原始出發高度，沒有就 0.4 身高）。純畫面
+  function fightHitAnim(g, p, o, k) {
+    g.fx.push({ kind: "pfin", x: o.x, y: p.y + (k.spawn ? k.spawn[1] : FT.CH * 0.4), t: 0, life: 1.2, bul: k.hitBul, own: p.side, face: p.face });
+  }
+  // v7.5.1：投射物結束（打中、被擋、落地、飛到最遠）時播原作的「命中動畫」（finish）；沒有圖就照舊畫火花。純畫面
+  function fightProjEnd(g, q) {
+    if (q.bul) g.fx.push({ kind: "pfin", x: q.x, y: q.y, t: 0, life: 1.2, bul: q.bul, own: q.own, face: q.face || 1, drawF: q.drawF });
+    else g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 });
+  }
   // 投射物：用「上一步到這一步的連線」判斷有沒有碰到受傷框（快的投射物也不會穿過去）
   function fightProjectiles(g) {
     const dt = FT.STEP;
     for (const q of g.projs) {
       q.px = q.x; q.py = q.y; q.t += dt;
       q.x += q.vx * dt;
-      if (q.kind === "lob") { q.y += q.vy * dt; q.vy -= FT.GRAV * (q.gm || 1) * dt; }
-      const o = g.p[1 - q.own], h = fHurt(o), r = (q.kind === "lob" ? 26 : 14) * (q.box || 1);
+      if (q.kind === "lob" && q.bz) { // 原生曲線：照時間沿貝茲曲線走，到終點落地
+        const B = q.bz, t = Math.min(1, q.t / B.T), u = 1 - t, f = q.face || 1, cx = (B.sx + B.ex) / 2 + f * B.h, cy = (B.sy + B.ey) / 2 + B.h;
+        q.x = u * u * u * B.sx + 3 * u * u * t * B.sx + 3 * u * t * t * cx + t * t * t * B.ex;
+        q.y = t >= 1 ? 0 : u * u * u * B.sy + 3 * u * u * t * B.sy + 3 * u * t * t * cy + t * t * t * B.ey;
+        q.vx = (q.x - q.px) / dt; q.vy = (q.y - q.py) / dt;
+      } else if (q.kind === "lob") { q.y += q.vy * dt; q.vy -= FT.GRAV * (q.gm || 1) * dt; }
+      else if (q.vy) { q.y += q.vy * dt; if (q.y < -FT.CH * 0.3) { q.dead = true; fightProjEnd(g, q); continue; } } // 斜飛的直線：鑽到地底就結束
+      // v7.5.1：拋物線飛行中段（飛行時間的 10%～90%）碰撞寬度減半——仍然打得到人，但不會一直被打（使用者決定）
+      const lt = q.kind === "lob" && q.T ? q.t / q.T : 0, r = (q.kind === "lob" ? 26 * (lt > 0.1 && lt < 0.9 ? 0.5 : 1) : 14) * (q.box || 1);
+      const o = g.p[1 - q.own], h = fHurt(o);
       // 掃過的範圍（上一步到這一步）：一般是中心點 ± r；有碰撞框（v7.5，跟著投射物圖）就用碰撞框
       const m = q.box || 1, pb = q.pb, fc = q.face || Math.sign(q.vx) || 1;
       const bx0 = pb ? (fc > 0 ? pb[0] : -pb[1]) * m : -r, bx1 = pb ? (fc > 0 ? pb[1] : -pb[0]) * m : r;
       const sx0 = Math.min(q.px, q.x) + bx0, sx1 = Math.max(q.px, q.x) + bx1;
       const yLo = Math.min(q.y, q.py) + (pb ? pb[2] * m : -r), yHi = Math.max(q.y, q.py) + (pb ? pb[3] * m : r);
       // 對方的召喚物會擋下投射物（先打到召喚物）
-      if (fightHitSummons(g, q.own, sx0, sx1, yLo, yHi, q.dmg, true)) { q.dead = true; g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 }); continue; }
+      if (fightHitSummons(g, q.own, sx0, sx1, yLo, yHi, q.dmg, true)) { q.dead = true; fightProjEnd(g, q); continue; }
       if (!o.ko && fOverlapX(sx0, sx1, h.x0, h.x1) && yHi > h.y0 && yLo < h.y1) {
         fightHit(g, q.src || g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx, q.bul); q.dead = true;
-        g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 });
+        fightProjEnd(g, q);
         continue;
       }
       if (q.kind === "lob" && q.y <= 0) {
-        q.dead = true; g.fx.push({ kind: "boom", x: q.x, y: 0, t: 0, life: 0.45 });
+        q.dead = true; if (q.bul) fightProjEnd(g, q); else g.fx.push({ kind: "boom", x: q.x, y: 0, t: 0, life: 0.45 });
         if (!o.ko && fOverlapX(q.x - FT.LOB_R * (q.box || 1), q.x + FT.LOB_R * (q.box || 1), h.x0, h.x1) && o.y < FT.AIR_SAFE * (q.box || 1)) fightHit(g, q.src || g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx, q.bul);
       }
       if (Math.abs(q.x) > FT.AW / 2 + 80) q.dead = true; // 飛出場地
-      if (q.kind === "line" && q.x0 != null && Math.abs(q.x - q.x0) > FT.SHOT_MAX) { q.dead = true; g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.25 }); } // v7.0：直線投射物最多飛 SHOT_MAX
+      if (q.kind === "line" && q.x0 != null && Math.abs(q.x - q.x0) > FT.SHOT_MAX) { q.dead = true; fightProjEnd(g, q); } // v7.0：直線投射物最多飛 SHOT_MAX
     }
     g.projs = g.projs.filter((q) => !q.dead);
   }
@@ -8059,7 +8110,9 @@ body.fight-on { overflow: hidden; }
         const anim = pickAnim(dr.part, ["normal", "idle", "wait", "shot", "fire", "attack"]);
         if (anim) {
           const n = dr.part.animations[anim].frame_count, idx = Math.floor(q.t * (dr.part.anim_rate || 24)) % Math.max(1, n);
-          const rot = q.kind === "lob" && q.bul.r ? Math.atan2(-q.vy, Math.abs(q.vx)) * 180 / Math.PI * -1 : 0;
+          /* 拋物線：圖片轉向（原始資料 r＝1）。原生曲線（v7.5.1）照遊戲：角度從 a0 漸變到 a1（跟雙人對打同一個做法）；
+             沒有原始曲線的照舊跟著飛行方向轉 */
+          const rot = q.kind === "lob" && q.bul.r ? (q.bz ? (q.bul.a0 || 0) + ((q.bul.a1 || 0) - (q.bul.a0 || 0)) * Math.min(1, q.t / q.bz.T) : Math.atan2(-q.vy, Math.abs(q.vx)) * 180 / Math.PI * -1) : 0;
           c.save(); c.translate(X(q.x), Y(q.y)); c.scale(k, k); drawPartCtx(c, dr, anim, idx, 0, 0, fightFlip(q.face), rot); c.restore();
           continue;
         }
@@ -8250,6 +8303,12 @@ body.fight-on { overflow: hidden; }
       for (let n = 0; n < (e.big ? 5 : 2); n++) { const sp = (12 + n * 9) * pr * fScale * 3; c.beginPath(); c.arc(X(e.x - e.dir * (sp / fScale)), Y(6 + n * 7 * pr), (e.big ? 12 : 7) * fScale * (1 + pr), 0, Math.PI * 2); c.fill(); }
     }
     else if (e.kind === "boom") { c.fillStyle = "#ffb14a"; c.beginPath(); c.arc(X(e.x), Y(20), 20 + 60 * pr, 0, Math.PI * 2); c.fill(); }
+    else if (e.kind === "pfin") { // v7.5.1：投射物的命中動畫（原作 finish），畫在投射物結束的位置
+      const f = e.drawF || g.cfg.f[e.own], dr = e.bul && f.bul[e.bul.p], anim = dr && pickAnim(dr.part, ["finish", "hit", "end"]);
+      if (anim) { const A = dr.part.animations[anim], n = A.frame_count, idx = Math.floor(e.t * (dr.part.anim_rate || 24));
+        if (idx < n) { c.globalAlpha = 1; c.translate(X(e.x), Y(e.y)); const k = fScale * FT.CH / f.h; c.scale(k, k); drawPartCtx(c, dr, anim, idx, 0, 0, fightFlip(e.face), 0); } }
+      else { c.strokeStyle = "#fff6a8"; c.lineWidth = 5; c.beginPath(); c.arc(X(e.x), Y(e.y), 10 + 40 * pr, 0, Math.PI * 2); c.stroke(); }
+    }
     else if (e.kind === "impact") {
       const h = FT.CH * 0.95 * fScale, f = g.cfg.f[e.own], dr = e.bul && f.bul[e.bul.p];
       c.fillStyle = "rgba(255,240,200,0.6)"; c.fillRect(X(e.x) - e.w * fScale / 2, gy - h, e.w * fScale, h);
