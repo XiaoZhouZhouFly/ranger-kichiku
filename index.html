@@ -982,7 +982,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v7.4";
+  const APP_VERSION = "v7.4.1";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -5201,6 +5201,14 @@ body.fight-on { overflow: hidden; }
     fightNorm: async (id) => { await Promise.all([ensureStats(), ensureSkillFx()]); const f = await fightLoad(id), fs = fightStats(f); return { N: fs.N, atk: fs.atk.kind, sk: fs.sk.map((k) => k && k.kind), summary: fightSummary(fs) }; },
     fightCompat: () => normAll(),
     fightSync: () => netSyncCheck(),
+    // 自動平衡抽樣（v7.5）：可以上格鬥場的角色（不含隱藏的召喚物、不適合的角色）；清掉角色快取（大量對戰時避免記憶體一直長）
+    fightPool: () => S.index.filter((r) => !r.hidden && fightCompatOf(r).lvl !== "unfit").map((r) => r.id),
+    fightCacheClear: () => FG.cache.clear(),
+    // 自動平衡的類型（v7.4.1）：普攻形式（melee／dline／line／lob）＋有沒有控制效果、召喚（不下載動畫，用 normUnit 快速判斷）
+    fightTypes: async (ids) => { await Promise.all([ensureStats(), ensureSkillFx()]); const out = {};
+      for (const id of ids) { const r = S.index.find((x) => x.id === id); if (!r) continue; const N = normUnit(r, NORM_ALL_ANIMS), fx = N.sk.filter((k) => k.exists).flatMap((k) => k.fx.map((e) => e.c));
+        out[id] = [N.atk.form || "?", fx.some((c) => FIGHT_FX[c] && FX_CONTROL.has(FIGHT_FX[c].b)) ? 1 : 0, fx.some((c) => FX_SUMMON.has(c)) ? 1 : 0]; }
+      return out; },
     fightView: () => ({ land: !!FG.land, w: FW, h: FH, camX: FG.cam ? Math.round(FG.cam.x) : null, view: FG.cam ? Math.round(FG.cam.view) : null, scale: +fScale.toFixed(3) }), // v7.0：畫面方向與鏡頭
     // v6：連線層自我測試（不連網）：第 0 格按的跳，延遲 d 格後才出現；假網路延遲時會卡住等待
     fightNetTest: (d) => {
@@ -5221,9 +5229,10 @@ body.fight-on { overflow: hidden; }
     // 數值平衡檢查：兩隻 AI 對打一場（倒下或時間到就停）→ 勝方（-1＝平手）、秒數、雙方剩餘體力比例
     // v7.3：明確用一般對戰模式（cpu）；之前沒指定＝打木樁模式，右方不會倒、2 秒沒挨打會回滿血，勝率不準
     fightBout: async (c0, c1, seed, secs) => {
-      const r = await window.__rk.fightRun({ c0, c1, mode: "cpu", ai: ["normal", "normal"], seed, secs: secs || 60, holdMove: true, teleMode: "sync", steps: (secs || 60) * 60, stopKo: true });
-      const left = r.hp.map((h, i) => h / r.maxHp[i]);
-      return { win: r.log.ko ? (r.hp[0] > 0 ? 0 : 1) : left[0] === left[1] ? -1 : left[0] > left[1] ? 0 : 1, t: r.log.koT || r.t, left: left.map((x) => +x.toFixed(2)), hits: r.log.hits };
+      const r = await window.__rk.fightRun({ c0, c1, mode: "cpu", ai: ["normal", "normal"], seed, secs: secs || 60, holdMove: true, teleMode: "sync", steps: (secs || 60) * 60, stopKo: true, hpEvery: 300 });
+      const left = r.hp.map((h, i) => Math.max(0, h) / r.maxHp[i]);
+      // v7.4.1：多回傳 ko（有沒有人倒下；沒有＝時間到）與 hp5（每 5 秒雙方血量 %，倒下後就沒有後面的點）
+      return { win: r.log.ko ? (r.hp[0] > 0 ? 0 : 1) : left[0] === left[1] ? -1 : left[0] > left[1] ? 0 : 1, t: r.log.koT || r.t, left: left.map((x) => +x.toFixed(2)), hits: r.log.hits, ko: !!r.log.ko, hp5: r.hpAt };
     },
     // 數值平衡：一隻角色換算後的數值（hp、減傷、移速、普攻／技能傷害、五種能力）
     fightStatsOf: async (id) => { await Promise.all([ensureStats(), ensureSkillFx()]); const fs = fightStats(await fightLoad(id));
@@ -5237,7 +5246,7 @@ body.fight-on { overflow: hidden; }
       const g = fightNew({ f, fs, extra, rounds: spec.rounds || 1, secs: spec.secs ?? 0, mode: spec.mode || "dummy", seed: spec.seed || 1,
         holdMove: !!spec.holdMove, teleMode: spec.teleMode || "dist" });
       g.phase = "fight"; g.phaseT = 1;
-      const log = { hits: 0, guards: 0, breaks: 0, downs: 0, inv: 0, ko: 0, dmg: [], scale: [] }, mem = [{}, {}], trace = [];
+      const log = { hits: 0, guards: 0, breaks: 0, downs: 0, inv: 0, ko: 0, dmg: [], scale: [] }, mem = [{}, {}], trace = [], hpAt = [];
       for (let k = 0; k < (spec.steps || 600); k++) {
         const inputs = [0, 1].map((side) => {
           const inp = fightBlankInput();
@@ -5258,9 +5267,10 @@ body.fight-on { overflow: hidden; }
         log.summons = Math.max(log.summons || 0, g.summons.length); // 場上召喚物最多幾隻
         log.clones = Math.max(log.clones || 0, g.clones.length); // 場上複製體最多幾隻
         if (spec.stopKo && log.ko) { log.koT = +g.t.toFixed(2); break; } // 數值平衡檢查：倒下就停
+        if (spec.hpEvery && (k + 1) % spec.hpEvery === 0) hpAt.push(g.p.map((p) => Math.round(Math.max(0, p.hp) / p.maxHp * 100))); // 每 hpEvery 步記一次雙方血量 %（自動平衡的前中後期用）
         if (spec.trace) trace.push(g.p.map((p) => [Math.round(p.x), Math.round(p.y), Math.round(p.hp), p.state, +p.gauge.toFixed(1), +p.sv.toFixed(1), p.face, Object.keys(p.st).sort().join(","), p.st.shield ? Math.round(p.st.shield.v) : 0]).concat([g.summons.map((m) => [m.side, Math.round(m.x), Math.max(0, Math.round(m.hp)), m.act ? 1 : 0])]));
       }
-      return { log, trace, cd: g.p.map((p) => p.cd.map((c) => +c.toFixed(2))), atkCd: g.p.map((p) => +p.atkCd.toFixed(2)), maxHp: g.p.map((p) => p.maxHp), dr: g.p.map((p) => p.dr), gauge: g.p.map((p) => +p.gauge.toFixed(1)), sv: g.p.map((p) => +p.sv.toFixed(1)), state: g.p.map((p) => p.state), face: g.p.map((p) => p.face), hp: g.p.map((p) => Math.round(p.hp)), x: g.p.map((p) => Math.round(p.x)), phase: g.phase, wins: g.wins.slice(), stats: Object.assign({}, g.stats), t: +g.t.toFixed(2) };
+      return { log, trace, hpAt, cd: g.p.map((p) => p.cd.map((c) => +c.toFixed(2))), atkCd: g.p.map((p) => +p.atkCd.toFixed(2)), maxHp: g.p.map((p) => p.maxHp), dr: g.p.map((p) => p.dr), gauge: g.p.map((p) => +p.gauge.toFixed(1)), sv: g.p.map((p) => +p.sv.toFixed(1)), state: g.p.map((p) => p.state), face: g.p.map((p) => p.face), hp: g.p.map((p) => Math.round(p.hp)), x: g.p.map((p) => Math.round(p.x)), phase: g.phase, wins: g.wins.slice(), stats: Object.assign({}, g.stats), t: +g.t.toFixed(2) };
     },
     duel: () => ({ inited: !!D.inited, a: D.f[0] && D.f[0].r.id, b: D.f[1] && D.f[1].r.id, kind: D.type, mode: D.mode, seed: D.seed, settings: settingsToSaved(),
       state: D.cd != null ? "countdown" : D.playing ? "playing" : D.idle ? (D.pos > 0 ? "ended" : "idle") : "paused", pos: Math.floor(D.pos || 0),

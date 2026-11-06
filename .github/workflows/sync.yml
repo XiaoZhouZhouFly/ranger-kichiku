@@ -108,5 +108,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # 網站包約 600 MB，GitHub 那邊處理（syncing_files）偶爾超過預設的 10 分鐘就會被取消；放寬到 30 分鐘（v7.4.1）
       - id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          timeout: 1800000

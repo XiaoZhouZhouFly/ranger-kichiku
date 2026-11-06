@@ -1,0 +1,132 @@
+# 格鬥場自動平衡抽樣（v7.4.1）
+# - 每天（台灣時間 05:07，每日同步之後）：4 個分片各跑約 50 分鐘，新角色跟 1,000 個不同對手各打一場、其餘時間隨機配對（左右隨機）；
+#   每場原始紀錄存 data/balance/raw/<規則版本>/<日期>.json.gz，彙總在 data/balance/fight_samples.json（只改 data/，不會觸發同步與發布）。
+#   有新角色測完時開一則 Issue（GitHub 會寄 email）。
+# - 每週一台灣時間 08:00：開一則「平衡週報」Issue（Bradley-Terry 強度排名、類型矩陣、前中後期），建議值寫進 data/balance/fight_suggest.json、
+#   全部統計寫進 data/balance/fight_analysis.json。網站不會自己改數值。
+# - 規則或指令見 tools/fight_sample.mjs、tools/fight_report.mjs 檔頭；技術文件 格鬥場規格 F-§10。
+name: 格鬥場自動平衡抽樣
+
+on:
+  schedule:
+    - cron: "7 21 * * *"   # 每天台灣時間 05:07（UTC 21:07）：抽樣
+    - cron: "0 0 * * 1"    # 每週一台灣時間 08:00（UTC 週一 00:00）：週報
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "sample＝抽樣、weekly＝週報"
+        required: true
+        default: sample
+        type: choice
+        options: [sample, weekly]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: fight-balance
+  cancel-in-progress: false
+
+jobs:
+  sample:
+    if: github.event.schedule == '7 21 * * *' || (github.event_name == 'workflow_dispatch' && inputs.task == 'sample')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: 安裝瀏覽器
+        working-directory: tools
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: 抽樣
+        run: node tools/fight_sample.mjs sample . --state data/balance/fight_samples.json --out delta-${{ matrix.shard }}.json --minutes 50 --shard ${{ matrix.shard }}/4 --pages 2 --opp 1000
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: delta-${{ matrix.shard }}
+          path: delta-${{ matrix.shard }}.json
+          retention-days: 3
+          if-no-files-found: ignore
+
+  merge:
+    needs: sample
+    if: always() && needs.sample.result != 'skipped'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: delta-*
+          merge-multiple: true
+          path: deltas
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: 合併結果
+        id: m
+        run: |
+          ls deltas/*.json
+          node tools/fight_sample.mjs merge --state data/balance/fight_samples.json deltas/*.json > new_ids.txt
+          echo "new=$(tr '\n' ' ' < new_ids.txt)" >> "$GITHUB_OUTPUT"
+      - name: 安裝瀏覽器（新角色報告用）
+        if: steps.m.outputs.new != ''
+        working-directory: tools
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: 新角色報告（開 Issue → 寄 email）
+        if: steps.m.outputs.new != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node tools/fight_report.mjs new . --out report.md ${{ steps.m.outputs.new }}
+          gh issue create --title "格鬥場新角色平衡測試 $(TZ=Asia/Taipei date +%Y-%m-%d)" --body-file report.md
+      - name: 存回 repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/balance
+          git diff --cached --quiet && exit 0
+          git commit -q -m "格鬥場平衡抽樣 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+          for i in 1 2 3 4 5; do git pull -q --rebase && git push -q && exit 0; sleep 20; done
+          exit 1
+
+  weekly:
+    if: github.event.schedule == '0 0 * * 1' || (github.event_name == 'workflow_dispatch' && inputs.task == 'weekly')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: 安裝瀏覽器
+        working-directory: tools
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: 週報（開 Issue → 寄 email）
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node tools/fight_report.mjs weekly . --out report.md
+          gh issue create --title "格鬥場平衡週報 $(TZ=Asia/Taipei date +%Y-%m-%d)" --body-file report.md
+      - name: 存回 repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/balance
+          git diff --cached --quiet && exit 0
+          git commit -q -m "格鬥場平衡週報 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+          for i in 1 2 3 4 5; do git pull -q --rebase && git push -q && exit 0; sleep 20; done
+          exit 1
