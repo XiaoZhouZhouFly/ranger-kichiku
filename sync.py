@@ -97,6 +97,25 @@ def clean_path(p: str) -> str:
     return re.sub(r"^res_from_emulator/", "", str(p or "").lstrip("/"))
 
 
+_SIZE_IN_NAME = re.compile(r"_(\d+)x(\d+)(?:_\d+)?\.png$")
+
+
+def fix_rect(name: str, r):
+    """v7.5：少數上游角色（莉莎、莎莉 417/418…）的 rect 寫成 [x, 0, y, 0]（寬高是 0），寬高要從檔名「_寬x高.png」補回來。"""
+    if not r or len(r) < 4 or (r[2] and r[3]):
+        return r
+    m = _SIZE_IN_NAME.search(name or "")
+    return [r[0], r[2], int(m.group(1)), int(m.group(2))] if m else r
+
+
+def fix_meta_rects(meta: dict) -> dict:
+    for part in (meta.get("parts") or {}).values():
+        for n, s in (part.get("sprites") or {}).items():
+            if s.get("rect"):
+                s["rect"] = fix_rect(n, s["rect"])
+    return meta
+
+
 def compact_meta(meta: dict) -> tuple[dict, list[str]]:
     """只留網頁播放需要的欄位，並回傳這份資料用到的 PNG（上游路徑）。"""
     out = {"unit_id": meta.get("unit_id"), "parts": {}}
@@ -115,7 +134,7 @@ def compact_meta(meta: dict) -> tuple[dict, list[str]]:
             "anim_rate": part.get("anim_rate", 24),
             "png": "res/" + png,
             "images": [{"name": i["name"], "m": i["m"]} for i in part.get("images", [])],
-            "sprites": {n: {"rect": s["rect"], "rotated": bool(s.get("rotated"))}
+            "sprites": {n: {"rect": fix_rect(n, s["rect"]), "rotated": bool(s.get("rotated"))}
                         for n, s in (part.get("sprites") or {}).items()},
             "animations": anims,
         })
@@ -569,7 +588,7 @@ def sync_stats(rows, summons=None) -> None:
 # 網站格鬥場用它決定判定距離（js-18-fight-data.js fightStats）；沒有這個檔或沒有這隻角色時，網站會在開打時自己量（較粗略）。
 # 需要 Pillow；沒有就跳過（網站照樣能用）。結果依動畫檔內容的雜湊快取，只有角色資料變了才重算。
 FIGHT_REACH = DATA / "fight_reach.json"
-REACH_VER = 2
+REACH_VER = 3  # v7.5：加上身體衝刺（d）與投射物大小（p）
 REACH_CLIPS = {
     "a": ["attack_all", "attack", "attack_a", "attack_b"],
     "s1": ["s_attack_all", "s_action_attack_all", "s_attack", "s_attack_a", "s_attack_b", "s_action_attack_2", "s_action_attack_3"],
@@ -601,25 +620,55 @@ def _box(T, x0, y0, x1, y1):
     return [min(p[0] for p in pts), min(p[1] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts)]
 
 
+def _cluster(part, fr, tol=12):
+    """一格的身體主體：從最大的部件開始，外框相距 tol 以內的才併進來（跟網站 js-13 fCluster 一樣）。沒有部件＝None。"""
+    bx = [_box(T, 0, 0, sp["rect"][2], sp["rect"][3]) for _, sp, T in _items(part, fr)]
+    if not bx:
+        return None
+    bx.sort(key=lambda b: -(b[2] - b[0]) * (b[3] - b[1]))
+    c, rest, grew = list(bx[0]), bx[1:], True
+    while grew:
+        grew, keep = False, []
+        for b in rest:
+            if b[0] <= c[2] + tol and b[2] >= c[0] - tol and b[1] <= c[3] + tol and b[3] >= c[1] - tol:
+                c = [min(c[0], b[0]), min(c[1], b[1]), max(c[2], b[2]), max(c[3], b[3])]
+                grew = True
+            else:
+                keep.append(b)
+        rest = keep
+    return c
+
+
+def _opaque_cluster(part, fr, atlas, cache, tol=12):
+    """跟 _cluster 一樣，但只算不透明像素（光暈、透明邊不算）。"""
+    bx = []
+    for name, sp, T in _items(part, fr):
+        bb = _opaque(atlas, sp, cache, name)
+        if bb:
+            bx.append(_box(T, *bb))
+    if not bx:
+        return None
+    bx.sort(key=lambda b: -(b[2] - b[0]) * (b[3] - b[1]))
+    c, rest, grew = list(bx[0]), bx[1:], True
+    while grew:
+        grew, keep = False, []
+        for b in rest:
+            if b[0] <= c[2] + tol and b[2] >= c[0] - tol and b[1] <= c[3] + tol and b[3] >= c[1] - tol:
+                c = [min(c[0], b[0]), min(c[1], b[1]), max(c[2], b[2]), max(c[3], b[3])]
+                grew = True
+            else:
+                keep.append(b)
+        rest = keep
+    return c
+
+
 def _body_bounds(part, anim, tol=12):
-    """跟網站 js-13 fBounds 一樣：每格從最大的部件開始，外框相距 tol 以內的才併進來。"""
+    """跟網站 js-13 fBounds 一樣：每格的身體主體（_cluster）聯集。"""
     out = None
     for fr in part["animations"][anim]["frames"]:
-        bx = [_box(T, 0, 0, sp["rect"][2], sp["rect"][3]) for _, sp, T in _items(part, fr)]
-        if not bx:
-            continue
-        bx.sort(key=lambda b: -(b[2] - b[0]) * (b[3] - b[1]))
-        c, rest, grew = list(bx[0]), bx[1:], True
-        while grew:
-            grew, keep = False, []
-            for b in rest:
-                if b[0] <= c[2] + tol and b[2] >= c[0] - tol and b[1] <= c[3] + tol and b[3] >= c[1] - tol:
-                    c = [min(c[0], b[0]), min(c[1], b[1]), max(c[2], b[2]), max(c[3], b[3])]
-                    grew = True
-                else:
-                    keep.append(b)
-            rest = keep
-        out = c if out is None else [min(out[0], c[0]), min(out[1], c[1]), max(out[2], c[2]), max(out[3], c[3])]
+        c = _cluster(part, fr, tol)
+        if c:
+            out = c if out is None else [min(out[0], c[0]), min(out[1], c[1]), max(out[2], c[2]), max(out[3], c[3])]
     return out
 
 
@@ -637,10 +686,20 @@ def _opaque(atlas, sp, cache, name):
     return bb
 
 
-def _reach(part, anim, atlas, cache, cx, y0, y1):
+def _reach(part, anim, atlas, cache, cx, y0, y1, bw):
+    """回傳 (伸多遠, 身體衝多遠)，都從原位的身體中心算、原始座標。
+    v7.5 身體衝刺：某一格的身體主體中心往前離開原位超過一個身高（例如始皇帝、樞木朱雀衝過去踢），就改從衝出去的身體往前量。"""
     h = y1 - y0
-    tol, best = h * 0.15, 0.0
+    tol, best, dash = h * 0.15, 0.0, 0.0
     for fr in part["animations"][anim]["frames"]:
+        c = _cluster(part, fr)
+        mc = (c[0] + c[2]) / 2 if c else cx
+        # 衝出去的要「像身體」：高度 0.6～1.6 個身高、寬度不超過 3 倍（避免把召喚出來的大型生物、大特效當成身體）；
+        # 衝超過 8 個身高的不算（那是瞬移到畫面外、不是攻擊）
+        like = c and h * 0.6 <= c[3] - c[1] <= h * 1.6 and c[2] - c[0] <= bw * 3
+        moved = bool(like) and h * 1.0 < mc - cx <= h * 8
+        if moved:
+            dash = max(dash, mc - cx)
         iv = []
         for name, sp, T in _items(part, fr):
             bb = _opaque(atlas, sp, cache, name)
@@ -651,12 +710,29 @@ def _reach(part, anim, atlas, cache, cx, y0, y1):
                 continue
             iv.append((b[0], b[2]))
         iv.sort()
-        cur = cx
+        cur = mc if moved else cx
         for a, b in iv:
             if a <= cur + tol:
                 cur = max(cur, b)
         best = max(best, cur - cx)
-    return best
+    return best, dash
+
+
+def _proj_box(part, atlas, k):
+    """會飛的投射物圖（normal 動畫）不透明部分的範圍 [左, 右, 下, 上]（以投射物位置為 0、往前／往上為正，場地單位）。"""
+    anims = part.get("animations") or {}
+    n = next((x for x in ["normal", "idle", "wait", "shot", "fire", "attack"] if x in anims and anims[x].get("frames")), None)
+    if not n:
+        return None
+    cache, b0 = {}, None
+    for fr in anims[n]["frames"]:
+        for name, sp, T in _items(part, fr):
+            bb = _opaque(atlas, sp, cache, name)
+            if not bb:
+                continue
+            b = _box(T, *bb)
+            b0 = b if b0 is None else [min(b0[0], b[0]), min(b0[1], b[1]), max(b0[2], b[2]), max(b0[3], b[3])]
+    return None if b0 is None else [round(b0[0] * k), round(b0[2] * k), round(-b0[3] * k), round(-b0[1] * k)]
 
 
 EFFECT_CLIPS = ["finish", "hit", "end", "normal", "idle"]
@@ -681,7 +757,8 @@ def _effect_extent(part, atlas, k):
 
 
 def fight_reach_of(meta, png_path, proj=None):
-    """一隻角色 → {"a": 普攻, "s": [技能 1, 技能 2], "e": [技能 1 特效範圍, 技能 2 特效範圍]}
+    """一隻角色 → {"a": 普攻, "s": [技能 1, 技能 2], "e": [技能 1 特效範圍, 技能 2 特效範圍], "d": [普攻, 技能 1, 技能 2 身體衝多遠], "p": [普攻, 技能 1, 技能 2 投射物大小]}
+    d：身體衝刺距離（沒有衝＝0）。p：會飛的投射物（n／s1／s2）圖的範圍 [左, 右, 下, 上]，不會飛或沒有圖＝null。
     a、s：動作從身體中心往前伸到多遠（場地單位；沒有那個動作＝null）。
     e：不會飛的技能投射物（projectiles.json 的 s1／s2，v＝0 或 e＝0）的特效圖範圍 [左, 右]；沒有特效圖＝null（效果畫在角色動作裡）。"""
     from PIL import Image
@@ -697,10 +774,24 @@ def fight_reach_of(meta, png_path, proj=None):
     if not lb or lb[3] - lb[1] <= 0:
         return None
     atlas = Image.open(png_path).convert("RGBA")
-    k, cx, cache = 170 / (lb[3] - lb[1]), (lb[0] + lb[2]) / 2, {}
+    bh = lb[3] - lb[1]
+    # v7.5：待機時身體很扁（寬 > 高 × 1.3，例如利姆路的史萊姆型態）→ 身高改用攻擊動作的身體高度（比較高的話）；網站 js-11 同一套
+    flat_h = None
+    if lb[2] - lb[0] > bh * 1.3:
+        an = next((x for x in REACH_CLIPS["a"] if has(x)), None)
+        hs = sorted(c[3] - c[1] for fr in (anims[an]["frames"] if an else []) for c in [_opaque_cluster(part, fr, atlas, {})] if c)
+        if hs and hs[len(hs) // 2] > bh:
+            bh = flat_h = hs[len(hs) // 2]  # 攻擊動作身體高度的中位數（只算不透明像素）
+    k, cx, cache = 170 / bh, (lb[0] + lb[2]) / 2, {}
+    dash = {}
     def one(key):
         n = next((x for x in REACH_CLIPS[key] if has(x)), None)
-        return round(_reach(part, n, atlas, cache, cx, lb[1], lb[3]) * k) if n else None
+        if not n:
+            dash[key] = 0
+            return None
+        r, d = _reach(part, n, atlas, cache, cx, lb[1], lb[3], lb[2] - lb[0])
+        dash[key] = round(d * k)
+        return round(r * k)
     eff = []
     for key in ("s1", "s2"):
         cfg = (proj or {}).get(key)
@@ -714,7 +805,24 @@ def fight_reach_of(meta, png_path, proj=None):
             except Exception:
                 r = None
         eff.append(r)
-    return {"a": one("a"), "s": [one("s1"), one("s2")], "e": eff}
+    pbox = []
+    for key in ("n", "s1", "s2"):
+        cfg = (proj or {}).get(key)
+        moving = cfg and (cfg.get("v") or 0) > 0 and cfg.get("e")
+        bp = (meta.get("parts") or {}).get(cfg.get("p")) if moving else None
+        r = None
+        if bp and bp.get("png"):
+            bpng = Path(png_path).parent.parent.parent / bp["png"]
+            try:
+                r = _proj_box(bp, Image.open(bpng).convert("RGBA"), k) if bpng.exists() else None
+            except Exception:
+                r = None
+        pbox.append(r)
+    a, s1, s2 = one("a"), one("s1"), one("s2")
+    out = {"a": a, "s": [s1, s2], "e": eff, "d": [dash["a"], dash["s1"], dash["s2"]], "p": pbox}
+    if flat_h:
+        out["bh"] = round(flat_h, 1)  # 身高（原始座標）：待機太扁時改用的身高，網站畫角色時用（js-11）
+    return out
 
 
 def sync_fight_reach() -> None:
@@ -733,12 +841,12 @@ def sync_fight_reach() -> None:
         uid = f.name[:-len(".json.gz")]
         raw = f.read_bytes()
         pj = projs.get(uid) or {}
-        hs = hashlib.sha1(raw + json.dumps([pj.get("s1"), pj.get("s2")], sort_keys=True).encode()).hexdigest()[:10]
+        hs = hashlib.sha1(raw + json.dumps([pj.get("n"), pj.get("s1"), pj.get("s2")], sort_keys=True).encode()).hexdigest()[:10]
         if uid in old and old[uid].get("h") == hs:
             out[uid] = old[uid]
             continue
         try:
-            meta = json.loads(gzip.decompress(raw))
+            meta = fix_meta_rects(json.loads(gzip.decompress(raw)))
             part = (meta.get("parts") or {}).get("body")
             png = DATA / part["png"] if part else None
             r = fight_reach_of(meta, png, pj) if png and png.exists() else None

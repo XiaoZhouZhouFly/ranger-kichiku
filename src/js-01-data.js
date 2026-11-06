@@ -90,6 +90,11 @@
       catch { meta = await fetchData(`${base}units/${id}.json`, "json"); }
     }
     meta.base = base;
+    // v7.5：少數上游角色（莉莎、莎莉 417/418…）的部件位置寫成 [x, 0, y, 0]（寬高是 0），寬高從檔名「_寬x高.png」補回來（sync.py fix_rect 同一套）
+    for (const part of Object.values(meta.parts || {})) for (const [n, sp] of Object.entries(part.sprites || {})) {
+      const r = sp.rect, m = r && (!r[2] || !r[3]) && /_(\d+)x(\d+)(?:_\d+)?\.png$/.exec(n);
+      if (m) sp.rect = [r[0], r[2], +m[1], +m[2]];
+    }
     return meta;
   }
   // 本體以外的部件（投射物）圖片；讀不到的略過

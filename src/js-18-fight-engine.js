@@ -359,12 +359,12 @@
     lob(g, p, o, a, k) {
       const b = fightProjBase(g, p, a, k), T = k.lobT || FT.LOB_TIME, h0 = FT.CH * 0.6 + p.y, land = b.x + p.face * a.aimD;
       const gm = FT.LOB_GRAV_MUL; // v7.4：同樣飛行時間、重力 ×2＝弧線更高（跟直線做出區別：不跳也能從底下穿過，只有快落地時打得到）
-      g.projs.push(Object.assign(b, { kind: "lob", y: h0, py: h0, gm, vx: (land - b.x) / T, vy: (0.5 * FT.GRAV * gm * T * T - h0) / T, landX: land }));
+      g.projs.push(Object.assign(b, { kind: "lob", hideOwner: !!k.hideBody, y: h0, py: h0, gm, vx: (land - b.x) / T, vy: (0.5 * FT.GRAV * gm * T * T - h0) / T, landX: land }));
     },
     // 直線（技能與普攻投射物）：朝面向一直飛，飛出場地或打中才消失
     line(g, p, o, a, k) {
       const b = fightProjBase(g, p, a, k), y = p.y + FT.CH * (a.s === 2 ? 0.35 : 0.28);
-      g.projs.push(Object.assign(b, { kind: "line", y, py: y, vx: p.face * (k.speed || FT.SPEED_DEF), vy: 0, x0: b.x })); // x0：起點（最多飛 SHOT_MAX）
+      g.projs.push(Object.assign(b, { kind: "line", y, py: y, vx: p.face * (k.speed || FT.SPEED_DEF), vy: 0, x0: b.x, pb: k.pbox || null, face: p.face, hideOwner: !!k.hideBody })); // x0：起點（最多飛 SHOT_MAX）；pb：碰撞框（v7.5）
     },
     // 瞬間直線（遠程直接命中的普攻）：不產生飛行物，這一刻檢查身體前緣往前 range 內、同一高度有沒有對手
     dline(g, p, o, a, k) {
@@ -424,10 +424,14 @@
       q.x += q.vx * dt;
       if (q.kind === "lob") { q.y += q.vy * dt; q.vy -= FT.GRAV * (q.gm || 1) * dt; }
       const o = g.p[1 - q.own], h = fHurt(o), r = (q.kind === "lob" ? 26 : 14) * (q.box || 1);
-      const yLo = Math.min(q.y, q.py) - r, yHi = Math.max(q.y, q.py) + r;
+      // 掃過的範圍（上一步到這一步）：一般是中心點 ± r；有碰撞框（v7.5，跟著投射物圖）就用碰撞框
+      const m = q.box || 1, pb = q.pb, fc = q.face || Math.sign(q.vx) || 1;
+      const bx0 = pb ? (fc > 0 ? pb[0] : -pb[1]) * m : -r, bx1 = pb ? (fc > 0 ? pb[1] : -pb[0]) * m : r;
+      const sx0 = Math.min(q.px, q.x) + bx0, sx1 = Math.max(q.px, q.x) + bx1;
+      const yLo = Math.min(q.y, q.py) + (pb ? pb[2] * m : -r), yHi = Math.max(q.y, q.py) + (pb ? pb[3] * m : r);
       // 對方的召喚物會擋下投射物（先打到召喚物）
-      if (fightHitSummons(g, q.own, Math.min(q.px, q.x) - r, Math.max(q.px, q.x) + r, yLo, yHi, q.dmg, true)) { q.dead = true; g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 }); continue; }
-      if (!o.ko && fOverlapX(q.px, q.x, h.x0 - r, h.x1 + r) && yHi > h.y0 && yLo < h.y1) {
+      if (fightHitSummons(g, q.own, sx0, sx1, yLo, yHi, q.dmg, true)) { q.dead = true; g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 }); continue; }
+      if (!o.ko && fOverlapX(sx0, sx1, h.x0, h.x1) && yHi > h.y0 && yLo < h.y1) {
         fightHit(g, q.src || g.p[q.own], o, q.dmg, q.sv, q.heavy, q.id, q.fx, q.bul); q.dead = true;
         g.fx.push({ kind: "spark", x: q.x, y: q.y, t: 0, life: 0.35 });
         continue;

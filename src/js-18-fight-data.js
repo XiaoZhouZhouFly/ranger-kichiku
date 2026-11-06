@@ -24,7 +24,7 @@
     LOB_TIME: 0.8, LOB_R: 60, LOB_GRAV_MUL: 2,                         // 拋物線基準飛行時間（資料速度 LOB_V0 時）、落地爆炸半徑、拋物線的重力倍數（v7.4：×2＝拋得高，不跳也能從底下穿過）
     // 原始資料 → 場地（射程、速度是遊戲單位；換算係數集中在這裡）
     MELEE_RG: 200,                                    // 普攻沒有飛行過程時：射程小於這個＝近戰，以上＝瞬間直線
-    VIS_MELEE_MAX: 400, VIS_DLINE_MAX: 560,
+    VIS_MELEE_MAX: 400, VIS_DLINE_MAX: 560, VIS_LUNGE_MAX: 700, PBOX_FRONT: 120, FRONT_FAR: 400, // v7.5：身體衝刺型的上限；投射物碰撞只取圖的最前面 PBOX_FRONT
     FX_W_MAX: 400, FRONT_OVER: 30, FRONT_MIN: 100, // v7.4：技能動作要比普攻動作多伸出 FRONT_OVER、離身體前緣至少 FRONT_MIN 才算「身前範圍」（否則是施法動作，維持定點）
                                        // v7.4：技能特效圖太寬時等比縮小到這個寬度（判定跟著）
     SK_VS_ATK: 1.2, SK_WIDTH_K: 0.45, SK_WIDTH_MAX: 360, // v7.4：技能範圍至少是普攻判定的 1.2 倍；矩形寬＝技能伸到距離 × 0.45（最寬 360）           // v7.4：判定跟著畫面——攻擊動作實際伸到多遠（從身體中心算）的上限：近戰、瞬間直線
@@ -180,6 +180,20 @@
     if (v != null) return v;
     return clip ? fReach(f, clip) * FT.CH / f.h : 0;
   }
+  // v7.5 身體衝刺：攻擊動作裡身體衝出去多遠（0＝沒衝；i：0 普攻、1 技能 1、2 技能 2）。只有每日同步量的資料有（自製角色＝0）
+  function fightVisDash(f, i) { const r = S.reach && S.reach[f.r.id]; return (r && r.d && r.d[i]) || 0; }
+  /* v7.5 投射物碰撞框：投射物圖不透明部分 [左, 右, 下, 上]（以投射物位置為 0、往前／往上為正）。
+     只取最前面 PBOX_FRONT（拖在後面的尾巴不算）；上下至少 ±14（跟舊的點判定一樣大）。沒有資料＝null（照舊用點判定） */
+  function fightProjBox(f, i) {
+    const r = S.reach && S.reach[f.r.id], b = r && r.p && r.p[i]; if (!b) return null;
+    return [Math.round(Math.max(b[0], b[1] - FT.PBOX_FRONT)), b[1], Math.max(-FT.CH * 0.4, Math.min(b[2], -14)), Math.min(FT.CH * 1.2, Math.max(b[3], 14))];
+  }
+  /* v7.5 本人變成投射物：攻擊動作有 ≥ 25% 的格子身體完全看不到（例如黑帝斯：本人隱形、飛出去的「人」是投射物圖），
+     投射物飛行中就不畫本人（純畫面，不影響判定），避免場上同時有兩個人 */
+  function fightHideFrac(f, clip) {
+    const fr = (clip && f.part.animations[clip] && f.part.animations[clip].frames) || []; if (!fr.length) return 0;
+    return fr.filter((x) => !fItems(f, x).some((t) => t.alpha >= 0.3)).length / fr.length;
+  }
   // 技能特效圖的左右範圍（以落點為 0、往右為正，場地單位）：優先用同步算好的；沒有就用部件外框現場算（較粗略）
   function fightEffectExtent(f, s, bulCfg) {
     const r = S.reach && S.reach[f.r.id];
@@ -207,9 +221,12 @@
        瞬間直線＝畫面比原本的判定長才放長（不縮短）。手寫數值有寫 reach／range 就照手寫。 */
     if (atkClip && !(pre.atk && (pre.atk.reach != null || pre.atk.range != null))) {
       const bw = fclamp(f.w / f.h * FT.CH, 56, 120), vis = fightVisReach(f, "a", atkClip); // 場地單位，從中心算
-      if (atk.kind === "melee") atk.reach = Math.round(fclamp(vis, 0, FT.VIS_MELEE_MAX) - bw / 2) > FT.REACH_MIN ? Math.round(fclamp(vis, 0, FT.VIS_MELEE_MAX) - bw / 2) : FT.REACH_MIN;
-      else if (atk.kind === "dline") atk.range = Math.round(Math.max(atk.range, fclamp(vis, 0, FT.VIS_DLINE_MAX) - bw / 2));
+      const lunge = fightVisDash(f, 0) > 0; // v7.5：身體衝過去打（始皇帝、樞木朱雀…）上限放寬
+      if (atk.kind === "melee") atk.reach = Math.max(FT.REACH_MIN, Math.round(fclamp(vis, 0, lunge ? FT.VIS_LUNGE_MAX : FT.VIS_MELEE_MAX) - bw / 2));
+      else if (atk.kind === "dline") atk.range = Math.round(Math.max(atk.range, fclamp(vis, 0, lunge ? FT.VIS_LUNGE_MAX : FT.VIS_DLINE_MAX) - bw / 2));
     }
+    if (atk.kind === "shot" && !(pre.atk && pre.atk.pbox)) atk.pbox = fightProjBox(f, 0); // v7.5：投射物碰撞框跟著圖
+    if ((atk.kind === "shot" || atk.kind === "lob") && !(pre.atk && pre.atk.hideBody != null)) atk.hideBody = fightHideFrac(f, atkClip) >= 0.25;
     atk.cd = Math.max(atk.cd, atk.dur);
     // 普攻的判定前緣（從身體前緣算）：技能範圍至少要比它遠（v7.4）
     const bwF = fclamp(f.w / f.h * FT.CH, 56, 120), atkFront = atk.kind === "melee" ? atk.reach : atk.kind === "dline" || atk.kind === "lob" ? atk.range : 0;
@@ -245,13 +262,18 @@
            沒有特效圖（效果畫在角色自己的技能動作裡）：改成「身前範圍」，從身體前緣打到動作實際伸到的地方，不拖曳。 */
         if (o.kind === "rect" && !has("width") && !has("kind")) {
           const ex = fightEffectExtent(f, s, o.bul);
-          if (ex) { const w = Math.max(1, ex[1] - ex[0]), sc = w > FT.FX_W_MAX ? FT.FX_W_MAX / w : 1; o.width = Math.max(FT.WIDTH_MIN, Math.round(w * sc)); o.off = Math.round((ex[0] + ex[1]) / 2 * sc); o.fxs = sc; }
+          /* v7.5：有特效圖，但技能動作本身就一路伸到很遠（例如巫女桔梗的技能 2：靈蛇從身上一路飛出去，特效圖只是最後的命中）
+             → 畫面上整條路都在攻擊，改成身前範圍（打到動作伸到的地方），特效圖照樣當命中特效 */
+          if (ex && !o.enemyFx.some((e) => ["pull", "swap", "summon", "copy"].includes(FIGHT_FX[e.c].b)) && vs - bwF / 2 >= FT.FRONT_FAR) { o.kind = "front"; o.ahead = Math.round(fclamp(vs - bwF / 2, 60, FT.CAST_MAX)); o.range = o.ahead; o.width = o.ahead; }
+          else if (ex) { const w = Math.max(1, ex[1] - ex[0]), sc = w > FT.FX_W_MAX ? FT.FX_W_MAX / w : 1; o.width = Math.max(FT.WIDTH_MIN, Math.round(w * sc)); o.off = Math.round((ex[0] + ex[1]) / 2 * sc); o.fxs = sc; }
           // 拉近、換位、召喚、複製這類「要打到遠處對手才有用」的技能維持定點（改成身前範圍就失去意義）
           // 施法動作（技能動作沒有比普攻伸得更遠、或幾乎沒伸出去：效果其實出現在對手身上，例如原地揮杖、瞬移到對手身邊）也維持定點
           else if (!o.bul && !o.enemyFx.some((e) => ["pull", "swap", "summon", "copy"].includes(FIGHT_FX[e.c].b))
             && vs >= Math.min(fightVisReach(f, "a", atk.clip), FT.VIS_MELEE_MAX) + FT.FRONT_OVER && vs - bwF / 2 >= FT.FRONT_MIN) { o.kind = "front"; o.ahead = Math.round(fclamp(vs - bwF / 2, 60, FT.CAST_MAX)); o.range = o.ahead; o.width = o.ahead; }
         }
       }
+      if (o.kind === "line" && !k.clipSub) o.pbox = fightProjBox(f, s + 1); // v7.5：投射物碰撞框跟著圖
+      if (o.kind === "line" || o.kind === "lob") o.hideBody = fightHideFrac(f, k.clip) >= 0.25;
       if (p) Object.assign(o, preD ? {} : { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
       return o;
     });

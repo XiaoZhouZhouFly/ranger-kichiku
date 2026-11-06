@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://xiaozhouzhoufly.github.io/ranger-kichiku/"><img src="https://img.shields.io/badge/%E9%96%8B%E5%95%9F%E7%B6%B2%E7%AB%99-%E9%BB%9E%E6%88%91-ff5a5f?style=for-the-badge&logo=googlechrome&logoColor=white" alt="開啟網站"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v7.4.1-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v7.4.1"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/%E6%9B%B4%E6%96%B0%E6%97%A5%E8%AA%8C-v7.5-2f80ed?style=for-the-badge&logo=readthedocs&logoColor=white" alt="更新日誌 v7.5"></a>
 </p>
 
 <p align="center">
@@ -49,8 +49,9 @@
 - 普攻命中、技能發動、技能命中都有音效（多種預設或自己上傳），可以再加上自己的背景音樂；上傳過的檔案會記在這台裝置，下次不用再傳。
 - 分享按鈕：複製連結或下載專案檔，朋友打開就是同一個畫面；專案檔也能拿來備份自己的作品，按旁邊的「開啟專案檔」還原。
 
-## 最近更新（v7.4.1）
+## 最近更新（v7.5）
 
+- 格鬥場：衝過去打的角色（始皇帝、樞木朱雀…）、大型投射物（黑帝斯…）、很長的技能動作（巫女桔梗…）判定也跟畫面一致；利姆路、莉莎等角色的體型修正。
 - 格鬥場自動平衡：每天自動讓全部角色隨機對打、每週一寄週報（GitHub Issue），新角色當天測完也會通知；數值要人工確認才改。
 - 格鬥場：判定改成跟畫面一致，不再「看起來打到了卻沒中」；所有按住型技能都能左右拖、往上下拖出去可以取消；拋物線拋得更高，不跳也能從底下穿過。
 - 格鬥場：召喚物上限統一成每方 3 隻；拿掉「測試」字樣。角色格式說明更正數值欄位的意思。

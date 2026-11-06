@@ -15,6 +15,9 @@
     // 讓角色以身體中心站位、腳踩在地面上（原始素材的原點不在腳底中央）
     f.ox = -(f.lb.x0 + f.lb.x1) / 2; f.oy = -f.lb.y1;
     f.w = f.lb.x1 - f.lb.x0; f.h = f.lb.y1 - f.lb.y0;
+    /* v7.5：待機時身體很扁（例如利姆路的史萊姆型態）不拿待機的高度當身高，不然會被放大成一般人的身高、變成巨大史萊姆。
+       每日同步量好的身高（data/fight_reach.json 的 bh：攻擊動作身體高度的中位數，只算不透明像素）優先；沒有就照舊 */
+    const rr = S.reach && S.reach[r.id]; if (rr && rr.bh) f.h = rr.bh;
     return f;
   }
   function pickAnim(part, names) { return names.find((n) => part.animations[n]?.frames?.length) || null; }

@@ -587,7 +587,10 @@
         c.beginPath(); c.moveTo(X(p.x + p.face * hw), Y(p.y + FT.CH * 0.5)); c.lineTo(X(p.x + p.face * (hw + 18)), Y(p.y + FT.CH * 0.5)); c.stroke(); // 面向
         fightLabel(c, FT_STATE_LABEL[p.state] || p.state, X(p.x), Y(p.y + FT.CH * 1.32), 22, "#ffd84a");
       }
-      for (const q of g.projs) { c.beginPath(); c.arc(X(q.x), Y(q.y), (q.kind === "lob" ? 26 : 14) * fScale, 0, Math.PI * 2); c.stroke(); }
+      for (const q of g.projs) {
+        if (q.pb) { const m = q.box || 1, fc = q.face || 1, a0 = q.x + (fc > 0 ? q.pb[0] : -q.pb[1]) * m, a1 = q.x + (fc > 0 ? q.pb[1] : -q.pb[0]) * m; c.strokeRect(X(a0), Y(q.y + q.pb[3] * m), (a1 - a0) * fScale, (q.pb[3] - q.pb[2]) * m * fScale); continue; } // v7.5：碰撞框
+        c.beginPath(); c.arc(X(q.x), Y(q.y), (q.kind === "lob" ? 26 : 14) * fScale, 0, Math.PI * 2); c.stroke();
+      }
       c.restore();
     }
     // 投射物
@@ -731,6 +734,7 @@
     // 陰影
     c.fillStyle = "rgba(0,0,0,0.25)"; c.beginPath(); c.ellipse(X(p.x), Y(0), g.cfg.fs[i].bw * fScale * 0.6 * big, 8, 0, 0, Math.PI * 2); c.fill();
     if (p.st.poly) fightDrawPoly(c, g, p, X, Y);
+    else if (g.projs.some((q) => q.own === i && q.hideOwner) && !p.ko) { /* v7.5：本人變成投射物飛出去時不畫本人 */ }
     else {
       if (p.running) fightSpeedLines(c, p, X, Y);
       c.save(); c.translate(X(p.x), Y(p.y)); c.scale(k, k);

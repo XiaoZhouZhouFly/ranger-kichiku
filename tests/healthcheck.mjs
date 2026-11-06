@@ -409,6 +409,14 @@ await test("格鬥場（測試版）：矩形、防禦條、硬直值倒地、�
   check(lobN(lobUnder) === 0 && lobN(lobLand) === 1, `拋物線從頭上越過不該打到、丟在腳下要打到：越過 ${lobN(lobUnder)}、腳下 ${lobN(lobLand)}、位置 ${lobUnder.x}`);
   const lobBack = await R({ c0: "x002-orb", c1: "x001-cube", steps: 800, script: [{ side: 0, sk: [1, 640, 680, -1000] }] });
   check(lobBack.log.hits === 0 && lobBack.face[0] === -1, `拋物線技能往後拖：應該轉身往後丟：命中 ${lobBack.log.hits}、面向 ${lobBack.face[0]}`);
+  // v7.5：判定跟著畫面的四條通則＋體型（需要每日同步量好的 data/fight_reach.json）
+  const H = async (id) => (await p.evaluate((x) => window.__rk.fightStatsOf(x), id)).hit;
+  const qs = await H("u1571e-qs"), hd = await H("u1573e-hd"), kk = await H("u1032u-kikyou"), rim = await H("u1146u-rimuru"), riza = await H("u415u-riza");
+  check(qs.atk >= 500, `衝刺型：始皇帝的普攻要打到衝過去的地方（≥ 500）：${qs.atk}`);
+  check(hd.atkHide && hd.atkBox && hd.sk[0].hide, `本人變成投射物：黑帝斯飛行中不畫本人、投射物有碰撞框：${JSON.stringify(hd)}`);
+  check(kk.sk[1].ahead >= 600, `技能動作很長：巫女桔梗技能 2 應該是身前範圍、打到 600 以上：${JSON.stringify(kk.sk[1])}`);
+  check(rim.scale > 1.3 && rim.scale < 2.2, `體型：利姆路（待機是史萊姆）不該被放大成巨大史萊姆：縮放 ${rim.scale}`);
+  check(riza.atk > 0 && riza.scale > 0.5 && riza.scale < 1.5, `體型：莉莎（上游部件寬高是 0）要能正常顯示：普攻 ${riza.atk}、縮放 ${riza.scale}`);
   // 輸入緩衝：普攻快結束時按技能，結束後自動接上
   const buf = await R({ c0: "x001-cube", c1: "x002-orb", steps: 40, trace: true, script: [{ side: 0, from: 0, to: 1, atk: 1 }, { side: 0, sk: [0, 30, 31, 0] }] });
   check(buf.trace[36][0][3] === "aim", `緩衝：普攻結束時應該接上技能，實際狀態 ${buf.trace[36][0][3]}`);
