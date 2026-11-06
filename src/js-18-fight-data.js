@@ -21,9 +21,13 @@
     AIM_MIN: 60,                                      // 矩形、拋物線的最近距離（從身體前緣算）
     TELE_MIN: 0.3, TELE_MAX: 0.8, TELE_SYNC_MIN: 0.2, // 矩形預告：依距離＝近～遠；跟前搖同步時最短 0.2 秒
     AIR_SAFE: 40,                                     // 離地超過這個高度，矩形與拋物線爆炸就打不到
-    LOB_TIME: 0.8, LOB_R: 60,                         // 拋物線基準飛行時間（資料速度 LOB_V0 時）、落地爆炸半徑
+    LOB_TIME: 0.8, LOB_R: 60, LOB_GRAV_MUL: 2,                         // 拋物線基準飛行時間（資料速度 LOB_V0 時）、落地爆炸半徑、拋物線的重力倍數（v7.4：×2＝拋得高，不跳也能從底下穿過）
     // 原始資料 → 場地（射程、速度是遊戲單位；換算係數集中在這裡）
     MELEE_RG: 200,                                    // 普攻沒有飛行過程時：射程小於這個＝近戰，以上＝瞬間直線
+    VIS_MELEE_MAX: 400, VIS_DLINE_MAX: 560,
+    FX_W_MAX: 400, FRONT_OVER: 30, FRONT_MIN: 100, // v7.4：技能動作要比普攻動作多伸出 FRONT_OVER、離身體前緣至少 FRONT_MIN 才算「身前範圍」（否則是施法動作，維持定點）
+                                       // v7.4：技能特效圖太寬時等比縮小到這個寬度（判定跟著）
+    SK_VS_ATK: 1.2, SK_WIDTH_K: 0.45, SK_WIDTH_MAX: 360, // v7.4：技能範圍至少是普攻判定的 1.2 倍；矩形寬＝技能伸到距離 × 0.45（最寬 360）           // v7.4：判定跟著畫面——攻擊動作實際伸到多遠（從身體中心算）的上限：近戰、瞬間直線
     RG_REACH: 0.6, REACH_MIN: 70, REACH_MAX: 150,     // 近戰距離＝射程 × 0.6（70～150）
     DLINE_MIN: 150, DLINE_MAX: 560,                   // 瞬間直線距離＝射程 × 0.6（150～560，場地開場相距 440）
     RG_CAST: 1.4, CAST_MIN: 220, CAST_MAX: 700,       // 指定位置打擊的最遠施放距離＝射程 × 1.4
@@ -51,10 +55,10 @@
   const fclamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const toFrames = (sec) => Math.round(sec * 60);
 
-  /* 招式的操作方式：dist＝按住拖曳決定位置（矩形、拋物線），dir＝只決定方向、點一下就放（直線、普攻投射物），
+  /* 招式的操作方式：side＝按住顯示範圍、左右拖選方向、放開出招（身前範圍，v7.4），dist＝按住拖曳決定位置（矩形、拋物線），dir＝只決定方向、點一下就放（直線、普攻投射物），
      tap＝按下就放（近戰普攻、輔助技能） */
-  const AIM_MODE = { rect: "dist", lob: "dist", dash: "dist", line: "dir", shot: "dir", melee: "tap", dline: "tap", self: "tap", buff: "tap" };
-  const SK_KIND_LABEL = { dash: "突進", rect: "指定位置打擊（矩形預告）", line: "直線投射物", lob: "拋物線", self: "自身", buff: "輔助（暫時用加攻＋回血代替）" };
+  const AIM_MODE = { front: "side", rect: "dist", lob: "dist", dash: "dist", line: "dir", shot: "dir", melee: "tap", dline: "tap", self: "tap", buff: "tap" };
+  const SK_KIND_LABEL = { front: "身前範圍", dash: "突進", rect: "指定位置打擊（矩形預告）", line: "直線投射物", lob: "拋物線", self: "自身", buff: "輔助（暫時用加攻＋回血代替）" };
   const ATK_KIND_LABEL = { melee: "近戰", dline: "瞬間直線", shot: "直線投射物", lob: "拋物線" };
 
   /* 自製角色的手寫數值（官方角色由 fightStats 從資料換算）；沒寫的欄位用換算值 */
@@ -140,19 +144,19 @@
     ATK_BASE: 47,             // 平均普攻傷害（攻擊週期 0.55 秒）→ 一般角色約 20～25 下倒
     SK_BASE: [155, 155],      // 平均技能傷害（冷卻 7 秒、出招 0.8 秒；技能 1、2 同一個基數，差別來自冷卻、形式與官方倍率比例）→ 約體力 10～20%
     SK_CLAMP: [60, 320],
-    FORM: { melee: 0.85, dline: 0.9, line: 1.0, shot: 1.0, dash: 1.1, lob: 1.1, target: 1.15, rect: 1.15 },
+    FORM: { front: 1.0, melee: 0.85, dline: 0.9, line: 1.0, shot: 1.0, dash: 1.1, lob: 1.1, target: 1.15, rect: 1.15 },
     CTL_DMG: 0.8,             // 帶控制效果的技能傷害打八折
     DR_TAX: 0.5,              // 減傷的「稅」：每 1% 減傷再扣 0.5% 有效體力（減傷 20% → 有效體力少 10%）
     NO_SK: 0.25,              // 少一個技能，普攻傷害 +25%
   };
   const bclamp = (x) => fclamp(x, BAL.CAP[0], BAL.CAP[1]);
   // 角色的五種能力（平均＝1）→ { off 攻擊倍率, dur 耐久倍率, walk, dr, ctl }
-  function fightBudget(F, sk) {
+  function fightBudget(F, sk, rgEff) {
     const R = BAL.REF, off = (F.pa.v + F.ma.v) / Math.max(0.5, F.ai.v || 1.2);
     const t = off > 0 && F.hp.st === "ok" ? fclamp(Math.log(F.hp.v / off / R.tank), -1.2, 1.2) : 0;
     const ctl = sk.reduce((n, k) => n + (k ? k.enemyFx.filter((e) => FX_CONTROL.has(FIGHT_FX[e.c].b)).length : 0), 0);
     const q = { off: Math.exp(-BAL.TILT * t), dur: Math.exp(BAL.TILT * t), mob: bclamp(Math.pow((F.mv.v || R.mv) / R.mv, 0.7)),
-      rng: bclamp(Math.pow((F.rg.v || R.rg) / R.rg, 0.5)), ctl: 1 + BAL.CTL_PER * ctl };
+      rng: bclamp(Math.pow((rgEff || F.rg.v || R.rg) / R.rg, 0.5)), ctl: 1 + BAL.CTL_PER * ctl };
     const sum = Object.keys(BAL.W).reduce((a, k) => a + BAL.W[k] * q[k], 0);   // 能力總和超過 1 → 攻、守一起打折
     const hp = F.hp.st === "ok" ? F.hp.v : 0;
     return { off: bclamp(q.off / sum), dur: bclamp(q.dur / sum), walk: BAL.WALK * q.mob, ctl, q, sum,
@@ -163,10 +167,28 @@
   }
   // 技能傷害；ratio＝官方倍率算出的「技能 1／2 比例」（壓縮過）
   function fightSkDmg(o, B, ratio) {
-    const wF = o.kind === "rect" ? fclamp(Math.pow(160 / o.width, 0.25), 0.8, 1.2) : 1;
+    // 判定越小傷害越高：矩形看寬度；身前範圍看往前多遠（v7.4）
+    const wF = o.kind === "rect" ? fclamp(Math.pow(160 / o.width, 0.25), 0.8, 1.2) : o.kind === "front" ? fclamp(Math.pow(250 / (o.ahead || 250), 0.25), 0.85, 1.2) : 1;
     const cF = o.enemyFx.some((e) => FX_CONTROL.has(FIGHT_FX[e.c].b)) ? BAL.CTL_DMG : 1;
     const x = BAL.SK_BASE[o.s] * Math.pow(o.cd / 7, 0.4) * Math.pow(o.dur / 0.8, 0.3) * (BAL.FORM[o.kind] || 1) * wF * cF * ratio * B.off;
     return Math.round(fclamp(x, BAL.SK_CLAMP[0], BAL.SK_CLAMP[1]));
+  }
+  /* 攻擊動作實際伸到多遠（從身體中心，場地單位）。優先用每日同步算好的 data/fight_reach.json（只算不透明的像素，較準）；
+     沒有這隻（自製角色、還沒同步）就現場量（js-13 fReach，用部件外框，較粗略）。which：「a」普攻、0／1 技能。 */
+  function fightVisReach(f, which, clip) {
+    const r = S.reach && S.reach[f.r.id], v = r ? (which === "a" ? r.a : r.s && r.s[which]) : null;
+    if (v != null) return v;
+    return clip ? fReach(f, clip) * FT.CH / f.h : 0;
+  }
+  // 技能特效圖的左右範圍（以落點為 0、往右為正，場地單位）：優先用同步算好的；沒有就用部件外框現場算（較粗略）
+  function fightEffectExtent(f, s, bulCfg) {
+    const r = S.reach && S.reach[f.r.id];
+    if (r && r.e) return r.e[s] || null;
+    const dr = bulCfg && f.bul[bulCfg.p]; if (!dr) return null;
+    const anim = pickAnim(dr.part, ["finish", "hit", "end", "normal", "idle"]); if (!anim) return null;
+    let x0 = Infinity, x1 = -Infinity;
+    for (const fr of dr.part.animations[anim].frames || []) for (const t of fItems(dr, fr)) { const b = fItemBox(t); x0 = Math.min(x0, b[0]); x1 = Math.max(x1, b[2]); }
+    return isFinite(x0) ? [x0 * FT.CH / f.h, x1 * FT.CH / f.h] : null;
   }
   function fightStats(f) {
     // 手寫數值：程式裡的 FIGHT_PRESET（方塊騎士、圓圓法師），或資料檔 stats.json 的 "fight"（v7.2 起，自製角色用；只蓋過有寫的欄位）
@@ -181,7 +203,16 @@
       reach: fclamp(rg * FT.RG_REACH, FT.REACH_MIN, FT.REACH_MAX), range: a.form === "lob" ? fclamp(rg * FT.RG_LOB, FT.LOB_MIN, FT.LOB_MAX) : fclamp(rg * FT.RG_REACH, FT.DLINE_MIN, FT.DLINE_MAX),
       speed: fSpeed(a.cfg), lobT: fLobT(a.cfg) }, pre.atk || {});
     if (pre.atk && pre.atk.kind) atk.kind = pre.atk.kind;
+    /* v7.4：判定跟著畫面。近戰＝攻擊動作實際伸到的距離（減掉半個身體，因為判定從身體前緣算）；
+       瞬間直線＝畫面比原本的判定長才放長（不縮短）。手寫數值有寫 reach／range 就照手寫。 */
+    if (atkClip && !(pre.atk && (pre.atk.reach != null || pre.atk.range != null))) {
+      const bw = fclamp(f.w / f.h * FT.CH, 56, 120), vis = fightVisReach(f, "a", atkClip); // 場地單位，從中心算
+      if (atk.kind === "melee") atk.reach = Math.round(fclamp(vis, 0, FT.VIS_MELEE_MAX) - bw / 2) > FT.REACH_MIN ? Math.round(fclamp(vis, 0, FT.VIS_MELEE_MAX) - bw / 2) : FT.REACH_MIN;
+      else if (atk.kind === "dline") atk.range = Math.round(Math.max(atk.range, fclamp(vis, 0, FT.VIS_DLINE_MAX) - bw / 2));
+    }
     atk.cd = Math.max(atk.cd, atk.dur);
+    // 普攻的判定前緣（從身體前緣算）：技能範圍至少要比它遠（v7.4）
+    const bwF = fclamp(f.w / f.h * FT.CH, 56, 120), atkFront = atk.kind === "melee" ? atk.reach : atk.kind === "dline" || atk.kind === "lob" ? atk.range : 0;
     // 技能
     const sk = N.sk.map((k, s) => {
       if (!k.exists || !k.clip) return null;
@@ -198,11 +229,36 @@
       const hitFx = (e) => FIGHT_FX[e.c].to === "enemy" || (FIGHT_FX[e.c].onHit && k.form !== "self" && k.form !== "buff");
       o.enemyFx = sup.filter(hitFx); o.selfFx = sup.filter((e) => !hitFx(e));
       o.damaging = k.damaging; o.mul = (k.fx.find((e) => e.c === "DMG" && e.val > 0) || {}).val || 0;
+      /* v7.4：技能範圍也跟著畫面。技能動作實際伸到多遠（量不到或太小時，至少是普攻判定的 1.2 倍），
+         矩形：最遠施放距離與寬度跟著放大；拋物線：最遠距離跟著放大。手寫數值有寫的欄位照手寫。 */
+      if (!FIGHT_PRESET[f.r.id]) {
+        const vs = k.clipSub ? fightVisReach(f, "a", k.clip) : fightVisReach(f, s, k.clip);
+        const base = Math.max(vs - bwF / 2, atkFront * FT.SK_VS_ATK);
+        if (o.kind === "dash") o.ahead = Math.round(fclamp(vs - bwF / 2, o.width / 2, FT.CAST_MAX)); // 突進落地後往前打多遠（照技能動畫）
+        const has = (key) => p && p[key] != null;
+        if (o.kind === "rect") {
+          if (!has("range")) o.range = Math.round(fclamp(Math.max(o.range, base), FT.CAST_MIN, FT.CAST_MAX));
+          if (!has("width")) o.width = Math.round(fclamp(Math.max(o.width, base * FT.SK_WIDTH_K), FT.WIDTH_MIN, FT.SK_WIDTH_MAX));
+        } else if (o.kind === "lob" && !has("range")) o.range = Math.round(fclamp(Math.max(o.range, base), FT.LOB_MIN, FT.LOB_MAX));
+        /* v7.4：指定位置打擊分兩類（每日同步先量好，見 sync.py fight_reach）——
+           有特效圖（投射物部件）：判定＝特效圖不透明部分實際蓋到的範圍（off＝範圍中心離落點多遠，往面向為正；太寬就等比縮小到 FX_W_MAX）；
+           沒有特效圖（效果畫在角色自己的技能動作裡）：改成「身前範圍」，從身體前緣打到動作實際伸到的地方，不拖曳。 */
+        if (o.kind === "rect" && !has("width") && !has("kind")) {
+          const ex = fightEffectExtent(f, s, o.bul);
+          if (ex) { const w = Math.max(1, ex[1] - ex[0]), sc = w > FT.FX_W_MAX ? FT.FX_W_MAX / w : 1; o.width = Math.max(FT.WIDTH_MIN, Math.round(w * sc)); o.off = Math.round((ex[0] + ex[1]) / 2 * sc); o.fxs = sc; }
+          // 拉近、換位、召喚、複製這類「要打到遠處對手才有用」的技能維持定點（改成身前範圍就失去意義）
+          // 施法動作（技能動作沒有比普攻伸得更遠、或幾乎沒伸出去：效果其實出現在對手身上，例如原地揮杖、瞬移到對手身邊）也維持定點
+          else if (!o.bul && !o.enemyFx.some((e) => ["pull", "swap", "summon", "copy"].includes(FIGHT_FX[e.c].b))
+            && vs >= Math.min(fightVisReach(f, "a", atk.clip), FT.VIS_MELEE_MAX) + FT.FRONT_OVER && vs - bwF / 2 >= FT.FRONT_MIN) { o.kind = "front"; o.ahead = Math.round(fclamp(vs - bwF / 2, 60, FT.CAST_MAX)); o.range = o.ahead; o.width = o.ahead; }
+        }
+      }
       if (p) Object.assign(o, preD ? {} : { range: 400, width: 160, speed: 560, lobT: FT.LOB_TIME, enemyFx: [], selfFx: [] }, p);
       return o;
     });
     // 總預算制：攻、守、機動、射程、控制五種能力分一份預算
-    const B = fightBudget(F, sk), nSk = sk.filter(Boolean).length;
+    // v7.4：射程分數改用實際判定距離（近戰、瞬間直線；換回原作射程的尺度＝÷ RG_REACH），手變長的角色傷害／體力自動打折
+    const rgEff = !FIGHT_PRESET[f.r.id] && !preD && (atk.kind === "melee" || atk.kind === "dline") ? Math.max(F.rg.v || 0, atkFront / FT.RG_REACH) : null;
+    const B = fightBudget(F, sk, rgEff), nSk = sk.filter(Boolean).length;
     if (atk.dmg == null) atk.dmg = fightAtkDmg(atk, B, nSk);
     const m = sk.map((o) => (o && o.mul) || 0), r = m[0] && m[1] ? fclamp(Math.pow(m[1] / m[0], 0.3), 0.5, 2) : 1;
     sk.forEach((o, s) => {
@@ -236,7 +292,7 @@
       `普攻 ${ATK_KIND_LABEL[a.kind]}${a.kind === "melee" ? " " + Math.round(a.reach) + " 遠" : a.kind === "dline" || a.kind === "lob" ? " " + Math.round(a.range) + " 遠" : ""}・${a.dmg}（${fr(a, a.kind === "melee")}）`];
     fs.sk.forEach((k, s) => {
       if (!k) { parts.push(`技能${s + 1} 沒有`); return; }
-      const extra = k.kind === "dash" ? `，距離 ${Math.round(k.range)}（左右都可以）` : k.kind === "rect" ? `，射程 ${Math.round(k.range)}、寬 ${Math.round(k.width)}` : k.kind === "lob" ? `，射程 ${Math.round(k.range)}` : "";
+      const extra = k.kind === "front" ? `，往前 ${Math.round(k.ahead)}` : k.kind === "dash" ? `，距離 ${Math.round(k.range)}（左右都可以）` : k.kind === "rect" ? `，射程 ${Math.round(k.range)}、寬 ${Math.round(k.width)}` : k.kind === "lob" ? `，射程 ${Math.round(k.range)}` : "";
       parts.push(`技能${s + 1} ${SK_KIND_LABEL[k.kind]}${k.kind === "buff" || k.kind === "self" ? "" : "・" + (k.dmg || "無傷害")}${extra}・冷卻 ${k.cd.toFixed(1)} 秒（${fr(k, false)}）`);
     });
     if (fs.op) parts.unshift("⚠ 超模角色：數值故意超出平衡預算");

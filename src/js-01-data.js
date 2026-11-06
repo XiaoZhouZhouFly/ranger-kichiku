@@ -76,7 +76,8 @@
     if (!fxPromise) fxPromise = Promise.all([
       fetchData(LOCAL + "skill_fx.json", "json").catch(() => ({})),
       fetchData(CUSTOM + "skill_fx.json", "json").catch(() => ({})),
-    ]).then(([x, c]) => { S.fx = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); });
+      fetchData(LOCAL + "fight_reach.json", "json").catch(() => ({})), // v7.4：格鬥場判定距離（每日同步先算好，見 sync.py）
+    ]).then(([x, c, r]) => { S.fx = Object.assign({}, x && typeof x === "object" ? x : {}, c && typeof c === "object" ? c : {}); S.reach = r && typeof r === "object" ? r : {}; });
     return fxPromise;
   }
   /* 角色的動畫資料（單人、雙人共用）：官方角色是壓縮檔 .json.gz（找不到才讀 .json），自製角色是 .json */

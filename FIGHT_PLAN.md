@@ -220,3 +220,12 @@ js-19-fight-ui.js     觸控、畫面、回合流程
 - 召喚物上限：所有角色一樣，每方場上最多 `FT.SUM_MAX` ＝ 3 隻；技能的 `sumMax` 與 `fightSumMax` 刪除。
 - **原則補充**（「三、設計原則」原文不變）：一般角色照公式換算、追求強度相同；選角畫面標「⚠ 超模」的自製惡搞角色（`stats.json` 的 `fight` 寫 `op: true`）是刻意的例外，不受「強度相同」限制。
 - 刪除沒用到的 `fightRanks`。拿掉介面上的「測試」字樣。
+
+## v7.4（已交付）：判定跟著畫面、全部技能可左右拖
+- 判定距離：`fightVisReach`（優先 `data/fight_reach.json`，由 `sync.py sync_fight_reach` 量不透明像素；沒有就 js-13 `fReach` 用部件外框量）。近戰 `reach`＝動作伸到的距離 − 半個身體（最多 `VIS_MELEE_MAX` 400）；瞬間直線只放長不縮短（`VIS_DLINE_MAX` 560）。手寫 `reach`／`range` 優先。
+- 預算：射程分數改用實際判定距離（`rgEff`），手長的角色攻守打折。
+- 技能：範圍基準 `max(技能動作距離 − 半身, 普攻前緣 × SK_VS_ATK 1.2)`；有特效圖的定點打擊寬度＝特效圖不透明寬（`FX_W_MAX` 400，`off` 中心偏移、`fxs` 縮放；按下時起點扣掉 `off`，範圍中心對準對手）；沒特效圖、不是拉近／換位／召喚／複製、技能動作比普攻多伸 `FRONT_OVER` 30 以上、離身體前緣 ≥ `FRONT_MIN` 100 → `front` 身前範圍（傷害係數 `(250 ÷ 往前距離)^0.25`，0.85～1.2）；突進落地範圍 `ahead`。
+- 操作：`front`、`rect`、`lob`、`line`、`shot` 都能左右拖（`aim.side`；沒拖＝ null 照舊），放開轉向；取消一律只看上下拖出外圈。電腦不拖曳。
+- 拋物線：`FT.LOB_GRAV_MUL` 2（同樣飛行時間、弧線約 1.9 個身高），飛行中碰撞規則不變。試過「只算落地」「下落段才算」，使用者選了拋高。
+- 平衡：重跑結果見 FIGHT_BALANCE.md；調整留到 v7.5。健檢 33 項；同步檢查代碼 78E0-D82B（跟 v7.3 不相容）。
+- 自製角色：沒有預先量好的資料，網頁現場用部件外框量（較粗略）；角色編輯器可以在 `stats.json` 的 `fight` 直接寫 `atk.reach`、技能的 `kind`、`ahead`、`range`、`width`、`off` 覆蓋（見 CHARACTER_FORMAT）。

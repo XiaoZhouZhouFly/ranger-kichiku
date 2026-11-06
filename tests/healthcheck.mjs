@@ -395,6 +395,20 @@ await test("格鬥場（測試版）：矩形、防禦條、硬直值倒地、�
   check(line.log.hits === 1, "直線技能點一下應該飛到對手身上");
   const turned = await R({ c0: "x002-orb", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 40, 0] }, { side: 0, from: 10, to: 20, mx: -1 }] });
   check(turned.log.hits === 0 && turned.face[0] === -1 && turned.x[0] === -220, `按住直線技能時 ◀ 只轉身不走路，放開往反方向射：命中 ${turned.log.hits}、x ${turned.x[0]}`);
+  // v7.4：直線、矩形、拋物線都能左右拖（無視面向）：往後拖＝轉身往後出招；往前拖＝照舊
+  const lineBack = await R({ c0: "x002-orb", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 40, -100] }] });
+  check(lineBack.log.hits === 0 && lineBack.face[0] === -1, `直線技能往後拖 100：應該轉身往反方向射：命中 ${lineBack.log.hits}、面向 ${lineBack.face[0]}`);
+  const lineFwd = await R({ c0: "x002-orb", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 40, 100] }] });
+  check(lineFwd.log.hits === 1 && lineFwd.face[0] === 1, `直線技能往前拖：照舊往前射：命中 ${lineFwd.log.hits}、面向 ${lineFwd.face[0]}`);
+  const rectBack = await R({ c0: "x001-cube", c1: "x002-orb", steps: 200, script: [{ side: 0, sk: [0, 5, 40, -400] }] });
+  check(rectBack.log.hits === 0 && rectBack.face[0] === -1, `矩形技能往後拖：應該轉身打背後：命中 ${rectBack.log.hits}、面向 ${rectBack.face[0]}`);
+  // v7.4：拋物線拋得高（重力 ×2）：站在路徑中段、不跳的人從底下穿過不會被打到；站在落點會被打到
+  const lobUnder = await R({ c0: "x002-orb", c1: "x001-cube", steps: 800, script: [{ side: 1, from: 590, to: 620, mx: -1 }, { side: 0, sk: [1, 640, 680, 1000] }] });
+  const lobLand = await R({ c0: "x002-orb", c1: "x001-cube", steps: 800, script: [{ side: 1, from: 590, to: 620, mx: -1 }, { side: 0, sk: [1, 640, 680, 0] }] });
+  const lobN = (r) => r.log.hits + (r.log.fxhits || 0); // 圓圓法師的拋物線沒有傷害、只有效果（算 fxhit）
+  check(lobN(lobUnder) === 0 && lobN(lobLand) === 1, `拋物線從頭上越過不該打到、丟在腳下要打到：越過 ${lobN(lobUnder)}、腳下 ${lobN(lobLand)}、位置 ${lobUnder.x}`);
+  const lobBack = await R({ c0: "x002-orb", c1: "x001-cube", steps: 800, script: [{ side: 0, sk: [1, 640, 680, -1000] }] });
+  check(lobBack.log.hits === 0 && lobBack.face[0] === -1, `拋物線技能往後拖：應該轉身往後丟：命中 ${lobBack.log.hits}、面向 ${lobBack.face[0]}`);
   // 輸入緩衝：普攻快結束時按技能，結束後自動接上
   const buf = await R({ c0: "x001-cube", c1: "x002-orb", steps: 40, trace: true, script: [{ side: 0, from: 0, to: 1, atk: 1 }, { side: 0, sk: [0, 30, 31, 0] }] });
   check(buf.trace[36][0][3] === "aim", `緩衝：普攻結束時應該接上技能，實際狀態 ${buf.trace[36][0][3]}`);
@@ -557,16 +571,16 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   const p = await open(); await p.goto(BASE + "?app=fight");
   await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
   const R = (spec) => p.evaluate((s) => window.__rk.fightRun(s), { trace: true, ...spec });
-  const W = [{ side: 0, from: 0, to: 40, mx: 1 }], sk = (slot, at, side = 0) => ({ side, sk: [slot, at, at + 1, 0] });
+  const W = [{ side: 0, from: 0, to: 90, mx: 1 }] /* v7.4：身前範圍的技能要走近一點（原本 40 步，技能在第 50 步；改成 90 步、第 95 步） */, sk = (slot, at, side = 0) => ({ side, sk: [slot, at, at + 1, 0] });
   const has = (r, side, name) => r.trace.some((t) => t[side][7].split(",").includes(name));
   const st = (r, side, s) => r.trace.some((t) => t[side][3] === s);
   // 沒有效果資料（skill_fx.json 還沒同步）時，第一項檢查會看不到暈眩 → 跳過
-  const stun = await R({ c0: "u006e-clark", c1: "x001-cube", steps: 300, script: [...W, sk(0, 50)] });
+  const stun = await R({ c0: "u006e-clark", c1: "x001-cube", steps: 300, script: [...W, sk(0, 95)] });
   if (!st(stun, 1, "stunfx")) return "skip:沒有技能效果資料（skill_fx.json 還沒同步）";
-  const kb = await R({ c0: "u1003e-jessica", c1: "x001-cube", steps: 300, script: [...W, sk(0, 50)] });
+  const kb = await R({ c0: "u1003e-jessica", c1: "x001-cube", steps: 300, script: [...W, sk(0, 95)] });
   check(kb.log.downs >= 1, "擊退應該讓對手倒地");
-  const si = await R({ c0: "u023e-sindy", c1: "x001-cube", steps: 260, script: [...W, sk(0, 50), sk(0, 165, 1), sk(0, 200, 1)] });
-  check(has(si, 1, "silence") && si.trace[170][1][3] === "idle" && ["aim", "skill"].includes(si.trace[203][1][3]), "沉默期間不能用技能，結束後可以");
+  const si = await R({ c0: "u023e-sindy", c1: "x001-cube", steps: 300, script: [...W, sk(0, 95), sk(0, 175, 1), sk(0, 215, 1)] }); // v7.4：沉默大約在第 141～201 步
+  check(has(si, 1, "silence") && si.trace[180][1][3] === "idle" && ["aim", "skill"].includes(si.trace[218][1][3]), "沉默期間不能用技能，結束後可以");
   const dot = await R({ c0: "u010e-clara", c1: "x001-cube", steps: 400, script: [sk(0, 50)] });
   const hp = dot.trace.map((t) => t[1][2]), drops = hp.filter((v, i) => i && v < hp[i - 1]).length;
   check(drops >= 5, `持續傷害應該分好幾次扣血，實際 ${drops} 次`);
@@ -598,12 +612,12 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   check(armor.hp[1] < armor.maxHp[1] && armor.hp[0] < armor.maxHp[0], `前搖被普攻打中，技能應該照樣打中對手：${armor.hp}`);
   // v6.0.3：霸體期間硬直值累積加倍（普攻 25 → 50）
   check(Math.max(...armor.trace.map((t) => t[1][5])) >= 50, `霸體期間被普攻打中，硬直值應該加倍：最高 ${Math.max(...armor.trace.map((t) => t[1][5]))}`);
-  const cut = await R({ c0: "u006e-clark", c1: "x001-cube", steps: 220, script: [{ side: 0, from: 0, to: 40, mx: 1 }, { side: 1, from: 0, to: 40, mx: -1 }, sk(0, 60, 0), sk(0, 70, 1)] });
+  const cut = await R({ c0: "u006e-clark", c1: "x001-cube", steps: 220, script: [{ side: 0, from: 0, to: 40, mx: 1 }, { side: 1, from: 0, to: 40, mx: -1 }, sk(0, 60, 0), sk(0, 85, 1)] }); // v7.4：克拉克的技能改成身前範圍（前搖結束才判定，沒有預告），對手晚一點出招才會在前搖中被暈
   check(cut.hp[0] === cut.maxHp[0], `前搖被暈眩打中，技能應該被打斷（預告消失）：${cut.hp}`);
   const buff = await R({ c0: "u023u-sindy", c1: "x001-cube", steps: 60, script: [sk(1, 5)] });
   check(has(buff, 0, "atkUp") && has(buff, 0, "spdUp"), "增益技能應該加上攻擊、移速增加");
   // v5.3：受傷增減、清除增益、反射、吸血、冷卻重置
-  const vul = await R({ c0: "u010u-clara", c1: "x001-cube", steps: 400, script: [...W, sk(1, 50), sk(0, 200)] });
+  const vul = await R({ c0: "u010u-clara", c1: "x001-cube", steps: 400, script: [...W, sk(1, 95), sk(0, 200)] });
   const base = await R({ c0: "u010u-clara", c1: "x001-cube", steps: 400, script: [...W, sk(0, 200)] });
   check(vul.log.dmg[vul.log.dmg.length - 1] > base.log.dmg[0], `技能抗性降低後，下一招技能傷害應該變高：${vul.log.dmg} vs ${base.log.dmg}`);
   const clean = await R({ c0: "u032u-ron", c1: "u023u-sindy", steps: 300, script: [sk(1, 2, 1), { side: 0, from: 0, to: 40, mx: 1 }, sk(1, 60)] });
@@ -616,26 +630,26 @@ await test("格鬥場：技能效果（暈眩、擊退、沉默、持續傷害�
   // v5.3 第 2 部分：突進、拉近、交換位置、泡泡、複製體
   // v6.4：將敵人召喚為隊友（對手複製體）要技能打中才出現；沒打中、被擋下都沒有
   const cpHit = await R({ c0: "u1004e-sally", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 40, 0] }] });
-  const cpMiss = await R({ c0: "u1004e-sally", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 40, -400] }] });
+  const cpMiss = await R({ c0: "u1004e-sally", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 40, -400] }, { side: 1, from: 0, to: 200, mx: 1, run: true }] }); // v7.4：技能範圍照特效圖（很寬），要讓對手跑遠才會沒打中
   const cpGuard = await R({ c0: "u1004e-sally", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 40, 0] }, { side: 1, from: 0, to: 200, guard: true }] });
   check(cpHit.log.clones === 1 && !cpMiss.log.clones && !cpGuard.log.clones, `複製體：打中 ${cpHit.log.clones}、沒打中 ${cpMiss.log.clones}、被擋 ${cpGuard.log.clones}（應該是 1、0、0）`);
-  const dash = await R({ c0: "u1216e-towa", c1: "x001-cube", steps: 250, script: [...W, sk(0, 50)] });
+  const dash = await R({ c0: "u1216e-towa", c1: "x001-cube", steps: 250, script: [...W, sk(0, 95)] });
   check(dash.log.hits >= 1 && dash.x[0] > -38, `突進應該衝過去並打中：x ${dash.x[0]}、命中 ${dash.log.hits}`);
-  const pull = await R({ c0: "u1013e-brown", c1: "x001-cube", steps: 250, script: [...W, sk(0, 50)] });
+  const pull = await R({ c0: "u1013e-brown", c1: "x001-cube", steps: 250, script: [{ side: 0, from: 0, to: 40, mx: 1 }, sk(0, 50)] }); // 拉近要從遠處拉，不走太近
   check(pull.x[1] < 150, `拉動敵人應該把對手拉近：對手 x ${pull.x[1]}`);
   // v5.4：擊飛撞牆（對手滑到牆邊暈眩，自己跟上去）
   const wall = await R({ c0: "u1021e-pink", c1: "x001-cube", steps: 150, trace: true, script: [{ side: 0, mx: 1, from: 0, to: 50 }, { side: 0, sk: [0, 60, 80, 0] }] });
   const wEnd = wall.trace[wall.trace.length - 1];
   check(wEnd[1][0] > 300 && wall.trace.some((s) => s[1][3] === "stunfx") && wEnd[0][0] > 100, `擊飛撞牆：對手 x ${wEnd[1][0]}、自己 x ${wEnd[0][0]}`);
-  const swap = await R({ c0: "u003u-bella", c1: "x001-cube", steps: 200, script: [...W, sk(1, 50)] });
+  const swap = await R({ c0: "u003u-bella", c1: "x001-cube", steps: 200, script: [...W, sk(1, 95)] });
   check(swap.x[0] > swap.x[1], `交換位置後左右應該對調：${swap.x}`);
-  const bub = await R({ c0: "u1418e-moon", c1: "x001-cube", steps: 300, script: [...W, sk(0, 50)] });
+  const bub = await R({ c0: "u1418e-moon", c1: "x001-cube", steps: 300, script: [...W, sk(0, 95)] });
   check(bub.trace.some((t) => t[1][3] === "bubble" && t[1][1] > 50), "泡泡應該讓對手浮起來");
-  const copy = await R({ c0: "u1004e-sally", c1: "x001-cube", steps: 400, script: [...W, sk(0, 50)] });
+  const copy = await R({ c0: "u1004e-sally", c1: "x001-cube", steps: 400, script: [...W, sk(0, 95)] });
   check(copy.log.hits >= 2, `複製體應該也會攻擊：命中 ${copy.log.hits}`);
   // v5.3.1：召喚物（會攻擊、會被打倒、擋投射物、被「清除召喚物」封鎖）、變形外觀
-  const sum = await R({ c0: "u1009e-sally", c1: "x001-cube", steps: 500, script: [sk(0, 5), { side: 1, from: 60, to: 500, atk: 30 }] });
-  check(sum.log.summons >= 1 && sum.trace.some((t) => t[2].length) && !sum.trace[499][2].length, `召喚物應該出現、會被打倒：最多 ${sum.log.summons} 隻`);
+  const sum = await R({ c0: "u1009e-sally", c1: "x001-cube", steps: 800, script: [sk(0, 5), { side: 1, from: 60, to: 800, atk: 30 }] }); // v7.4：步數 500 → 800
+  check(sum.log.summons >= 1 && sum.trace.some((t) => t[2].length) && !sum.trace[799][2].length, `召喚物應該出現、會被打倒：最多 ${sum.log.summons} 隻`);
   // v6.4：召喚技能要打中才召喚（瞄準旁邊打空、被防禦擋下都不會叫出來）
   const sumMiss = await R({ c0: "u1009e-sally", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 20, -400] }] });
   const sumGuard = await R({ c0: "u1009e-sally", c1: "x001-cube", steps: 200, script: [{ side: 0, sk: [0, 5, 20, 0] }, { side: 1, from: 0, to: 200, guard: true }] });

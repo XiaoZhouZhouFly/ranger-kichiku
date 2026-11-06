@@ -31,6 +31,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: 安裝 Pillow（格鬥場判定距離用；裝不起來也照樣同步）
+        run: pip install pillow || true
+
       - name: 同步資料
         run: python sync.py
 

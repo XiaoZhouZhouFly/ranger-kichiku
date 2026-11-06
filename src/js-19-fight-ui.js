@@ -396,7 +396,7 @@
   function fightCancelAt(who, key, b, B) {
     if (!b) return false;
     const k = FG.fs[who] && fightSlot(FG.fs[who], SLOT_OF[key]);
-    if (k && k.kind === "dash") return Math.abs(b.y - B.y) > B.r * CANCEL_R;
+    if (k && FT_AIMED[k.kind]) return Math.abs(b.y - B.y) > B.r * CANCEL_R; // 左右拖不取消，往上下拖出外圈才取消
     return Math.hypot(b.x - B.x, b.y - B.y) > B.r * CANCEL_R;
   }
   const fUp = (ev) => {
@@ -627,21 +627,29 @@
   function fightDrawAims(c, g, i, X, Y, gy) {
     const me = g.p[i], fs = g.cfg.fs[i], front = me.x + me.face * fs.bw / 2, H = FT.CH * 0.95 * fScale;
     const green = (x0, x1, y0, y1) => { c.fillStyle = "rgba(60,220,110,0.18)"; c.strokeStyle = "rgba(60,220,110,0.85)"; c.lineWidth = 2; const a = Math.min(x0, x1), b = Math.max(x0, x1); c.fillRect(a, y0, b - a, y1 - y0); c.strokeRect(a, y0, b - a, y1 - y0); };
-    const at = (d) => X(front + me.face * d);
     for (const s of [0, 1, 2]) {
       const a = me.aim[s]; if (!a) continue;
       const k = fightSlot(fs, s), mode = AIM_MODE[k.kind];
+      // 矩形、拋物線、直線（v7.4）：方向跟著拖的那一邊（a.side）；atS＝指定哪一邊、離身體前緣多遠
+      const dn = a.side || me.face, at = (d) => X(me.x + dn * (fs.bw / 2 + d)), atS = (sg, d) => X(me.x + sg * (fs.bw / 2 + d));
       c.save();
       c.setLineDash([10, 8]); c.lineWidth = 4; c.strokeStyle = a.cancel ? "#888" : "#ffffff";
-      if (mode === "dir") {
-        const py = Y(me.y + FT.CH * (s === 2 ? 0.35 : 0.28)), edge = X(me.face * (FT.AW / 2 + 80));
-        if (FG.set.showRange) green(at(0), edge, py - 16, py + 16);
+      if (k.kind === "front") { // 身前範圍（v7.4）：白框＝放開時會打到的範圍（左右拖換邊）；綠色＝兩邊都畫
+        const ahead = (k.ahead || k.range) * fxBoxMul(me, true), dir = a.d === -1 ? -1 : 1, fx = (dd) => X(me.x + dir * (fs.bw / 2 + dd));
+        if (FG.set.showRange) { green(X(me.x - fs.bw / 2 - ahead), X(me.x - fs.bw / 2), gy - H, gy); green(X(me.x + fs.bw / 2), X(me.x + fs.bw / 2 + ahead), gy - H, gy); }
+        const x0 = fx(0), x1 = fx(ahead), lo = Math.min(x0, x1);
+        c.fillStyle = a.cancel ? "rgba(120,120,120,0.18)" : "rgba(255,255,255,0.18)"; c.fillRect(lo, gy - H, Math.abs(x1 - x0), H); c.strokeRect(lo, gy - H, Math.abs(x1 - x0), H);
+        fightLabel(c, a.cancel ? "放開＝取消" : "◀ 左右拖換邊 ▶", (x0 + x1) / 2, gy - H - 16, 22, "#ffffff");
+      } else if (mode === "dir") {
+        const py = Y(me.y + FT.CH * (s === 2 ? 0.35 : 0.28));
+        if (FG.set.showRange) for (const sg of [1, -1]) green(atS(sg, 0), X(sg * (FT.AW / 2 + 80)), py - 16, py + 16);
         c.beginPath(); c.moveTo(at(0), py); c.lineTo(at(70), py); c.stroke();
         c.setLineDash([]); c.fillStyle = a.cancel ? "#888" : "#fff"; // 箭頭＝方向
         c.beginPath(); c.moveTo(at(95), py); c.lineTo(at(65), py - 16); c.lineTo(at(65), py + 16); c.closePath(); c.fill();
       } else if (k.kind === "rect") {
-        if (FG.set.showRange) green(at(FT.AIM_MIN - k.width / 2), at(k.range + k.width / 2), gy - H, gy);
-        const x0 = at(a.d - k.width / 2), x1 = at(a.d + k.width / 2), lo = Math.min(x0, x1);
+        const off = k.off || 0; // 特效範圍中心離落點多遠（v7.4）
+        if (FG.set.showRange) for (const sg of [1, -1]) green(atS(sg, FT.AIM_MIN + off - k.width / 2), atS(sg, k.range + off + k.width / 2), gy - H, gy);
+        const x0 = at(a.d + off - k.width / 2), x1 = at(a.d + off + k.width / 2), lo = Math.min(x0, x1);
         c.fillStyle = a.cancel ? "rgba(120,120,120,0.18)" : "rgba(255,255,255,0.16)"; c.fillRect(lo, gy - H, Math.abs(x1 - x0), H); c.strokeRect(lo, gy - H, Math.abs(x1 - x0), H);
         fightLabel(c, "預告 " + fightTeleDelay(g, k, a.d).toFixed(2) + " 秒", at(a.d), gy - H - 16, 22, "#ffffff");
       } else if (k.kind === "dash") { // 突進：落點是場地上的位移（左右都可以）；地上一條虛線到落點，落點畫判定範圍
@@ -650,12 +658,13 @@
         c.beginPath(); c.moveTo(X(me.x), gy - 10); c.lineTo(wx(a.d), gy - 10); c.stroke();
         c.setLineDash([]); c.strokeRect(wx(a.d) - k.width * fScale / 2, gy - H * 0.6, k.width * fScale, H * 0.6);
       } else if (k.kind === "lob") {
-        if (FG.set.showRange) green(at(FT.AIM_MIN - FT.LOB_R), at(k.range + FT.LOB_R), gy - 24, gy);
-        const sx = at(0), ex = at(a.d), sy = Y(me.y + FT.CH * 0.6), top = Math.min(sy, gy) - 120;
+        if (FG.set.showRange) for (const sg of [1, -1]) green(atS(sg, FT.AIM_MIN - FT.LOB_R), atS(sg, k.range + FT.LOB_R), gy - 24, gy);
+        const sx = at(0), ex = at(a.d), sy = Y(me.y + FT.CH * 0.6), top = Math.min(sy, gy) - (FT.LOB_GRAV_MUL > 1 ? 320 * fScale : 120);
         c.beginPath(); c.moveTo(sx, sy); c.quadraticCurveTo((sx + ex) / 2, top, ex, gy); c.stroke();
         c.setLineDash([]); c.beginPath(); c.ellipse(ex, gy - 4, FT.LOB_R * fScale, 12, 0, 0, Math.PI * 2); c.stroke();
       }
       if (a.cancel) { c.fillStyle = "#fff"; c.font = canvasFont(900, 30); c.textAlign = "center"; c.fillText("取消", mode === "dir" ? at(70) : at(a.d), gy - H - 46); }
+      else if (k.kind !== "front" && k.kind !== "dash") fightLabel(c, "◀ 左右拖換邊 ▶", X(me.x), gy - H - 46, 20, "#ffffff"); // 矩形、拋物線、直線也可以左右拖（v7.4）
       c.restore();
     }
   }
@@ -783,7 +792,8 @@
       c.fillStyle = "rgba(255,240,200,0.6)"; c.fillRect(X(e.x) - e.w * fScale / 2, gy - h, e.w * fScale, h);
       if (dr) {
         const anim = pickAnim(dr.part, ["finish", "hit", "end", "normal", "idle"]);
-        if (anim) { const n = dr.part.animations[anim].frame_count; c.globalAlpha = 1; c.translate(X(e.x), gy); const k = fScale * FT.CH / f.h; c.scale(k, k); drawPartCtx(c, dr, anim, Math.min(n - 1, Math.floor(pr * n)), 0, 0, false, 0); }
+        // v7.4：特效畫在落點（範圍中心往回 off），跟著出手方的面向翻轉，太寬時等比縮小（判定也一樣大）
+        if (anim) { const n = dr.part.animations[anim].frame_count; c.globalAlpha = 1; c.translate(X(e.x - (e.face || 1) * (e.off || 0)), gy); const k = fScale * FT.CH / f.h * (e.fxs || 1); c.scale(k, k); drawPartCtx(c, dr, anim, Math.min(n - 1, Math.floor(pr * n)), 0, 0, e.face ? fightFlip(e.face) : false, 0); }
       }
     } else if (e.kind === "num" || e.kind === "text") {
       c.font = canvasFont(900, e.kind === "num" ? (e.heavy ? 40 : 32) : 26); c.textAlign = "center"; c.lineWidth = 6; c.strokeStyle = "#1b2038";

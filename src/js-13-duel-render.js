@@ -31,18 +31,52 @@
     }
     return out;
   }
+  // 一個部件在畫面上的外框（這一格）
+  function fItemBox(t) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [px, py] of [[0, 0], [t.w, 0], [0, t.h], [t.w, t.h]]) {
+      const x = t.A * px + t.B * py + t.C, y = t.D * px + t.E * py + t.F;
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    }
+    return [x0, y0, x1, y1];
+  }
+  /* 角色大小（v7.4）：每一格只算「跟身體連在一起」的部件——從最大的部件開始，外框相距 12 以內的才併進來。
+     待機動畫裡飄在很遠的部件（例：恩琴）不會把身高算得很大、讓角色被縮得很小。 */
   function fBounds(f, anim) {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const fr of (f.part.animations[anim]?.frames || [])) for (const t of fItems(f, fr)) {
-      if (t.alpha < 0.3) continue;
-      for (const [px, py] of [[0, 0], [t.w, 0], [0, t.h], [t.w, t.h]]) {
-        const x = t.A * px + t.B * py + t.C, y = t.D * px + t.E * py + t.F;
-        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+    const TOL = 12;
+    for (const fr of (f.part.animations[anim]?.frames || [])) {
+      const bx = fItems(f, fr).filter((t) => t.alpha >= 0.3).map(fItemBox);
+      if (!bx.length) continue;
+      bx.sort((a, b) => (b[2] - b[0]) * (b[3] - b[1]) - (a[2] - a[0]) * (a[3] - a[1]));
+      let c = bx[0].slice(), rest = bx.slice(1), grew = true;
+      while (grew) {
+        grew = false; const keep = [];
+        for (const b of rest) {
+          if (b[0] <= c[2] + TOL && b[2] >= c[0] - TOL && b[1] <= c[3] + TOL && b[3] >= c[1] - TOL) { c = [Math.min(c[0], b[0]), Math.min(c[1], b[1]), Math.max(c[2], b[2]), Math.max(c[3], b[3])]; grew = true; }
+          else keep.push(b);
+        }
+        rest = keep;
       }
+      x0 = Math.min(x0, c[0]); y0 = Math.min(y0, c[1]); x1 = Math.max(x1, c[2]); y1 = Math.max(y1, c[3]);
     }
     if (!isFinite(x0)) return { x0: -40, x1: 40, y0: -100, y1: 0 };
     return { x0, x1, y0, y1 };
   }
+  /* 攻擊動作實際伸到多遠（v7.4，格鬥場的判定距離用）：從身體中心往前，部件之間空隙小於身高 15% 的才算連著
+     （飛出去的金幣、粒子不算），也不算高度離身體太遠的部件。回傳原始座標（還沒縮放），從身體中心算起。 */
+  function fReach(f, anim) {
+    const cx = -f.ox, y0 = f.lb.y0, y1 = f.lb.y1, h = y1 - y0, tol = h * 0.15;
+    let best = 0;
+    for (const fr of (f.part.animations[anim]?.frames || [])) {
+      const iv = fItems(f, fr).filter((t) => t.alpha >= 0.3).map(fItemBox).filter((b) => b[3] >= y0 - h * 0.5 && b[1] <= y1 + h * 0.2).sort((a, b) => a[0] - b[0]);
+      let cur = cx;
+      for (const b of iv) if (b[0] <= cur + tol) cur = Math.max(cur, b[2]);
+      best = Math.max(best, cur - cx);
+    }
+    return best;
+  }
+
   function drawFighter(f, anim, idx, x, faceLeft, flash, mul = 1) { drawFighterCtx(dctx, f, anim, idx, x, faceLeft, flash, mul); }
   // 畫一個角色（腳底中央在 x、地面 0）；c＝要畫在哪個畫布（雙人對戰、格鬥場共用）
   function drawFighterCtx(c, f, anim, idx, x, faceLeft, flash, mul = 1) {
