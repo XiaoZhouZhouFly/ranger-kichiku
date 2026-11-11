@@ -1,4 +1,4 @@
-// 格鬥場自動平衡報告（v7.4.1）：讀原始紀錄 data/balance/raw/<規則版本>/*.json.gz，算統計、寫分析檔，產生 GitHub Issue 用的 Markdown。
+// 格鬥場自動平衡報告（v7.4.1）：讀原始紀錄 data/balance/raw/<網站版本>/*.json.gz（v7.5.2 起依版本分資料夾，只用規則版本相同的檔），算統計、寫分析檔，產生 GitHub Issue 用的 Markdown。
 // 用法：
 //   週報：  node tools/fight_report.mjs weekly <網站資料夾> --out report.md     （更新 state 的 week／prev，寫 fight_suggest.json、fight_analysis.json）
 //   新角色：node tools/fight_report.mjs new <網站資料夾> --out report.md id1 id2 …
@@ -41,19 +41,37 @@ const table = (head, body) => [`| ${head.join(" | ")} |`, `| ${head.map(() => "-
 const ATK = { melee: "近戰", dline: "瞬間直線", line: "投射物", lob: "拋物線" };
 
 // ---------- 讀原始紀錄（目前規則版本） ----------
+// v7.5.2：「左、右、種子」都一樣的對戰只算一次（同樣的種子重播結果完全相同，重複的紀錄沒有新資訊）。
+//   v7.4.1～v7.5.1 的抽樣亂數會繞圈，同一批對戰每天被記錄上百次；去重複後舊紀錄仍可使用。dup＝去掉幾筆
 function loadRaw() {
-  const dir = path.join(RAW, state.v), ids = [], idx = new Map(), recs = [];
+  // v7.5.2：原始紀錄依網站版本分資料夾（raw/v7.5.1/、raw/v7.5.2/…，舊的 raw/<規則版本>/ 也照讀），只用規則版本跟目前相同的檔
+  const ids = [], idx = new Map(), recs = [], seen = new Set();
   const id = (x) => { if (!idx.has(x)) { idx.set(x, ids.length); ids.push(x); } return idx.get(x); };
-  if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir).filter((f) => f.endsWith(".json.gz")).sort()) {
-    const d = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(dir, f))));
-    for (const r of d.recs) recs.push({ a: id(d.pool[r[0]]), b: id(d.pool[r[1]]), res: r[3], t: r[4] / 10, ko: r[5], hp: r[6] ? r[6].split(";").map((x) => x.split(",").map(Number)) : [], date: d.date });
+  let dup = 0;
+  const files = fs.existsSync(RAW) ? fs.readdirSync(RAW).filter((d) => fs.statSync(path.join(RAW, d)).isDirectory())
+    .flatMap((d) => fs.readdirSync(path.join(RAW, d)).filter((f) => f.endsWith(".json.gz")).map((f) => [f, path.join(RAW, d, f)])).sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1])) : [];
+  // 只統計 state.minVer（v7.5.2 起＝"v7.5.2"）以後的網站版本資料夾；更早的（例如 raw/v7.5.1/ 修正前的紀錄）只保存、不列入
+  const verNum = (s) => (/^v[\d.]+$/.test(s) ? s.slice(1).split(".").map(Number) : null);
+  const verGE = (a, b) => { for (let i = 0; i < Math.max(a.length, b.length); i++) { const x = a[i] || 0, y = b[i] || 0; if (x !== y) return x > y; } return true; };
+  const minV = state.minVer ? verNum(state.minVer) : null;
+  for (const [, file] of files) {
+    const fv = verNum(path.basename(path.dirname(file)));
+    if (minV && (!fv || !verGE(fv, minV))) continue;
+    const d = JSON.parse(zlib.gunzipSync(fs.readFileSync(file)));
+    if (d.v !== state.v) continue;
+    for (const r of d.recs) {
+      const a = id(d.pool[r[0]]), b = id(d.pool[r[1]]), key = a + "," + b + "," + r[2];
+      if (seen.has(key)) { dup++; continue; }
+      seen.add(key);
+      recs.push({ a, b, res: r[3], t: r[4] / 10, ko: r[5], hp: r[6] ? r[6].split(";").map((x) => x.split(",").map(Number)) : [], date: d.date });
+    }
   }
-  return { ids, idx, recs };
+  return { ids, idx, recs, dup };
 }
 
 // ---------- 統計 ----------
 function analyze() {
-  const { ids, recs } = loadRaw(), N = ids.length;
+  const { ids, recs, dup } = loadRaw(), N = ids.length;
   if (!recs.length) return null;
   const y = (r) => (r.res === 2 ? 0.5 : r.res === 0 ? 1 : 0);
   // Bradley-Terry（左方優勢 h），對角牛頓法
@@ -96,7 +114,7 @@ function analyze() {
       ph: c.ph.map((a) => a.map((x) => +(x / c.n).toFixed(4))), type: T[id] || null,
       vt: Object.fromEntries(Object.entries(c.vt).map(([k, v]) => [k, [v[0], +v[1].toFixed(1), +v[2].toFixed(1)]])) };
   });
-  const out = { v: state.v, since: state.since, date: state.updated, bouts: recs.length, chars: Object.keys(chars).length, pool: (state.seen || []).length, minN: MIN_N,
+  const out = { v: state.v, since: state.since, date: state.updated, bouts: recs.length, dup, chars: Object.keys(chars).length, pool: (state.seen || []).length, minN: MIN_N,
     global: { leftWin: +(leftW / recs.length).toFixed(4), h: +h.toFixed(4), leftAdv: +(sig(h) - 0.5).toFixed(4), tie: +(tie / recs.length).toFixed(4), timeout: +(to / recs.length).toFixed(4), avgT: +allT.toFixed(1), cpFix: cpFix.map((k) => (k + 1) * 5), cpAvg: cpAvg.map((k) => (k + 1) * 5) },
     matrix: M, chars: chars };
   fs.writeFileSync(ANALYSIS, JSON.stringify(out));
@@ -153,7 +171,7 @@ else if (MODE === "weekly") {
   const G = A.global;
   const md = [
     `## 格鬥場平衡週報（${state.week.start} ～ ${A.date}）`, "",
-    `- 規則版本（同步檢查代碼）\`${A.v}\`，從 ${A.since} 開始累積：共 ${A.bouts.toLocaleString()} 場（這週 ${state.week.bouts.toLocaleString()} 場）`,
+    `- 規則版本（同步檢查代碼）\`${A.v}\`，從 ${A.since} 開始累積：共 ${A.bouts.toLocaleString()} 場（這週 ${state.week.bouts.toLocaleString()} 場${A.dup ? `；另有 ${A.dup.toLocaleString()} 筆完全重複的紀錄已去掉，不列入統計` : ""}）`,
     `- 樣本 ≥ ${MIN_N} 場、列入排名的角色 ${ok.length}／${A.pool} 隻（其餘樣本不足，先不下結論）`,
     `- 左方勝率 ${pct(G.leftWin)}（模型估計左方優勢 ${(G.leftAdv * 100).toFixed(1)} 個百分點，排名已扣除）；平手 ${(G.tie * 100).toFixed(1)}%、打滿 60 秒沒人倒下 ${(G.timeout * 100).toFixed(1)}%；平均 ${G.avgT} 秒`,
     `- 標準：預期勝率 ${pct(WIN_LO)}～${pct(WIN_HI)}（Bradley-Terry 模型，已扣除對手強弱與左右；電腦 normal 互打，不會左右拖曳）`,

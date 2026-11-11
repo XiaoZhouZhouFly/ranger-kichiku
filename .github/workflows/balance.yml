@@ -1,6 +1,7 @@
 # 格鬥場自動平衡抽樣（v7.4.1）
 # - 每天（台灣時間 05:07，每日同步之後）：4 個分片各跑約 50 分鐘，新角色跟 1,000 個不同對手各打一場、其餘時間隨機配對（左右隨機）；
-#   每場原始紀錄存 data/balance/raw/<規則版本>/<日期>.json.gz，彙總在 data/balance/fight_samples.json（只改 data/，不會觸發同步與發布）。
+#   每場原始紀錄存 data/balance/raw/<網站版本>/<日期>.json.gz（v7.5.2 起依版本分資料夾，統計只用 v7.5.2 以後的），彙總在 data/balance/fight_samples.json（只改 data/，不會觸發同步與發布）。
+#   抽樣亂數見 tools/fight_rng.mjs（v7.5.2：舊公式會繞圈重複）。
 #   有新角色測完時開一則 Issue（GitHub 會寄 email）。
 # - 每週一台灣時間 08:00：開一則「平衡週報」Issue（Bradley-Terry 強度排名、類型矩陣、前中後期），建議值寫進 data/balance/fight_suggest.json、
 #   全部統計寫進 data/balance/fight_analysis.json。網站不會自己改數值。

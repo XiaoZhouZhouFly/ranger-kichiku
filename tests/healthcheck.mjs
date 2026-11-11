@@ -770,6 +770,19 @@ await test("搜尋引擎設定（noindex）", async (open) => {
   check(robots.includes("noindex"), "網頁開頭沒有 noindex 設定，搜尋引擎會收錄");
 });
 
+// v7.5.2：自動平衡抽樣的亂數（tools/fight_rng.mjs）實際跑 100 萬次，不能提早循環、不能產生重複的對戰；舊公式當對照組必須被抓到
+await test("平衡抽樣亂數不會提早循環", async () => {
+  // 每日同步的健檢只取出 tests、src（sparse-checkout），沒有 tools 時標成略過並說明，不擋發布
+  if (!fs.existsSync(path.join(HERE, "../tools/fight_rng.mjs"))) return "skip 這次沒有取出 tools/（每日同步的健檢只取出 tests、src）";
+  const { rngSelfTest } = await import("../tools/fight_rng.mjs");
+  const r = rngSelfTest({ n: 1e6 });
+  check(r.oldDup > 0, "對照組（舊公式）沒有被抓到重複，測試本身失效");
+  check(r.perSeqDup === 0, `同一條序列 100 萬次內狀態重複 ${r.perSeqDup} 次（提早循環）`);
+  check(r.crossDup === 0, `不同次執行／分片的序列有 ${r.crossDup} 個狀態重疊`);
+  check(r.boutDup === 0, `${r.bouts} 場模擬對戰裡有 ${r.boutDup} 場完全重複`);
+  return `${r.seqs} 條序列各 ${r.n.toLocaleString()} 次、${r.bouts.toLocaleString()} 場模擬對戰都沒有重複（舊公式同樣次數重複 ${r.oldDup.toLocaleString()} 次）`;
+});
+
 // ---------- 結果 ----------
 await browser.close(); server.close();
 if (UPDATE || !fs.existsSync(BASELINE)) { fs.writeFileSync(BASELINE, JSON.stringify(newBaseline, null, 1) + "\n"); console.log(`已更新標準結果：${path.relative(process.cwd(), BASELINE)}`); }
