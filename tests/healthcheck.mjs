@@ -770,6 +770,55 @@ await test("搜尋引擎設定（noindex）", async (open) => {
   check(robots.includes("noindex"), "網頁開頭沒有 noindex 設定，搜尋引擎會收錄");
 });
 
+// v7.5.3：重播。網址帶 replay 直接重播；倒數期間引擎不動；結果要跟背景計算（fightBout）與紀錄一致；從頭、暫停、一格；離開後設定換回來
+await test("格鬥場：重播（倒數、對帳、從頭、暫停、上下一格、回溯、進度條記號）", async (open) => {
+  const p = await open({ width: 800, height: 600 });
+  await p.goto(BASE + "?app=fight"); await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
+  const modeBefore = (await p.evaluate(() => window.__rk.fight())).set.mode;
+  const pairs = [["u362e-blast", "u010u-clara", 1], ["x001-cube", "x002-orb", 7], ["u126h-charles", "u164e-alex", 2]], notes = []; // 第三場：時間到（不是 K.O.）
+  for (const [a, b, seed] of pairs) {
+    const E = await p.evaluate(([a, b, s]) => window.__rk.fightBout(a, b, s), [a, b, seed]);
+    const rec = `${E.win === -1 ? 2 : E.win},${Math.round(E.t * 10)}`;
+    await p.goto(`${BASE}?app=fight&replay=${a},${b},${seed}&rec=${rec}&rspeed=100`);
+    await p.waitForFunction(() => window.__rk && window.__rk.fightReplay(), null, { timeout: 60000 });
+    const early = await p.evaluate(() => window.__rk.fightReplay());
+    check(early.pre > 0 && early.k === 0, `倒數期間引擎動了：${JSON.stringify({ pre: early.pre, k: early.k })}`);
+    await p.waitForFunction(() => window.__rk.fightReplay().done, null, { timeout: 60000 });
+    const r = await p.evaluate(() => window.__rk.fightReplay());
+    check(r.match === true, `${a} vs ${b}：重播 ${JSON.stringify(r.done)} 跟背景計算 ${JSON.stringify({ win: E.win, t: E.t, ko: E.ko, left: E.left })} 不一致`);
+    check(r.recMatch === true, `${a} vs ${b}：重播跟紀錄 ${rec} 不一致`);
+    notes.push(`${a.split("-")[1]} vs ${b.split("-")[1]} ${r.done.ko ? "K.O." : "時間到"} ${r.done.t} 秒`);
+  }
+  check(notes.some((s) => s.includes("時間到")), "三場裡沒有「時間到」的情況（測試資料變了，請換一組會打滿 60 秒的角色）");
+  // 從頭：重新倒數、再跑一次結果一樣
+  const first = (await p.evaluate(() => window.__rk.fightReplay())).done;
+  await p.click("#fRpRestart");
+  check((await p.evaluate(() => window.__rk.fightReplay())).k === 0, "從頭之後步數沒有歸零");
+  await p.waitForFunction(() => window.__rk.fightReplay().done, null, { timeout: 60000 });
+  check(JSON.stringify((await p.evaluate(() => window.__rk.fightReplay())).done) === JSON.stringify(first), "從頭再播一次，結果不一樣");
+  // 暫停、一格（從頭後先等倒數完）
+  await p.click("#fRpRestart"); await p.waitForFunction(() => window.__rk.fightReplay().k > 30, null, { timeout: 20000 });
+  await p.click("#fRpPlay"); const k0 = (await p.evaluate(() => window.__rk.fightReplay())).k; await p.waitForTimeout(400);
+  check((await p.evaluate(() => window.__rk.fightReplay())).k === k0, "暫停之後還在跑");
+  await p.click("#fRpStep"); await p.waitForTimeout(200);
+  const live = await p.evaluate(() => window.__rk.fightReplay());
+  check(live.k === k0 + 1, "按「下一格」沒有剛好前進一步");
+  // 回溯：上一格、往回 1 秒、進度條跳回來，狀態指紋要跟一路播到同一步的一樣
+  await p.click("#fRpPrev"); check((await p.evaluate(() => window.__rk.fightReplay())).k === k0, "按「上一格」沒有剛好退一步");
+  await p.click("#fRpBack"); check((await p.evaluate(() => window.__rk.fightReplay())).k === Math.max(0, k0 - 60), "按「−1 秒」沒有剛好退 60 步");
+  await p.evaluate((k) => window.__rk.fightReplaySeek(k), live.k);
+  check((await p.evaluate(() => window.__rk.fightReplay())).hash === live.hash, "往回再跳回同一步，遊戲狀態跟一路播過來的不一樣");
+  const bar = await p.evaluate(() => { const b = document.getElementById("fRpBar"), r = window.__rk.fightReplay(); return { max: +b.max, total: r.total, doneK: r.doneK, marks: document.querySelectorAll("#fRpMarks .rp-mark").length }; });
+  check(bar.max === bar.total && bar.total > bar.doneK && bar.marks >= 1, `進度條或記號不對：${JSON.stringify(bar)}`);
+  await p.locator("#fRpMarks .rp-mark").last().click();
+  check((await p.evaluate(() => window.__rk.fightReplay())).k === Math.max(0, bar.doneK - 30), "點最後一個記號（時間到／K.O.）沒有跳到發生前 0.5 秒");
+  // 離開：回到一般格鬥場，存檔的模式沒有被改
+  await p.click("#fExit");
+  const after = await p.evaluate(() => ({ r: window.__rk.fightReplay(), mode: window.__rk.fight().set.mode, bar: document.getElementById("fReplay").hidden }));
+  check(after.r === null && after.bar && after.mode === modeBefore, `離開重播後沒有恢復：${JSON.stringify(after)}（原本模式 ${modeBefore}）`);
+  return notes.join("；");
+});
+
 // v7.5.2：自動平衡抽樣的亂數（tools/fight_rng.mjs）實際跑 100 萬次，不能提早循環、不能產生重複的對戰；舊公式當對照組必須被抓到
 await test("平衡抽樣亂數不會提早循環", async () => {
   // 每日同步的健檢只取出 tests、src（sparse-checkout），沒有 tools 時標成略過並說明，不擋發布

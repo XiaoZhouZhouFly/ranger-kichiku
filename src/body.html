@@ -389,6 +389,25 @@
     <div class="fight-stage" id="fStage" hidden>
       <canvas id="fcv" width="720" height="1280" aria-label="格鬥場"></canvas>
       <button class="btn small fight-exit" id="fExit" type="button">✕ 離開</button>
+      <div class="overlay fight-loading" id="fLoad" hidden><div class="ld-box"><i class="ld-spin"></i></div><span class="ld-text">載入中…</span></div>
+      <div class="fight-replay" id="fReplay" hidden>
+        <div class="fight-replay-seek">
+          <div class="fight-replay-track"><input type="range" id="fRpBar" min="0" max="1" step="1" value="0" aria-label="重播進度"><div class="fight-replay-marks" id="fRpMarks"></div></div>
+          <span class="fight-replay-time" id="fRpTime">0.0／0.0 秒</span>
+        </div>
+        <div class="row">
+          <button class="btn small" id="fRpBack" type="button" title="往回 1 秒（Shift＋←）">−1 秒</button>
+          <button class="btn small" id="fRpPrev" type="button" title="上一格（←）">⏮ 上一格</button>
+          <button class="btn small" id="fRpPlay" type="button" title="播放／暫停（空白鍵）">⏸ 暫停</button>
+          <button class="btn small" id="fRpStep" type="button" title="下一格（→）">下一格 ⏭</button>
+          <button class="btn small" id="fRpFwd" type="button" title="往前 1 秒（Shift＋→）">＋1 秒</button>
+        </div>
+        <div class="row">
+          <button class="btn small" id="fRpRestart" type="button">⟲ 從頭</button>
+          <span class="fight-replay-speed"><button class="chip" data-rspeed="0.5" type="button">0.5×</button><button class="chip" data-rspeed="1" type="button">1×</button><button class="chip" data-rspeed="2" type="button">2×</button><button class="chip" data-rspeed="4" type="button">4×</button></span>
+        </div>
+        <div class="fight-replay-info" id="fRpInfo"></div>
+      </div>
       <div class="fight-over" id="fOver" hidden>
         <strong id="fOverText"></strong>
         <div class="row"><button class="btn primary" id="fAgain" type="button">再來一場</button><button class="btn" id="fBack" type="button">返回選角</button></div>

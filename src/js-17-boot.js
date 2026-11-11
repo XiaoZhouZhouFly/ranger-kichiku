@@ -66,6 +66,10 @@
     fightRoster: () => FIGHT_ROSTER.map(([id, note]) => { const r = S.index.find((x) => x.id === id); return r ? { id, name: `${r.name}（${note}）` } : null; }).filter(Boolean),
     fightQuick: (id) => { const r = S.index.find((x) => x.id === id); return r ? fightCompatOf(r) : null; },
     fightPick: (side, id) => fightSetChar(side, S.index.find((x) => x.id === id)),
+    // v7.5.3：重播狀態（倒數剩幾秒、跑了幾步、結果、跟背景計算／紀錄是否一致）
+    // hash＝目前這一步的遊戲狀態指紋（往回跳之後要跟一路播到同一步的一樣）
+    fightReplay: () => { const R = FG.replay; return R && R.g ? { pre: R.pre, k: R.k, total: R.total, doneK: R.doneK, paused: !!R.paused, speed: R.speed, done: R.final && R.k >= R.doneK ? R.final : null, final: R.final, marks: R.marks.length, expect: R.expect, match: R.match, recMatch: R.recMatch, halt: R.halt, hash: fightStateHash(R.g) } : null; },
+    fightReplaySeek: (k) => { if (FG.replay) fightReplaySeek(k); return FG.replay ? FG.replay.k : null; }, // 健檢用：跳到第 k 步
     // 數值平衡檢查：兩隻 AI 對打一場（倒下或時間到就停）→ 勝方（-1＝平手）、秒數、雙方剩餘體力比例
     // v7.3：明確用一般對戰模式（cpu）；之前沒指定＝打木樁模式，右方不會倒、2 秒沒挨打會回滿血，勝率不準
     fightBout: async (c0, c1, seed, secs) => {

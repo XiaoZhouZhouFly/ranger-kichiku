@@ -348,6 +348,25 @@ footer a { color: inherit; }
 .fight-stage.pvp .fight-exit { top: 50%; right: auto; left: 6px; transform: translateY(-50%); }
 .fight-over { position: absolute; inset: auto 16px 50% 16px; transform: translateY(50%); z-index: 3; display: grid; gap: 12px; justify-items: center; padding: 18px; border: 2px solid var(--ink); border-radius: 14px; background: var(--panel, #fff); box-shadow: 4px 4px 0 var(--shadow); text-align: center; }
 .fight-over[hidden] { display: none; }
+/* 重播（v7.5.3）：下方的播放控制列 */
+.fight-replay { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 2; display: grid; gap: 6px; justify-items: center; padding: 8px 10px; border-radius: 12px; background: rgba(14, 17, 34, .88); color: #e8ebff; font-size: 13px; text-align: center; }
+.fight-replay[hidden] { display: none; }
+.fight-replay .row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center; }
+.fight-replay-speed { display: inline-flex; gap: 4px; }
+.fight-replay .btn, .fight-replay .chip:not([aria-pressed="true"]) { color: var(--ink); }
+.fight-replay-info { line-height: 1.4; overflow-wrap: anywhere; }
+.fight-replay-seek { width: 100%; display: flex; gap: 8px; align-items: center; }
+.fight-replay-track { position: relative; flex: 1; min-width: 0; }
+.fight-replay-track input[type=range] { width: 100%; margin: 0; accent-color: #ffd84a; }
+.fight-replay-time { flex: none; font-variant-numeric: tabular-nums; }
+/* 記號：疊在進度條上方的小三角（倒地、破防、K.O.／時間到） */
+.fight-replay-marks { position: absolute; left: 8px; right: 8px; top: -12px; height: 10px; pointer-events: none; }
+.rp-mark { position: absolute; top: 0; width: 12px; height: 10px; margin-left: -6px; padding: 0; border: 0; background: #ffd84a; clip-path: polygon(0 0, 100% 0, 50% 100%); cursor: pointer; pointer-events: auto; }
+.rp-mark.is-l { background: #ff6b6b; }
+.rp-mark.is-r { background: #59a7ff; }
+.rp-mark.is-ko, .rp-mark.is-timeup { width: 16px; height: 12px; margin-left: -8px; top: -2px; background: #fff; }
+.rp-mark.is-break { opacity: .75; }
+.fight-loading { z-index: 3; background: rgba(11, 13, 24, .55); }
 body.fight-on { overflow: hidden; }
 
 /* 格鬥場選角（v5.5）：相容性標示 */
@@ -788,6 +807,25 @@ body.fight-on { overflow: hidden; }
     <div class="fight-stage" id="fStage" hidden>
       <canvas id="fcv" width="720" height="1280" aria-label="格鬥場"></canvas>
       <button class="btn small fight-exit" id="fExit" type="button">✕ 離開</button>
+      <div class="overlay fight-loading" id="fLoad" hidden><div class="ld-box"><i class="ld-spin"></i></div><span class="ld-text">載入中…</span></div>
+      <div class="fight-replay" id="fReplay" hidden>
+        <div class="fight-replay-seek">
+          <div class="fight-replay-track"><input type="range" id="fRpBar" min="0" max="1" step="1" value="0" aria-label="重播進度"><div class="fight-replay-marks" id="fRpMarks"></div></div>
+          <span class="fight-replay-time" id="fRpTime">0.0／0.0 秒</span>
+        </div>
+        <div class="row">
+          <button class="btn small" id="fRpBack" type="button" title="往回 1 秒（Shift＋←）">−1 秒</button>
+          <button class="btn small" id="fRpPrev" type="button" title="上一格（←）">⏮ 上一格</button>
+          <button class="btn small" id="fRpPlay" type="button" title="播放／暫停（空白鍵）">⏸ 暫停</button>
+          <button class="btn small" id="fRpStep" type="button" title="下一格（→）">下一格 ⏭</button>
+          <button class="btn small" id="fRpFwd" type="button" title="往前 1 秒（Shift＋→）">＋1 秒</button>
+        </div>
+        <div class="row">
+          <button class="btn small" id="fRpRestart" type="button">⟲ 從頭</button>
+          <span class="fight-replay-speed"><button class="chip" data-rspeed="0.5" type="button">0.5×</button><button class="chip" data-rspeed="1" type="button">1×</button><button class="chip" data-rspeed="2" type="button">2×</button><button class="chip" data-rspeed="4" type="button">4×</button></span>
+        </div>
+        <div class="fight-replay-info" id="fRpInfo"></div>
+      </div>
       <div class="fight-over" id="fOver" hidden>
         <strong id="fOverText"></strong>
         <div class="row"><button class="btn primary" id="fAgain" type="button">再來一場</button><button class="btn" id="fBack" type="button">返回選角</button></div>
@@ -982,7 +1020,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v7.5.2";
+  const APP_VERSION = "v7.5.3";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -5244,6 +5282,10 @@ body.fight-on { overflow: hidden; }
     fightRoster: () => FIGHT_ROSTER.map(([id, note]) => { const r = S.index.find((x) => x.id === id); return r ? { id, name: `${r.name}（${note}）` } : null; }).filter(Boolean),
     fightQuick: (id) => { const r = S.index.find((x) => x.id === id); return r ? fightCompatOf(r) : null; },
     fightPick: (side, id) => fightSetChar(side, S.index.find((x) => x.id === id)),
+    // v7.5.3：重播狀態（倒數剩幾秒、跑了幾步、結果、跟背景計算／紀錄是否一致）
+    // hash＝目前這一步的遊戲狀態指紋（往回跳之後要跟一路播到同一步的一樣）
+    fightReplay: () => { const R = FG.replay; return R && R.g ? { pre: R.pre, k: R.k, total: R.total, doneK: R.doneK, paused: !!R.paused, speed: R.speed, done: R.final && R.k >= R.doneK ? R.final : null, final: R.final, marks: R.marks.length, expect: R.expect, match: R.match, recMatch: R.recMatch, halt: R.halt, hash: fightStateHash(R.g) } : null; },
+    fightReplaySeek: (k) => { if (FG.replay) fightReplaySeek(k); return FG.replay ? FG.replay.k : null; }, // 健檢用：跳到第 k 步
     // 數值平衡檢查：兩隻 AI 對打一場（倒下或時間到就停）→ 勝方（-1＝平手）、秒數、雙方剩餘體力比例
     // v7.3：明確用一般對戰模式（cpu）；之前沒指定＝打木樁模式，右方不會倒、2 秒沒挨打會回滿血，勝率不準
     fightBout: async (c0, c1, seed, secs) => {
@@ -7749,6 +7791,7 @@ body.fight-on { overflow: hidden; }
     if (FG.set.mode === "online" && !new URLSearchParams(location.search).get("room")) FG.set.mode = "dummy"; // 線上對戰要重新開房，不保留
     fightSetupUi(); for (const i of [0, 1]) { fightPanel(i); fightInfo(i); }
     olAutoJoin();
+    const R = fightReplayParse(); if (R) fightReplayStart(R); // v7.5.3：網址帶 replay＝直接重播那一場
   }
   document.querySelectorAll("#fMode .chip").forEach((c) => (c.onclick = () => { FG.set.mode = c.dataset.fmode; fightSave(); fightSetupUi(); fightInfo(1); }));
   document.querySelectorAll("#fOrient .chip").forEach((c) => (c.onclick = () => { FG.set.orient = c.dataset.forient; fightSave(); fightSetupUi(); }));
@@ -7809,6 +7852,7 @@ body.fight-on { overflow: hidden; }
   }
   function fightStop() {
     FG.running = false; $("fStage").hidden = true; document.body.classList.remove("fight-on");
+    if (FG.replay) { FG.replay = null; FG.set = FG.setSaved; $("fReplay").hidden = true; } // v7.5.3：離開重播，換回存檔的設定
     if (FG.set.mode === "online") { olAfterGame(); if (FG.net) FG.net.link = null; } // 中途離開：不再送按鍵
   }
   $("fStart").onclick = fightStart;
@@ -7966,6 +8010,7 @@ body.fight-on { overflow: hidden; }
   /* ---------- 每一格 ---------- */
   function fightTick(dt) {
     if (!FG.running || !FG.g) return;
+    if (FG.replay) return fightReplayTick(dt); // v7.5.3：重播走自己的流程（一般對戰的流程完全不變）
     const g = FG.g;
     if (FG.pauseUntil && performance.now() < FG.pauseUntil) { FG.acc = 0; fightDraw(); return; } // 轉向後的短暫暫停
     FG.acc = Math.min(FG.acc + dt, 0.25);
@@ -8327,7 +8372,10 @@ body.fight-on { overflow: hidden; }
   }
   function fightBanner(c, g, y) {
     let txt = "", sub = "";
-    if (g.phase === "intro") txt = g.cfg.mode === "dummy" ? "練習" : `第 ${g.round} 回合`;
+    const R = FG.replay && FG.replay.g === g ? FG.replay : null; // v7.5.3：重播的倒數只畫在畫面上（引擎還沒開始）
+    if (R && R.pre > 0) txt = String(Math.ceil(R.pre));
+    else if (R && R.k < 36 && g.phase === "fight") txt = "開打！";
+    else if (g.phase === "intro") txt = g.cfg.mode === "dummy" ? "練習" : `第 ${g.round} 回合`;
     else if (g.phase === "count") txt = String(3 - Math.floor(g.phaseT));
     else if (g.phase === "fight" && g.phaseT < 0.6) txt = "開打！";
     else if (g.phase === "end") { txt = g.endKind === "ko" ? "K.O." : "時間到"; sub = g.roundWinner === -1 ? "平手" : `${g.roundWinner ? "右方" : "左方"}拿下這回合`; }
@@ -8369,7 +8417,7 @@ body.fight-on { overflow: hidden; }
   // 按鈕：搖桿、普攻、技能（冷卻轉圈；矩形技能按住時顯示取消圈）
   function fightDrawControls(c, g, L, who) {
     const B = fightButtons(L), ctl = FG.ctl[who], p = g.p[who], fs = g.cfg.fs[who];
-    const human = FG.set.mode === "pvp" || who === (FG.set.mode === "online" ? FG.me : 0);
+    const human = !FG.replay && (FG.set.mode === "pvp" || who === (FG.set.mode === "online" ? FG.me : 0)); // 重播：不畫操作按鈕
     c.save();
     if (!L.land) { c.fillStyle = "#1a1e36"; c.fillRect(0, L.ctrl.y, FW, L.ctrl.h); }
     else c.globalAlpha = 0.78; // 橫向：按鈕半透明疊在場地上
@@ -8428,6 +8476,171 @@ body.fight-on { overflow: hidden; }
     }
     c.restore();
   }
+
+  /* ---------- 重播（v7.5.3） ----------
+     照自動平衡抽樣的條件重跑一場電腦對戰、畫出過程。網址：?app=fight&replay=左角色,右角色,種子[&rec=結果,秒數×10]
+     （rec＝原始紀錄的第 4、5 欄，選填，用來跟紀錄對帳）。
+     條件必須跟 js-17 的 __rk.fightRun／fightBout 完全一樣，否則過程會走岔：一般對戰（cpu）、normal 電腦互打、60 秒、1 回合、
+     holdMove、teleMode "sync"、直接從 fight 開始（phaseT 1）、每一步先算左方再算右方的電腦輸入、倒下或滿 3,600 步就定結果。
+     倒數 3 2 1 只畫在畫面上，倒數期間引擎完全不動（一般開打的倒數期間電腦會先消耗亂數，重播就不一樣了）。
+     回溯：引擎是決定性的，要到第 k 步就「重建同一場、不畫不出聲地快速跑 k 步」（整場 60 秒約 10 毫秒），不存中途狀態、不動引擎。
+     開始前先這樣快速跑完整場一次（fightReplayScan）：得到總步數（定結果後再讓 K.O.／時間到的畫面播完）、結果、進度條上的記號。
+     存檔的設定（FG.set）不改：重播期間換成一份暫時的複本，離開時換回來。 */
+  const RP_STEPS = 60 * 60, RP_PRE = 3, RP_MARK = { down: "倒地", break: "破防", ko: "K.O.", timeup: "時間到" };
+  const RP_URL = new URLSearchParams(location.search); // 載入當下的網址（開機流程之後會改寫網址列，所以先記下來）
+  function fightReplayParse() {
+    const q = RP_URL, v = q.get("replay");
+    if (!v) return null;
+    const [c0, c1, s] = v.split(","), seed = Number(s);
+    if (!c0 || !c1 || !Number.isInteger(seed)) return { err: "重播網址的格式：replay=左角色,右角色,種子" };
+    const rec = (q.get("rec") || "").split(",").map(Number);
+    // rspeed：健檢用的加速倍數（一般不用）
+    return { c0, c1, seed, rec: rec.length === 2 && rec.every(Number.isFinite) ? { res: rec[0], t: rec[1] / 10 } : null, fast: Math.max(1, Math.min(200, +q.get("rspeed") || 1)), speed: 1 };
+  }
+  // 載入畫面（樣式沿用單人／雙人的載入圈；程式各自獨立）
+  function fightReplayLoad(text, err) {
+    const el = $("fLoad"); el.hidden = !text; el.classList.toggle("err", !!err);
+    if (text) el.querySelector(".ld-text").textContent = text;
+  }
+  async function fightReplayStart(R) {
+    $("fStage").hidden = false; $("fOver").hidden = true; $("fReplay").hidden = true; $("fStage").classList.remove("pvp"); $("fExit").textContent = "✕ 離開";
+    document.body.classList.add("fight-on");
+    if (R.err) { fightReplayLoad(R.err, true); return; }
+    try {
+      fightReplayLoad("載入角色中…");
+      const f = await Promise.all([fightLoad(R.c0), fightLoad(R.c1)]), fs = f.map(fightStats);
+      for (const x of fs) for (const k of x.sk) fightSkillIcon(k);
+      fightReplayLoad("載入召喚物與變形外觀…");
+      const extra = await fightPrepareExtra(f);
+      fightReplayLoad("準備重播…");
+      R.expect = await window.__rk.fightBout(R.c0, R.c1, R.seed); // 對帳：用抽樣的同一個函式在背景算一次
+      FG.setSaved = FG.set; FG.set = Object.assign({}, FG.set, { mode: "cpu", c0: R.c0, c1: R.c1 });
+      FG.f = f; FG.fs = fs; FG.replay = R; R.args = [f, fs, extra];
+      fightReplayScan();
+      fightReplayReset(true);
+      FG.ctl = [fightCtl(), fightCtl()]; FG.mirror = false; FG.pauseUntil = 0; FG.net = netNew(0, 0, 0);
+      fightReplayMarks();
+      fightReplayLoad(""); $("fReplay").hidden = false;
+      FG.running = true; sfxUnlock(); fightResize(); fightReplayUi();
+    } catch (e) {
+      if (FG.replay) { FG.replay = null; FG.set = FG.setSaved; }
+      fightReplayLoad("重播失敗：" + (e.message || e), true);
+    }
+  }
+  // 重建同一場（同樣的角色、數值、種子），停在第 0 步；pre＝要不要重新倒數
+  function fightReplayReset(pre) {
+    const R = FG.replay, [f, fs, extra] = R.args;
+    R.g = fightNew({ f, fs, extra, rounds: 1, secs: 60, mode: "cpu", seed: R.seed, holdMove: true, teleMode: "sync" });
+    R.g.phase = "fight"; R.g.phaseT = 1;
+    Object.assign(R, { mem: [{}, {}], k: 0, pre: pre ? RP_PRE : 0, beep: pre ? 0 : -1, acc: 0, halt: false });
+    FG.g = R.g; FG.cam = null; FG.acc = 0;
+  }
+  // 往前一步（跟 fightRun 同一套：左→右的電腦輸入、fightStep）；loud＝正常播放才出聲
+  function fightReplayStep(loud) {
+    const R = FG.replay, g = R.g;
+    if (g.phase === "over" || (R.total && R.k >= R.total)) { R.halt = true; return; }
+    const inputs = [0, 1].map((side) => fightAi(g, side, "normal", R.mem[side]));
+    fightStep(g, inputs); R.k++;
+    if (loud) for (const e of g.events) fightSound(e);
+  }
+  // 開始前快速跑完整場：定結果（算法跟 fightBout 一樣：血量先四捨五入）、總步數、記號；之後由呼叫的人重建回第 0 步
+  function fightReplayScan() {
+    const R = FG.replay; R.total = 0; fightReplayReset(false);
+    R.marks = []; R.final = null; R.doneK = 0;
+    while (R.g.phase !== "over" && R.k < RP_STEPS + 600) {
+      fightReplayStep(false);
+      if (R.final) continue;
+      for (const e of R.g.events) if (RP_MARK[e.type]) R.marks.push({ k: R.k, type: e.type, side: e.side });
+      const ko = R.g.events.some((e) => e.type === "ko");
+      if (ko || R.k >= RP_STEPS) {
+        const g = R.g, hp = g.p.map((p) => Math.round(p.hp)), left = hp.map((h, i) => Math.max(0, h) / g.p[i].maxHp);
+        R.final = { win: ko ? (hp[0] > 0 ? 0 : 1) : left[0] === left[1] ? -1 : left[0] > left[1] ? 0 : 1, t: +g.t.toFixed(2), ko, left: left.map((x) => +x.toFixed(2)) };
+        R.doneK = R.k;
+        if (!ko) R.marks.push({ k: R.k, type: "timeup" });
+      }
+    }
+    R.total = R.k;
+    const E = R.expect, F = R.final;
+    R.match = !!E && !!F && E.win === F.win && E.ko === F.ko && E.t === F.t && E.left.every((x, i) => x === F.left[i]);
+    R.recMatch = R.rec && F ? R.rec.res === (F.win === -1 ? 2 : F.win) && Math.abs(R.rec.t - Math.round(F.t * 10) / 10) < 1e-6 : null;
+  }
+  // 跳到第 k 步：往回就重建，再不畫不出聲地快速跑過去；跳完停在那裡
+  function fightReplaySeek(k) {
+    const R = FG.replay; k = Math.max(0, Math.min(R.total, Math.round(k)));
+    if (k < R.k || R.pre > 0) fightReplayReset(false);
+    while (R.k < k && !R.halt) fightReplayStep(false);
+    R.paused = true; R.acc = 0; R.halt = R.k >= R.total; FG.cam = null;
+  }
+  function fightReplayTick(dt) {
+    const R = FG.replay;
+    if (R.pre > 0) { // 倒數：只畫，引擎不動
+      if (!R.paused) R.pre = Math.max(0, R.pre - dt);
+      const n = Math.ceil(R.pre); if (n !== R.beep) { R.beep = n; sfxPlay(n > 0 ? "cdBeep" : "cdGo"); }
+    } else if (!R.paused) {
+      const mul = R.speed * R.fast;
+      R.acc = Math.min(R.acc + dt * mul, 0.25 * mul);
+      while (R.acc >= FT.STEP - 1e-9 && !R.halt) { fightReplayStep(true); R.acc -= FT.STEP; }
+      if (R.halt) { R.paused = true; fightReplayUi(); } // 播到底：停住
+    }
+    fightDraw(); fightReplayInfo();
+  }
+  // 下方資訊列與進度條：秒數；播到定結果之後顯示結果與對帳
+  const rpSec = (k) => (k * FT.STEP).toFixed(1);
+  function fightReplayInfo() {
+    const R = FG.replay, g = R.g, nm = (i) => g.cfg.f[i].r.name, side = (w) => (w === -1 ? "平手" : `${w ? "右方" : "左方"}・${nm(w)} 獲勝`), F = R.final;
+    let s = `重播：${nm(0)} vs ${nm(1)}・種子 ${R.seed}`;
+    if (F && R.k >= R.doneK) {
+      s += `｜${side(F.win)}（${F.ko ? "K.O." : "時間到"}，${F.t.toFixed(1)} 秒）`;
+      s += R.match ? "｜✓ 跟背景計算一致" : "｜✕ 跟背景計算不一致（過程走岔了）";
+      if (R.recMatch != null) s += R.recMatch ? "｜✓ 跟紀錄一致" : "｜✕ 跟紀錄不一致（可能是規則改過的舊紀錄）";
+    }
+    if (s !== R.info) { R.info = s; $("fRpInfo").textContent = s; }
+    const bar = $("fRpBar");
+    if (!R.drag && +bar.value !== R.k) bar.value = String(R.k);
+    const tt = `${rpSec(R.k)}／${rpSec(R.total)} 秒`;
+    if (tt !== R.tt) { R.tt = tt; $("fRpTime").textContent = tt; }
+  }
+  // 進度條上的記號：倒地、破防、K.O.／時間到（點一下跳到發生前 0.5 秒；顏色：左方紅、右方藍、時間到灰）
+  function fightReplayMarks() {
+    const R = FG.replay, box = $("fRpMarks"), bar = $("fRpBar");
+    bar.max = String(R.total); bar.value = "0"; box.textContent = "";
+    for (const m of R.marks) {
+      const b = document.createElement("button"); b.type = "button";
+      b.className = `rp-mark is-${m.type}${m.side === 0 ? " is-l" : m.side === 1 ? " is-r" : ""}`;
+      b.style.left = `${(m.k / Math.max(1, R.total)) * 100}%`;
+      b.title = `${rpSec(m.k)} 秒・${m.side == null ? "" : m.side ? "右方" : "左方"}${RP_MARK[m.type]}`; b.setAttribute("aria-label", b.title);
+      b.onclick = rpDo(() => fightReplaySeek(m.k - 30));
+      box.appendChild(b);
+    }
+  }
+  function fightReplayUi() {
+    const R = FG.replay; if (!R) return;
+    $("fRpPlay").textContent = R.paused ? "▶ 播放" : "⏸ 暫停";
+    document.querySelectorAll("#fReplay [data-rspeed]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.rspeed === R.speed)));
+  }
+  function rpDo(fn) { return () => { if (FG.replay && FG.running) { fn(FG.replay); fightReplayUi(); } }; }
+  const rpPlay = (R) => { if (R.k >= R.total) fightReplayReset(false); R.paused = !R.paused; R.halt = false; }; // 播到底再按播放＝從頭（不倒數）
+  $("fRpPlay").onclick = rpDo(rpPlay);
+  $("fRpPrev").onclick = rpDo((R) => fightReplaySeek(R.k - 1));
+  $("fRpStep").onclick = rpDo((R) => fightReplaySeek(R.k + 1));
+  $("fRpBack").onclick = rpDo((R) => fightReplaySeek(R.k - 60));
+  $("fRpFwd").onclick = rpDo((R) => fightReplaySeek(R.k + 60));
+  $("fRpRestart").onclick = rpDo((R) => { fightReplayReset(true); R.paused = false; });
+  document.querySelectorAll("#fReplay [data-rspeed]").forEach((b) => (b.onclick = rpDo((R) => { R.speed = +b.dataset.rspeed; })));
+  // 進度條：拖曳時畫面跟著跳（跳了就暫停）
+  $("fRpBar").addEventListener("input", rpDo((R) => { R.drag = true; fightReplaySeek(+$("fRpBar").value); }));
+  $("fRpBar").addEventListener("change", () => { if (FG.replay) FG.replay.drag = false; });
+  // 鍵盤（電腦）：空白鍵播放／暫停；← → 一格；Shift＋← → 一秒
+  document.addEventListener("keydown", (e) => {
+    const R = FG.replay;
+    if (!R || !FG.running) return;
+    const n = e.shiftKey ? 60 : 1;
+    if (e.key === " ") rpDo(rpPlay)();
+    else if (e.key === "ArrowLeft") rpDo(() => fightReplaySeek(R.k - n))();
+    else if (e.key === "ArrowRight") rpDo(() => fightReplaySeek(R.k + n))();
+    else return;
+    e.preventDefault(); e.stopPropagation();
+  }, true);
 })();
 </script>
 
