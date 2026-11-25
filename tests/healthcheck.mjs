@@ -525,6 +525,107 @@ await test("格鬥場：線上對戰（假資料庫、兩個分頁：開房、�
   return `房號 ${code}，${link}，結果 ${JSON.stringify(na.hp)}`;
 });
 
+// v7.6：新版介面（A 段）。預設是原版；網址 ?fui=new 切成新版。設定頁、暫停（會停住）、離開要確認、兩人同機按兩次、線上對手離開會跳彈窗
+await test("格鬥場：新版介面（設定頁、暫停、兩人同機、線上對手離開）", async (open) => {
+  const p = await open({ width: 390, height: 844 });
+  const ready = (q) => q.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
+  await p.goto(BASE + "?app=fight"); await ready(p);
+  check(await p.isHidden("#fxSetup") && await p.isVisible(".fight-setup") && await p.isVisible("#fStart"), "預設應該是原版介面");
+  await p.goto(BASE + "?app=fight&fui=new"); await ready(p);
+  check(await p.isVisible("#fxSetup") && await p.isHidden(".fight-setup"), "?fui=new 沒有切成新版");
+  check(await p.evaluate(() => document.getElementById("fStart").closest("#fxStartBar") !== null && document.body.classList.contains("fui-new")), "開始鈕沒有搬到新版的開始列，或頁首沒換樣式");
+  await p.waitForFunction(() => /\d/.test(document.getElementById("fxStats0").textContent), null, { timeout: 20000 });
+  check(/^打木樁/.test(await p.textContent("#fxSum")), "開始列的小字摘要不對");
+  check(await p.evaluate(() => document.documentElement.scrollWidth) <= 390, "新版設定頁出現橫向捲動");
+  check(await p.evaluate(() => [...document.querySelectorAll(".fx-mode b, .fx-mode span")].every((e) => e.getBoundingClientRect().height < 26)), "模式卡的文字換行了");
+  check(/資料更新/.test(await p.textContent("#fxFoot")) && !/ vs /.test(await p.textContent("#fxSum")), "小字沒有移到最下方，或開始鈕還有角色名字");
+  await p.setViewportSize({ width: 844, height: 390 });
+  check(await p.evaluate(() => { const a = document.querySelector(".fx-col.is-a").getBoundingClientRect(), c = document.querySelector(".fx-col.is-c").getBoundingClientRect(); return c.left > a.right && Math.abs(a.top - c.top) < 80; }), "橫向設定頁不是三欄");
+  await p.setViewportSize({ width: 390, height: 844 });
+  // 暫停：開場的「第 1 回合」期間暫停，4 秒後還是 intro（引擎沒動）；繼續之後會開打
+  await p.click("#fStart"); await p.waitForFunction(() => window.__rk.fight().running);
+  check(await p.isVisible("#fxPauseBtn") && await p.isHidden("#fExit"), "新版對戰應該顯示暫停鈕、不顯示離開鈕");
+  await p.click("#fxPauseBtn"); const ph0 = (await p.evaluate(() => window.__rk.fight())).phase; await p.waitForTimeout(4200);
+  check(ph0 === "intro" && (await p.evaluate(() => window.__rk.fight())).phase === "intro", "暫停時遊戲還在跑");
+  await p.click("#fxPause [data-act=resume]"); await p.waitForFunction(() => window.__rk.fight().phase === "fight", null, { timeout: 8000 });
+  await p.click("#fxPauseBtn"); await p.click("#fxPause [data-act=leave]");
+  check(await p.isVisible("#fxPause [data-act=leave-yes]") && (await p.evaluate(() => window.__rk.fight().running)), "按「離開對戰」應該先確認，不能直接離開");
+  await p.click("#fxPause [data-act=leave-yes]");
+  check(!(await p.evaluate(() => window.__rk.fight().running)) && await p.isVisible("#fxSetup"), "確定離開後應該回到設定頁");
+  // 兩人同機：按一次只出提示，按兩次才暫停；選單上下各一份
+  await p.click("#fxModes [data-fxmode=pvp]"); await p.click("#fStart"); await p.waitForFunction(() => window.__rk.fight().running);
+  await p.click("#fxPauseBtn");
+  check(await p.isHidden("#fxPause") && /再按一次/.test(await p.textContent("#fxHint")), "兩人同機按一次就暫停了（應該要按兩次）");
+  await p.click("#fxPauseBtn");
+  check(await p.evaluate(() => document.querySelectorAll("#fxPause .fx-pcard").length === 2 && !!document.querySelector("#fxPause .fx-pcard.is-top")), "兩人同機的暫停選單應該上下各一份");
+  await p.click("#fxPause .fx-pcard:not(.is-top) [data-act=resume]");
+  // 線上：A 開房、B 加入，開打後 A 打開選單（遊戲不停）再離開 → B 跳出「對手離開了」
+  // （v7.6 C 段：新版的線上畫面——開房、4 格房號加入、步驟條、狀態、底部「我準備好了」）
+  const A = p; await A.goto(BASE + "?app=fight&fakefb=1&fui=new"); await ready(A);
+  await A.click("#fxModes [data-fxmode=online]");
+  check(await A.isVisible("#fxOlJoin") && await A.isHidden("#fxOnlineSlot") && /建立房間/.test(await A.textContent("#fxOlMain")), "新版線上：沒有出現「加入房間」卡或「建立房間」鈕");
+  const B = await A.context().newPage(); await B.goto(BASE + "?app=fight&fakefb=1&fui=new"); await ready(B);
+  await B.click("#fxModes [data-fxmode=online]");
+  await B.fill("#fxOlBoxes input >> nth=0", "zz99"); await B.click("#fxOlJoinBtn");
+  await B.waitForFunction(() => /失敗/.test(document.getElementById("fxOlMsg").textContent), null, { timeout: 20000 });
+  check(await B.isVisible("#fxOlMsg.is-bad"), "新版線上：加入不存在的房間沒有顯示紅字原因");
+  await A.click("#fxOlMain");
+  await A.waitForFunction(() => window.__rk.fightOnline().code, null, { timeout: 20000 });
+  const code = await A.evaluate(() => window.__rk.fightOnline().code);
+  await A.waitForSelector("#fxOlRoom:not([hidden])");
+  check((await A.textContent("#fxOlCode")) === code && /等待對手加入/.test(await A.textContent("#fxOlStatus")) && await A.isDisabled("#fxOlMain"), "新版線上：開房後的房號、狀態或按鈕不對");
+  await B.fill("#fxOlBoxes input >> nth=0", code.toLowerCase()); await B.click("#fxOlJoinBtn"); // 小寫、一次貼整串也要能加入
+  for (const q of [A, B]) await q.waitForFunction(() => { const b = document.getElementById("fxOlMain"); return !b.disabled && /我準備好了/.test(b.textContent); }, null, { timeout: 30000 });
+  check(await A.evaluate(() => document.querySelectorAll("#fxOlSteps li.is-done").length === 2 && document.querySelector("#fxOlSteps li.is-now")?.textContent === "準備開打"), "新版線上：步驟條沒有走到第 3 步");
+  await A.click("#fxOlMain");
+  await B.waitForFunction(() => /對手已準備/.test(document.getElementById("fxOlStatus").textContent), null, { timeout: 15000 });
+  check(/取消準備/.test(await A.textContent("#fxOlMain")), "新版線上：按了準備之後按鈕沒有變成「取消準備」");
+  await B.click("#fxOlMain");
+  for (const q of [A, B]) await q.waitForFunction(() => window.__rk.fight().running && window.__rk.fightNet().frame > 60, null, { timeout: 30000 });
+  await A.click("#fxPauseBtn"); const f0 = (await A.evaluate(() => window.__rk.fightNet())).frame; await A.waitForTimeout(800);
+  check((await A.evaluate(() => window.__rk.fightNet())).frame > f0, "線上對戰打開選單時遊戲不應該停");
+  check(await A.isHidden("#fxPause [data-act=restart]"), "線上對戰的選單不應該有「重新開始」");
+  await A.click("#fxPause [data-act=leave]"); await A.click("#fxPause [data-act=leave-yes]");
+  await B.waitForSelector("#fxNotice:not([hidden])", { timeout: 10000 });
+  check(/對手離開了/.test(await B.textContent("#fxNotice")), `對手離開後的彈窗內容不對：${await B.textContent("#fxNotice")}`);
+  await B.click("#fxNotice [data-act=back]");
+  check(!(await B.evaluate(() => window.__rk.fight().running)), "按「返回選角」之後應該離開對戰");
+  await B.close();
+  return `房號 ${code}`;
+});
+
+// v7.6 B 段：新版選角面板（預覽再確認、最近、找不到、技能詳情、兩人輪流＋盲選）
+await test("格鬥場：新版選角面板與技能預覽", async (open) => {
+  const p = await open({ width: 390, height: 844 });
+  await p.goto(BASE + "?app=fight&fui=new"); await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
+  await p.evaluate(() => localStorage.removeItem("rk_fightRecent"));
+  await p.click("#fxModes [data-fxmode=dummy]"); await p.click("#fxCard0");
+  check(await p.isVisible("#fxPick") && (await p.locator("#fxpGrid .fxp-card").count()) > 10, "選角面板沒有打開或沒有角色");
+  await p.click("#fxpTabs [data-tab=recent]");
+  check(/未偵測到最近使用角色/.test(await p.textContent("#fxpGrid")), "沒有最近角色時的提示不對");
+  await p.click("#fxpTabs [data-tab=all]");
+  await p.fill("#fxpQ", "zzz不存在"); await p.waitForTimeout(400);
+  check(/找不到「zzz不存在」/.test(await p.textContent("#fxpGrid")), "搜尋找不到時的畫面不對");
+  await p.fill("#fxpQ", ""); await p.waitForTimeout(400);
+  const card = p.locator("#fxpGrid .fxp-card:not(.is-lock)").nth(3), id = await card.getAttribute("data-id");
+  await card.click();
+  await p.waitForFunction(() => /血量 \d/.test(document.getElementById("fxpStats")?.textContent || ""), null, { timeout: 20000 });
+  check((await p.evaluate(() => window.__rk.fight().set.c0)) !== id, "只點卡片（預覽）就換了角色，應該要按「選這隻」");
+  await p.click("#fxpPrev .fxp-pinfo");
+  check(await p.isVisible("#fxpDetail") && (await p.locator("#fxpDetail .fxp-cells span").count()) === 4, "技能詳情沒有打開或沒有四格數值");
+  await p.click("#fxpDetail [data-x=go]");
+  check((await p.evaluate(() => window.__rk.fight().set.c0)) === id && await p.isHidden("#fxPick"), "按「選這隻」沒有選定角色或面板沒關");
+  check((await p.evaluate(() => JSON.parse(localStorage.getItem("rk_fightRecent") || "[]")))[0] === id, "選過的角色沒有記進「最近」");
+  // 兩人同機：玩家 1 → 玩家 2，盲選時玩家 1 的卡片暫時藏起來
+  await p.click("#fxModes [data-fxmode=pvp]"); await p.click("#fxCard1");
+  check(/玩家 1/.test(await p.textContent("#fxpTitle")), "兩人同機應該從玩家 1 開始選");
+  await p.check("#fxpBlind"); await p.locator("#fxpGrid .fxp-card:not(.is-lock)").nth(2).click(); await p.click("#fxpPrev [data-x=go]");
+  check(/玩家 2/.test(await p.textContent("#fxpTitle")) && /盲選/.test(await p.textContent("#fxName0")), "換玩家 2 或盲選隱藏沒有生效");
+  await p.locator("#fxpGrid .fxp-card:not(.is-lock)").nth(4).click(); await p.click("#fxpPrev [data-x=go]");
+  await p.waitForFunction(() => window.__rk.fight().running, null, { timeout: 20000 });
+  return "預覽、詳情、最近、找不到、兩人輪流＋盲選";
+});
+
 await test("格鬥場：橫向、鏡頭、轉向（v7.0）", async (open) => {
   const p = await open({ width: 390, height: 844 });
   await p.goto(BASE + "?app=fight"); await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });

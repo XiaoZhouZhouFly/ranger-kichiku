@@ -1,4 +1,5 @@
 // 格鬥場自動平衡報告（v7.4.1）：讀原始紀錄 data/balance/raw/<網站版本>/*.json.gz（v7.5.2 起依版本分資料夾，只用規則版本相同的檔），算統計、寫分析檔，產生 GitHub Issue 用的 Markdown。
+// v7.6：原始紀錄以緊湊格式（數字陣列）讀入，每場約 35 位元組，週報不會再因為資料太多把記憶體用光（統計方法與結果不變）。
 // 用法：
 //   週報：  node tools/fight_report.mjs weekly <網站資料夾> --out report.md     （更新 state 的 week／prev，寫 fight_suggest.json、fight_analysis.json）
 //   新角色：node tools/fight_report.mjs new <網站資料夾> --out report.md id1 id2 …
@@ -43,11 +44,36 @@ const ATK = { melee: "近戰", dline: "瞬間直線", line: "投射物", lob: "�
 // ---------- 讀原始紀錄（目前規則版本） ----------
 // v7.5.2：「左、右、種子」都一樣的對戰只算一次（同樣的種子重播結果完全相同，重複的紀錄沒有新資訊）。
 //   v7.4.1～v7.5.1 的抽樣亂數會繞圈，同一批對戰每天被記錄上百次；去重複後舊紀錄仍可使用。dup＝去掉幾筆
+// v7.6：緊湊格式。每場不再是一個物件，而是存進幾條數字陣列（TypedArray，第 i 場＝每條陣列的第 i 格）：
+//   A／B＝左右方編號、SD＝種子（只用來去重複）、RES＝結果（0 左勝、1 右勝、2 平手）、KO＝有沒有倒下、T＝秒數 ×10、
+//   HN＝「每 5 秒血量」有幾個記錄點、HL＝前 HP_K 個記錄點「誰領先」（1 左、0 右、2 平；統計只用得到第 0～11 點）。
+//   去重複改用數字雜湊表（HT，存場次編號），不產生文字鍵。每場約 35 位元組（舊版約 500），算法、順序、輸出完全不變。
+const HP_K = 12, LEAD = [0, 1, 0.5];
 function loadRaw() {
   // v7.5.2：原始紀錄依網站版本分資料夾（raw/v7.5.1/、raw/v7.5.2/…，舊的 raw/<規則版本>/ 也照讀），只用規則版本跟目前相同的檔
-  const ids = [], idx = new Map(), recs = [], seen = new Set();
+  const ids = [], idx = new Map();
   const id = (x) => { if (!idx.has(x)) { idx.set(x, ids.length); ids.push(x); } return idx.get(x); };
-  let dup = 0;
+  let dup = 0, n = 0;
+  // 先用抽樣狀態的場數估容量（只影響要不要中途加大，不影響結果）
+  const hint = Object.values(state.chars || {}).reduce((s, c) => s + (Array.isArray(c) && +c[0] > 0 ? +c[0] : 0), 0) / 2;
+  let cap = Math.max(1 << 16, Math.ceil(hint * 1.1));
+  let A = new Uint16Array(cap), B = new Uint16Array(cap), SD = new Uint32Array(cap), RES = new Uint8Array(cap), KO = new Uint8Array(cap),
+    T = new Uint16Array(cap), HN = new Uint8Array(cap), HL = new Uint8Array(cap * HP_K);
+  const more = (Arr, old, size) => { const x = new Arr(size); x.set(old); return x; };
+  const grow = () => {
+    const c = Math.ceil(cap * 1.5);
+    A = more(Uint16Array, A, c); B = more(Uint16Array, B, c); SD = more(Uint32Array, SD, c); RES = more(Uint8Array, RES, c); KO = more(Uint8Array, KO, c);
+    T = more(Uint16Array, T, c); HN = more(Uint8Array, HN, c); HL = more(Uint8Array, HL, c * HP_K); cap = c;
+  };
+  // 去重複的雜湊表（開放定址；格子存場次編號，-1＝空），保持七成以下滿
+  let hbits = 16; while ((1 << hbits) * 0.7 < cap) hbits++;
+  let HT = new Int32Array(1 << hbits).fill(-1);
+  const slot = (a, b, s, bits) => { let h = Math.imul(a * 65536 + b, 0x9e3779b1) ^ Math.imul(s, 0x85ebca77); h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 13; return h >>> (32 - bits); };
+  const rehash = () => {
+    hbits++; HT = new Int32Array(1 << hbits).fill(-1); const m = (1 << hbits) - 1;
+    for (let i = 0; i < n; i++) { let k = slot(A[i], B[i], SD[i], hbits); while (HT[k] !== -1) k = (k + 1) & m; HT[k] = i; }
+  };
+  const bad = (what, file) => { throw new Error(`原始紀錄格式不符（${what}）：${file}`); };
   const files = fs.existsSync(RAW) ? fs.readdirSync(RAW).filter((d) => fs.statSync(path.join(RAW, d)).isDirectory())
     .flatMap((d) => fs.readdirSync(path.join(RAW, d)).filter((f) => f.endsWith(".json.gz")).map((f) => [f, path.join(RAW, d, f)])).sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1])) : [];
   // 只統計 state.minVer（v7.5.2 起＝"v7.5.2"）以後的網站版本資料夾；更早的（例如 raw/v7.5.1/ 修正前的紀錄）只保存、不列入
@@ -60,27 +86,40 @@ function loadRaw() {
     const d = JSON.parse(zlib.gunzipSync(fs.readFileSync(file)));
     if (d.v !== state.v) continue;
     for (const r of d.recs) {
-      const a = id(d.pool[r[0]]), b = id(d.pool[r[1]]), key = a + "," + b + "," + r[2];
-      if (seen.has(key)) { dup++; continue; }
-      seen.add(key);
-      recs.push({ a, b, res: r[3], t: r[4] / 10, ko: r[5], hp: r[6] ? r[6].split(";").map((x) => x.split(",").map(Number)) : [], date: d.date });
+      const a = id(d.pool[r[0]]), b = id(d.pool[r[1]]), s = r[2];
+      if (ids.length > 65536) bad("角色超過 65536 隻", file);
+      if (!(Number.isInteger(s) && s >= 0 && s < 2 ** 32)) bad("種子", file);
+      if (!(r[3] === 0 || r[3] === 1 || r[3] === 2)) bad("結果", file);
+      if (!(Number.isInteger(r[4]) && r[4] >= 0 && r[4] < 65536)) bad("秒數", file);
+      // 去重複：左、右、種子都一樣才算重複，保留最早那筆
+      const m = (1 << hbits) - 1; let k = slot(a, b, s, hbits), hit = false;
+      for (let j; (j = HT[k]) !== -1; k = (k + 1) & m) if (A[j] === a && B[j] === b && SD[j] === s) { hit = true; break; }
+      if (hit) { dup++; continue; }
+      if (n === cap) grow();
+      HT[k] = n; A[n] = a; B[n] = b; SD[n] = s; RES[n] = r[3]; KO[n] = r[5] ? 1 : 0; T[n] = r[4];
+      // 每 5 秒血量：只記「誰領先」（跟舊版逐點比 [左, 右] 的結果一樣，含缺數字的情況）
+      const hp = r[6] ? r[6].split(";") : [];
+      HN[n] = Math.min(hp.length, HP_K);
+      for (let q = 0; q < HN[n]; q++) { const [l, rr] = hp[q].split(",").map(Number); HL[n * HP_K + q] = l > rr ? 1 : l < rr ? 0 : 2; }
+      n++;
+      if (n > (1 << hbits) * 0.7) rehash();
     }
   }
-  return { ids, idx, recs, dup };
+  return { ids, idx, n, A, B, RES, KO, T, HN, HL, dup };
 }
 
 // ---------- 統計 ----------
 function analyze() {
-  const { ids, recs, dup } = loadRaw(), N = ids.length;
-  if (!recs.length) return null;
-  const y = (r) => (r.res === 2 ? 0.5 : r.res === 0 ? 1 : 0);
+  const { ids, n, A, B, RES, KO, T: T10, HN, HL, dup } = loadRaw(), N = ids.length;
+  if (!n) return null;
+  const y = (i) => (RES[i] === 2 ? 0.5 : RES[i] === 0 ? 1 : 0); // 第 i 場左方的得分
   // Bradley-Terry（左方優勢 h），對角牛頓法
   const beta = new Float64Array(N), LAM = 1; let h = 0;
   const g = new Float64Array(N), H = new Float64Array(N);
   for (let it = 0; it < 200; it++) {
     g.fill(0); H.fill(LAM); let gh = 0, Hh = 1e-6;
     for (let i = 0; i < N; i++) g[i] = -LAM * beta[i];
-    for (const r of recs) { const p = sig(beta[r.a] - beta[r.b] + h), e = y(r) - p, w = p * (1 - p); g[r.a] += e; g[r.b] -= e; H[r.a] += w; H[r.b] += w; gh += e; Hh += w; }
+    for (let i = 0; i < n; i++) { const a = A[i], b = B[i], p = sig(beta[a] - beta[b] + h), e = y(i) - p, w = p * (1 - p); g[a] += e; g[b] -= e; H[a] += w; H[b] += w; gh += e; Hh += w; }
     let mx = 0;
     for (let i = 0; i < N; i++) { const d = Math.max(-1, Math.min(1, g[i] / H[i])); beta[i] += d; mx = Math.max(mx, Math.abs(d)); }
     h += Math.max(-0.5, Math.min(0.5, gh / Hh));
@@ -90,17 +129,19 @@ function analyze() {
   const expW = (b) => { let s = 0; for (let j = 0; j < N; j++) s += sig(b - beta[j]); return s / N; };
   // 每隻角色：場數、原始勝率、左右、平手、超時、時長、前中後期
   const C = ids.map(() => ({ n: 0, w: 0, nl: 0, wl: 0, tie: 0, to: 0, t: 0, ph: [[0, 0, 0], [0, 0, 0]], vt: {} }));
-  const allT = recs.reduce((a, r) => a + r.t, 0) / recs.length;
+  let sumT = 0; for (let i = 0; i < n; i++) sumT += T10[i] / 10;
+  const allT = sumT / n;
   const cpFix = [3, 7, 11], cpAvg = [1, 2, 3].map((k) => Math.max(0, Math.min(11, Math.round((allT * k / 3) / 5) - 1)));
-  const lead = (r, k) => { if (r.hp.length > k) { const [l, rr] = r.hp[k]; return l > rr ? 1 : l < rr ? 0 : 0.5; } return y(r); }; // 左方在第 k 個記錄點是否領先
+  const lead = (i, k) => (HN[i] > k ? LEAD[HL[i * HP_K + k]] : y(i)); // 左方在第 k 個記錄點是否領先（k ≤ 11）
   let tie = 0, to = 0, leftW = 0;
   const M = {}; // 類型矩陣：M[列][欄] = [場數, 列方勝場, 模型預測的列方勝場]
   const T = state.types || {};
-  for (const r of recs) {
-    const yl = y(r), pl = sig(beta[r.a] - beta[r.b] + h); leftW += yl; if (r.res === 2) tie++; if (!r.ko) to++;
-    for (const [me, op, w, left, pw] of [[r.a, r.b, yl, true, pl], [r.b, r.a, 1 - yl, false, 1 - pl]]) {
-      const c = C[me]; c.n++; c.w += w; c.t += r.t; if (left) { c.nl++; c.wl += w; } if (r.res === 2) c.tie++; if (!r.ko) c.to++;
-      for (let k = 0; k < 3; k++) { const lf = lead(r, cpFix[k]), la = lead(r, cpAvg[k]); c.ph[0][k] += left ? lf : 1 - lf; c.ph[1][k] += left ? la : 1 - la; }
+  for (let i = 0; i < n; i++) {
+    const ra = A[i], rb = B[i], rt = T10[i] / 10, isTie = RES[i] === 2, noKo = !KO[i];
+    const yl = y(i), pl = sig(beta[ra] - beta[rb] + h); leftW += yl; if (isTie) tie++; if (noKo) to++;
+    for (const [me, op, w, left, pw] of [[ra, rb, yl, true, pl], [rb, ra, 1 - yl, false, 1 - pl]]) {
+      const c = C[me]; c.n++; c.w += w; c.t += rt; if (left) { c.nl++; c.wl += w; } if (isTie) c.tie++; if (noKo) c.to++;
+      for (let k = 0; k < 3; k++) { const lf = lead(i, cpFix[k]), la = lead(i, cpAvg[k]); c.ph[0][k] += left ? lf : 1 - lf; c.ph[1][k] += left ? la : 1 - la; }
       const ta = (T[ids[me]] || ["?"])[0], tb = (T[ids[op]] || ["?"])[0], m = ((M[ta] ||= {})[tb] ||= [0, 0, 0]); m[0]++; m[1] += w; m[2] += pw;
       const v = (c.vt[tb] ||= [0, 0, 0]); v[0]++; v[1] += w; v[2] += pw; // 角色對某類型：[場數, 勝場, 模型預測勝場]
     }
@@ -114,8 +155,8 @@ function analyze() {
       ph: c.ph.map((a) => a.map((x) => +(x / c.n).toFixed(4))), type: T[id] || null,
       vt: Object.fromEntries(Object.entries(c.vt).map(([k, v]) => [k, [v[0], +v[1].toFixed(1), +v[2].toFixed(1)]])) };
   });
-  const out = { v: state.v, since: state.since, date: state.updated, bouts: recs.length, dup, chars: Object.keys(chars).length, pool: (state.seen || []).length, minN: MIN_N,
-    global: { leftWin: +(leftW / recs.length).toFixed(4), h: +h.toFixed(4), leftAdv: +(sig(h) - 0.5).toFixed(4), tie: +(tie / recs.length).toFixed(4), timeout: +(to / recs.length).toFixed(4), avgT: +allT.toFixed(1), cpFix: cpFix.map((k) => (k + 1) * 5), cpAvg: cpAvg.map((k) => (k + 1) * 5) },
+  const out = { v: state.v, since: state.since, date: state.updated, bouts: n, dup, chars: Object.keys(chars).length, pool: (state.seen || []).length, minN: MIN_N,
+    global: { leftWin: +(leftW / n).toFixed(4), h: +h.toFixed(4), leftAdv: +(sig(h) - 0.5).toFixed(4), tie: +(tie / n).toFixed(4), timeout: +(to / n).toFixed(4), avgT: +allT.toFixed(1), cpFix: cpFix.map((k) => (k + 1) * 5), cpAvg: cpAvg.map((k) => (k + 1) * 5) },
     matrix: M, chars: chars };
   fs.writeFileSync(ANALYSIS, JSON.stringify(out));
   return out;

@@ -241,6 +241,7 @@
     // 右邊卡片＝對手的角色
     const opp = other && other.id ? other.id : null;
     if (FG.olOpp !== opp) { FG.olOpp = opp; fightPanel(1); fightInfo(1); }
+    fuiOl(); // v7.6 新版介面的線上畫面
   }
   function olShareUrl() { return `${location.origin}${location.pathname}?app=fight&room=${OL.code}${qs.has("fakefb") ? "&fakefb=1" : ""}${qs.has("relay") ? "&relay=1" : ""}`; }
   async function olShowQr() {
@@ -301,19 +302,22 @@
       OL.pend = {};
       $("fStage").hidden = false; $("fOver").hidden = true; $("fStage").classList.remove("pvp");
       $("fExit").textContent = "✕ 離開"; document.body.classList.add("fight-on");
-      FG.running = true; sfxUnlock(); fightResize();
+      FG.running = true; sfxUnlock(); fightResize(); fuiOnStart();
       OL.started = true;
     } catch (e) { $("fOnReadyMsg").textContent = "載入失敗：" + (e.message || e); }
   }
   function olOnMsg(m) {
+    if (m.t === "bye") { if (FG.net && FG.net.game === m.g) FG.olGone = "left"; return; } // v7.6：對手打到一半離開
     if (FG.net && FG.net.link && FG.net.game === m.g) return netRecv(FG.net, m);
     if (!FG.net || !(FG.net.game >= m.g)) (OL.pend[m.g] = OL.pend[m.g] || []).push(m); // 下一場的訊息先存著
   }
   // 對戰中每一幀：對手斷線、不同步 → 停下來顯示原因
   function olTick(g) {
     if (g !== FG.g) return; // 這一幀開頭拿到的是上一場（剛好開新的一場）
-    const n = FG.net, bad = FG.olGone || !OL.room || !OL.room.guest ? "對手已斷線" : n && n.desync ? `同步錯誤（第 ${n.desync.f} 格雙方畫面不一樣），這場只好中止` : "";
+    const n = FG.net, bad = FG.olGone === "left" ? "對手離開了這場對戰" : FG.olGone || !OL.room || !OL.room.guest ? "對手已斷線" : n && n.desync ? `同步錯誤（第 ${n.desync.f} 格雙方畫面不一樣），這場只好中止` : "";
     if (n && n.waiting && g.phase !== "over" && n.stallFrames % 120 === 119) olLog(`等待對手的按鍵中：第 ${n.frame} 格，自己的佇列 ${n.q[n.me].size}、對手的佇列 ${n.q[1 - n.me].size}`);
+    if (bad && $("fOver").hidden && fuiOn()) { olLog("停止：" + bad); $("fOverText").textContent = bad; $("fOver").hidden = false; } // 新版：另外跳出彈窗（見下一行）
+    if (fuiOnlineTick(g, bad)) { if (g.phase === "over" && OL.started) olAfterGame(); return; }
     if (bad && $("fOver").hidden) { olLog("停止：" + bad); g.phase = "over"; g.winner = -2; $("fOver").hidden = false; $("fOverText").textContent = bad; }
     if (g.phase === "over" && OL.started) olAfterGame(); // 打完：雙方都取消準備，下一場要各自再按「再一場」
   }

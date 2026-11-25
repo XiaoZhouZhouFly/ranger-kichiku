@@ -154,6 +154,7 @@
     comp.className = "compat" + (c ? " " + c.lvl : ""); comp.textContent = c ? COMPAT_LABEL[c.lvl] : ""; comp.title = c ? c.why : "";
     const th = $(`fthumb${i}`); th.textContent = "";
     if (r) { const img = document.createElement("img"); img.alt = ""; const urls = thumbUrls(r.id); let n = 0; img.onerror = () => { if (++n < urls.length) img.src = urls[n]; }; img.src = urls[0]; th.appendChild(img); }
+    if (fuiOn() && FG.ready) { fuiCard(i); fuiSummary(); } // v7.6 新版介面的角色卡
   }
   function fightSetChar(i, r) {
     if (!r) return;
@@ -229,6 +230,7 @@
     $("fRight").textContent = st.mode === "pvp" ? "右方（玩家 2）" : st.mode === "cpu" ? "右方（電腦）" : online ? "對手" : "右方（木樁）";
     document.querySelector(".fighter.is-a .side-tag").textContent = online ? "你" : "左方（玩家 1）";
     $("fRounds").value = String(st.rounds); $("fSecs").value = String(st.secs); $("fShowRange").checked = st.showRange !== false; $("fShowBox").checked = st.showBox !== false;
+    fuiRefresh(); // v7.6 新版介面
   }
   async function initFight() {
     if (FG.inited) return; FG.inited = true;
@@ -293,7 +295,7 @@
       $("fStage").hidden = false; $("fOver").hidden = true; $("fStage").classList.toggle("pvp", mode === "pvp");
       $("fExit").textContent = mode === "pvp" ? "✕" : "✕ 離開";
       document.body.classList.add("fight-on");
-      FG.running = true; sfxUnlock(); fightResize();
+      FG.running = true; sfxUnlock(); fightResize(); fuiOnStart();
       $("fStartMsg").textContent = "";
     } catch (e) { $("fStartMsg").textContent = "載入失敗：" + (e.message || e); }
     $("fStart").disabled = false;
@@ -301,6 +303,9 @@
   function fightStop() {
     FG.running = false; $("fStage").hidden = true; document.body.classList.remove("fight-on");
     if (FG.replay) { FG.replay = null; FG.set = FG.setSaved; $("fReplay").hidden = true; } // v7.5.3：離開重播，換回存檔的設定
+    fuiCloseMenu(); fuiNoticeClose(); $("fxPauseBtn").hidden = true; $("fExit").hidden = false; // v7.6 新版介面的暫停／彈窗
+    // v7.6：線上對戰打到一半離開，先通知對手（不然對手會一直等按鍵、卡住）；舊版收到這則訊息會直接忽略
+    if (FG.set.mode === "online" && FG.net && FG.net.link && FG.g && FG.g.phase !== "over") { try { FG.net.link.send({ t: "bye" }); } catch {} }
     if (FG.set.mode === "online") { olAfterGame(); if (FG.net) FG.net.link = null; } // 中途離開：不再送按鍵
   }
   $("fStart").onclick = fightStart;
@@ -323,6 +328,7 @@
     if (fcv.height !== FH) fcv.height = FH;
     const w = Math.min(vw, vh * FW / FH);
     fcv.style.width = w + "px"; fcv.style.height = (w * FH / FW) + "px";
+    fuiPlaceBtn(); // v7.6：暫停鈕跟著畫布位置
   }
   /* 對戰中轉向：瀏覽器常常不會告訴我們手指放開了，所以把按住中的按鍵、瞄準都當成「取消放開」；
      單人模式順便暫停 0.5 秒讓人重新握好手機（線上對戰不能停） */
@@ -459,6 +465,7 @@
   function fightTick(dt) {
     if (!FG.running || !FG.g) return;
     if (FG.replay) return fightReplayTick(dt); // v7.5.3：重播走自己的流程（一般對戰的流程完全不變）
+    if (FG.paused) { FG.acc = 0; fightDraw(); return; } // v7.6 新版介面的暫停（只有本機模式會設；線上不會）
     const g = FG.g;
     if (FG.pauseUntil && performance.now() < FG.pauseUntil) { FG.acc = 0; fightDraw(); return; } // 轉向後的短暫暫停
     FG.acc = Math.min(FG.acc + dt, 0.25);
@@ -501,14 +508,15 @@
       fightDrawPlayer(c, g, L, 0);
       c.save(); c.translate(FW, FH); c.rotate(Math.PI); fightDrawPlayer(c, g, L, 1); c.restore();
       fightHudBar(c, g, L.hud.y, L.hud.h, true);
+      if (fuiOn()) fuiHud2p(c, g, L); // v7.6：兩人同機只加血量數字
     } else {
       fightDrawPlayer(c, g, L, FG.set.mode === "online" ? FG.me : 0);
-      fightHudBar(c, g, 18, 110, false);
+      if (fuiOn()) fuiHud(c, g, L); else fightHudBar(c, g, 18, 110, false); // v7.6 新版 HUD
       if (FG.net && (FG.net.delay || FG.net.lat || FG.net.jit)) { // v6 測試：連線層狀態
         c.fillStyle = FG.net.waiting ? "#ffd84a" : "#9aa3c8"; c.font = canvasFont(700, 20); c.textAlign = "right"; c.textBaseline = "top";
         c.fillText(netLabel(FG.net), FW - 20, L.view.y + 44);
       }
-      if (g.cfg.mode === "dummy") {
+      if (g.cfg.mode === "dummy" && !fuiOn()) { // 新版把木樁傷害畫在 HUD 裡
         const st = g.stats;
         c.fillStyle = "#cfd6ff"; c.font = canvasFont(700, 24); c.textAlign = "left"; c.textBaseline = "top";
         c.fillText(`木樁・這一串 ${st.lastCombo || 0}　最後一下 ${st.lastDmg || 0}　總共 ${st.total}（${st.hits} 下）`, 20, L.view.y + 10);
@@ -882,7 +890,7 @@
       c.fillStyle = ink; c.font = canvasFont(900, 14); c.fillText(label, b.x, b.y - h / 2 + 12); // 原本的字（小字）
     };
     pad("up", "跳", fightIconUp); pad("down", "防", fightIconShield); pad("left", "◀"); pad("right", "▶");
-    { // 防禦條（破防後要回到 GAUGE_REARM 才能再防：這段期間顯示灰色）
+    if (!fuiOn()) { // 防禦條（破防後要回到 GAUGE_REARM 才能再防：這段期間顯示灰色）；新版改成「防」外圈的環
       const r = Math.max(0, p.gauge) / FT.GAUGE_MAX, b = B.down;
       // 放在「防」左邊
       const gw = 90, gx = b.x - b.r - 10 - gw, gy = b.y - 6;
@@ -919,9 +927,10 @@
     btn("atk", { shot: "普攻↔", lob: "普攻⌒", dline: "普攻→" }[fs.atk.kind] || "普攻", p.atkCd, fs.atk.cd, false);
     for (const s of [0, 1]) {
       const k = fs.sk[s];
-      const lab = k ? ({ rect: "定點", line: "直線", lob: "拋物", self: "自身", dash: "突進", buff: "輔助" }[k.kind] + (s + 1)) : "—";
+      const lab = k ? (({ rect: "定點", line: "直線", lob: "拋物", self: "自身", dash: "突進", buff: "輔助", front: "身前" }[k.kind] || "技能") + (s + 1)) : "—"; // v7.6：補上「身前」（之前顯示 NaN）
       btn("sk" + s, lab, k ? p.cd[s] : 0, k ? k.cd : 1, !k);
     }
+    if (fuiOn()) fuiControls(c, g, L, B, who); // v7.6：防禦環、操作提示
     c.restore();
   }
 
@@ -969,7 +978,7 @@
       FG.ctl = [fightCtl(), fightCtl()]; FG.mirror = false; FG.pauseUntil = 0; FG.net = netNew(0, 0, 0);
       fightReplayMarks();
       fightReplayLoad(""); $("fReplay").hidden = false;
-      FG.running = true; sfxUnlock(); fightResize(); fightReplayUi();
+      FG.running = true; sfxUnlock(); fightResize(); fightReplayUi(); fuiOnStart();
     } catch (e) {
       if (FG.replay) { FG.replay = null; FG.set = FG.setSaved; }
       fightReplayLoad("重播失敗：" + (e.message || e), true);

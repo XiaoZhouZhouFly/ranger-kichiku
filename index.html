@@ -412,6 +412,468 @@ body.fight-on { overflow: hidden; }
 .ol-steps li.now { background: var(--accent); color: var(--accent-ink); }
 .ol-steps li.now::before { background: var(--accent-ink); color: var(--accent); }
 .fight-help .more { margin-top: 4px; }
+
+/* ---------- v7.6 格鬥場新版介面（測試；只在 body.fui-new 時生效） ---------- */
+/* 頁首（三個模式共用）：跟著新版開關走 */
+body.fui-new .top { padding-top: 20px; }
+body.fui-new .brand { display: grid; gap: 14px; width: 100%; }
+body.fui-new .logo { font-size: 30px; letter-spacing: .06em; align-items: center; }
+body.fui-new .logo b { font-size: 22px; padding: 4px 12px; border-width: 3px; border-radius: 10px; }
+body.fui-new .app-mode { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; max-width: 720px; border-width: 3px; border-radius: 14px; box-shadow: 0 4px 0 var(--shadow); }
+body.fui-new .app-mode button { padding: 12px 6px; font-size: 16px; font-weight: 900; }
+/* 設定頁 */
+.fx-setup { display: grid; gap: 14px; max-width: 720px; padding: 8px 16px 0; }
+.fx-setup[hidden] { display: none; }
+.fx-lbl { margin: 6px 0 0; font-size: 15px; font-weight: 700; color: var(--muted); }
+.fx-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fx-mode { display: grid; gap: 4px; text-align: left; min-height: 72px; padding: 14px 16px; border: 3px solid var(--ink); border-radius: 16px; background: var(--panel); color: var(--ink); cursor: pointer; }
+.fx-mode b { font-size: 19px; font-weight: 900; }
+.fx-mode span { font-size: 13px; font-weight: 500; color: var(--muted); }
+.fx-mode[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.fx-mode[aria-pressed="true"] span { color: color-mix(in srgb, var(--paper) 80%, transparent); }
+.fx-slot[hidden] { display: none; }
+.fx-slot .group { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.fx-slot .group > .lbl { font-weight: 700; color: var(--muted); }
+.fx-slot .group > .hint { flex-basis: 100%; margin: 0; }
+.fx-setup .chips .chip { min-height: 44px; padding: 8px 18px; font-size: 15px; font-weight: 900; border: 3px solid var(--line); }
+.fx-setup .chips .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--ink); }
+.fx-cards { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 0; }
+.fx-card { position: relative; display: grid; justify-items: center; gap: 6px; padding: 26px 8px 14px; min-width: 0; border: 3px solid var(--ink); border-top-width: 9px; border-radius: 18px; background: var(--panel); color: var(--ink); cursor: pointer; text-align: center; }
+.fx-card.is-a { border-top-color: #d91f56; }
+.fx-card.is-b { border-top-color: #2563eb; }
+.fx-card:disabled { cursor: default; opacity: 1; }
+.fx-card.is-wait { border-style: dashed; border-top-style: solid; }
+.fx-tag { position: absolute; top: 8px; left: 10px; padding: 2px 10px; border-radius: 999px; color: #fff; font-size: 13px; font-weight: 900; }
+.is-a .fx-tag { background: #d91f56; }
+.is-b .fx-tag { background: #2563eb; }
+.fx-ava { width: 72px; height: 72px; border-radius: 14px; background: color-mix(in srgb, var(--cool) 12%, var(--panel)); display: grid; place-items: center; overflow: hidden; }
+.fx-ava img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.fx-card strong { font-size: 16px; font-weight: 900; line-height: 1.3; overflow-wrap: anywhere; }
+.fx-sup { font-size: 12px; font-weight: 900; padding: 2px 8px; border-radius: 6px; }
+.fx-sup:empty { display: none; }
+.fx-sup.is-ok { background: #dcfce7; color: #166534; }
+.fx-sup.is-guess { background: #e0e7f5; color: #334a7a; }
+.fx-sup.is-guess::before { content: "？ "; }
+.fx-sup.is-unsup { background: #fff8d6; color: #7a5200; }
+.fx-sup.is-unsup::before { content: "⚠ "; }
+.fx-sup.is-wait { background: #fff1b8; color: #7a5200; }
+.fx-stats { display: flex; gap: 10px; justify-content: center; }
+.fx-stats span { display: grid; justify-items: center; }
+.fx-stats small { font-size: 12px; color: var(--muted); }
+.fx-stats b { font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.fx-vs { z-index: 1; margin: 0 -10px; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: var(--accent); font-weight: 900; font-style: italic; font-size: 18px; border: 3px solid var(--paper); }
+.fx-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fx-tools[hidden] { display: none; }
+.fx-tool { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; border: 3px solid var(--ink); border-radius: 14px; background: var(--panel); color: var(--ink); font-size: 16px; font-weight: 900; cursor: pointer; }
+.fx-more { border: 3px solid var(--line); border-radius: 14px; background: var(--panel); }
+.fx-more > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; cursor: pointer; list-style: none; min-height: 44px; }
+.fx-more > summary::-webkit-details-marker { display: none; }
+.fx-more > summary span { display: grid; }
+.fx-more > summary small { color: var(--muted); font-size: 13px; }
+.fx-more[open] > summary svg { transform: rotate(180deg); }
+.fx-more-body { display: grid; gap: 12px; padding: 0 16px 16px; }
+.fx-startbar { position: sticky; bottom: 0; z-index: 5; margin: 4px -16px 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--line); display: grid; gap: 6px; }
+.fx-startbar[hidden] { display: none; }
+.fx-start-slot { display: grid; gap: 4px; }
+.fx-start-slot #fStart { width: 100%; display: grid; gap: 2px; padding: 10px 16px; font-size: 24px; font-weight: 900; border-width: 3px; border-radius: 16px; box-shadow: 0 5px 0 var(--shadow); }
+.fx-start-slot #fStart .fx-sum { font-size: 13px; font-weight: 700; white-space: normal; }
+.fx-startbar > .fx-sum { display: none; }
+/* 對戰：暫停鈕、提示、暫停選單、彈窗 */
+.fx-pausebtn { position: absolute; z-index: 4; display: grid; place-items: center; padding: 0; border: 2px solid rgba(255,255,255,.55); border-radius: 14px; background: rgba(40,46,80,.85); color: #fff; cursor: pointer; }
+.fx-pausebtn svg { width: 55%; height: 55%; }
+.fx-pausebtn[hidden] { display: none; }
+.fx-hint { position: absolute; z-index: 6; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 10px 18px; border-radius: 999px; background: rgba(14,17,34,.9); color: #fff; font-weight: 900; pointer-events: none; }
+.fx-hint[hidden] { display: none; }
+.fx-overlay { position: absolute; inset: 0; z-index: 7; display: grid; place-items: center; padding: 16px; background: rgba(6,8,18,.6); }
+.fx-overlay[hidden] { display: none; }
+.fx-overlay.is-notice { z-index: 8; }
+.fx-overlay.is-pvp { grid-template-rows: 1fr 1fr; gap: 10px; }
+.fx-pcard { width: min(100%, 340px); display: grid; gap: 10px; padding: 20px; border: 3px solid #1b2038; border-radius: 22px; background: #fff; color: #1b2038; box-shadow: 0 6px 0 #1b2038; }
+.fx-pcard.is-top { transform: rotate(180deg); }
+.fx-overlay.is-pvp .fx-pcard { gap: 6px; padding: 12px 16px; }
+.fx-pcard h2 { margin: 0; font-size: 26px; font-weight: 900; display: flex; align-items: center; gap: 8px; }
+.fx-psub { margin: 0 0 4px; color: #4a5073; font-size: 14px; }
+.fx-pbtn { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 8px 14px; border: 3px solid #1b2038; border-radius: 14px; background: #fff; color: #1b2038; font-size: 18px; font-weight: 900; cursor: pointer; }
+.fx-pbtn small { margin-left: auto; font-size: 13px; color: #4a5073; font-weight: 700; }
+.fx-pbtn.is-main { background: #ffc61a; box-shadow: 0 4px 0 #1b2038; }
+.fx-pbtn.is-danger { border-color: #b4152f; color: #b4152f; }
+.fx-pbtn.is-danger-fill { border-color: #b4152f; background: #b4152f; color: #fff; }
+.fx-pnote { margin: 0; text-align: center; font-size: 12px; color: #4a5073; }
+@media (orientation: landscape) and (max-height: 500px) {
+  .fx-pcard { width: min(100%, 520px); grid-template-columns: 1fr 1fr; }
+  .fx-pcard h2, .fx-pcard .fx-psub, .fx-pcard .fx-pnote { grid-column: 1 / -1; }
+}
+/* v7.6 新版介面：比例照範例 01／08（第二版） */
+.fx-col { display: contents; }
+.fx-setup { gap: 12px; padding-top: 4px; }
+.fx-lbl { margin: 4px 0 -2px; font-size: 14px; }
+.fx-modes { gap: 10px; }
+.fx-mode { min-height: 0; padding: 12px 14px; gap: 2px; border-radius: 14px; }
+.fx-mode b { font-size: 17px; line-height: 1.25; }
+.fx-mode b, .fx-mode span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fx-mode span { font-size: 12.5px; }
+.fx-setup .chips .chip { min-height: 44px; padding: 6px 16px; font-size: 14px; }
+.fx-slot .group > .hint { display: none; }          /* 小字搬到頁面最下方（fxFoot） */
+.fx-card { padding: 24px 6px 12px; gap: 5px; border-radius: 16px; }
+.fx-ava { width: 64px; height: 64px; }
+.fx-card strong { font-size: 15px; }
+.fx-tool { min-height: 46px; font-size: 15px; border-radius: 12px; }
+.fx-more > summary { padding: 10px 14px; }
+.fx-foot { display: grid; gap: 4px; }
+.fx-foot:empty { display: none; }
+.fx-foot p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.fx-start-slot #fStart { font-size: 22px; padding: 8px 16px; }
+body.fui-new:has(#appFight[aria-pressed="true"]) .mode-note { display: none; }
+body.fui-new .top { padding-top: 14px; }
+body.fui-new .brand { gap: 10px; }
+body.fui-new .logo { font-size: 26px; }
+body.fui-new .logo b { font-size: 19px; }
+body.fui-new .app-mode button { padding: 10px 6px; font-size: 15px; }
+/* 橫向（範例 08）：三欄 */
+@media (orientation: landscape) and (max-height: 500px) {
+  body.fui-new .top { padding-top: 8px; padding-bottom: 6px; }
+  body.fui-new .brand { display: flex; flex-wrap: nowrap; gap: 14px; }
+  body.fui-new .logo { font-size: 20px; flex: none; }
+  body.fui-new .logo b { font-size: 15px; }
+  body.fui-new .app-mode { max-width: 420px; box-shadow: 0 3px 0 var(--shadow); }
+  body.fui-new .app-mode button { padding: 6px 6px; font-size: 14px; }
+  .fx-setup { max-width: none; grid-template-columns: minmax(150px, .8fr) minmax(0, 1.6fr) minmax(170px, .9fr); align-items: start; gap: 16px; padding-inline: max(28px, env(safe-area-inset-left)) max(28px, env(safe-area-inset-right)); }
+  .fx-col { display: grid; gap: 10px; min-width: 0; align-content: start; }
+  .fx-col.is-a .fx-modes { grid-template-columns: 1fr; gap: 8px; }
+  .fx-col.is-a .fx-mode { padding: 9px 12px; }
+  .fx-col.is-a .fx-mode b { font-size: 15px; }
+  .fx-col.is-c { position: sticky; top: 8px; }
+  .fx-col.is-c .fx-startbar { position: static; margin: 0; padding: 0; border: 0; background: none; order: -1; }
+  .fx-card { padding: 22px 6px 10px; }
+  .fx-ava { width: 52px; height: 52px; }
+  .fx-tool { min-height: 44px; }
+  /* 橫向暫停選單（範例 09）：左＝標題、右＝按鈕 */
+  .fx-pcard { width: min(100%, 600px); grid-template-columns: 1fr 1.25fr; grid-auto-flow: dense; column-gap: 20px; max-height: calc(100% - 8px); overflow: auto; }
+  .fx-pcard h2, .fx-pcard .fx-psub, .fx-pcard .fx-pnote { grid-column: 1; }
+  .fx-pcard .fx-pbtn { grid-column: 2; min-height: 46px; }
+  .fx-pcard h2 { align-self: end; }
+}
+/* v7.6 B 段：選角面板（範例 11–22） */
+.fxp { position: fixed; inset: 0; z-index: 70; }
+.fxp[hidden] { display: none; }
+body.fxp-on { overflow: hidden; }
+.fxp-dim { position: absolute; inset: 0; background: rgba(10,12,24,.55); }
+.fxp-sheet { position: absolute; left: 0; right: 0; bottom: 0; height: min(92%, 780px); display: grid; grid-template-rows: auto auto auto auto auto auto auto auto 1fr auto; gap: 10px; padding: 8px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--panel); color: var(--ink); border-radius: 24px 24px 0 0; box-shadow: 0 -4px 0 var(--shadow); overflow: hidden; }
+.fxp-grab { justify-self: center; width: 44px; height: 5px; border-radius: 3px; background: var(--line); }
+.fxp-head { display: flex; align-items: center; gap: 10px; }
+.fxp-head > div { flex: 1; min-width: 0; }
+.fxp-head h2 { margin: 0; font-size: 20px; font-weight: 900; }
+.fxp-head p { margin: 0; font-size: 13px; color: var(--muted); }
+.fxp-x { width: 44px; height: 44px; display: grid; place-items: center; border: 3px solid var(--ink); border-radius: 12px; background: var(--panel); color: var(--ink); cursor: pointer; }
+.fxp-steps { padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.25); font-weight: 900; }
+.fxp-sheet.is-p1 .fxp-head, .fxp-sheet.is-p2 .fxp-head { margin: -8px -16px 0; padding: 12px 16px; color: #fff; }
+.fxp-sheet.is-p1 .fxp-head { background: #d91f56; }
+.fxp-sheet.is-p2 .fxp-head { background: #2563eb; }
+.fxp-sheet.is-p1 .fxp-head p, .fxp-sheet.is-p2 .fxp-head p { color: rgba(255,255,255,.85); }
+.fxp-sheet.is-p1 .fxp-x, .fxp-sheet.is-p2 .fxp-x { border-color: #fff; background: transparent; color: #fff; }
+.fxp-off { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; background: #fff8d6; color: #7a5200; font-weight: 700; font-size: 13px; }
+.fxp-off[hidden], .fxp-pvp[hidden] { display: none; }
+.fxp-off button { margin-left: auto; min-height: 36px; padding: 0 12px; border: 2px solid #7a5200; border-radius: 10px; background: #fff; font-weight: 900; cursor: pointer; }
+.fxp-pvp { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.fxp-mini { min-height: 40px; padding: 6px 14px; border: 2px solid var(--ink); border-radius: 999px; background: var(--panel); color: var(--ink); font-weight: 800; cursor: pointer; }
+.fxp-mini.is-wide { width: 100%; min-height: 48px; border-radius: 14px; border-width: 3px; }
+.fxp-blind { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; font-weight: 800; min-height: 40px; }
+.fxp-bar { display: flex; gap: 10px; }
+.fxp-q { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px; min-height: 48px; border: 3px solid var(--ink); border-radius: 14px; background: color-mix(in srgb, var(--cool) 6%, var(--panel)); color: var(--muted); }
+.fxp-q input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 16px; color: var(--ink); outline: none; }
+.fxp-filter { position: relative; display: flex; align-items: center; gap: 6px; padding: 0 14px; min-height: 48px; border: 3px solid var(--ink); border-radius: 14px; background: var(--panel); color: var(--ink); font-weight: 900; cursor: pointer; }
+.fxp-filter b { position: absolute; top: -8px; right: -8px; min-width: 22px; height: 22px; display: grid; place-items: center; border-radius: 11px; background: #d91f56; color: #fff; font-size: 12px; }
+.fxp-fpanel { display: grid; gap: 6px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 14px; }
+.fxp-fpanel[hidden] { display: none; }
+.fxp-tabs { display: grid; grid-template-columns: repeat(4, 1fr); border: 3px solid var(--ink); border-radius: 14px; overflow: hidden; }
+.fxp-tabs button { min-height: 44px; border: 0; background: var(--panel); color: var(--ink); font-size: 15px; font-weight: 900; cursor: pointer; }
+.fxp-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.fxp-els, .fxp-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.fxp-chips { flex-wrap: wrap; overflow: visible; }
+.fxp-el { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border: 2px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font-weight: 800; cursor: pointer; }
+.fxp-el i, .fxp-meta i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.fxp-el[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.fxp-sort { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-weight: 800; }
+.fxp-sort button { border: 0; background: none; color: var(--ink); font-weight: 800; min-height: 36px; cursor: pointer; }
+.fxp-grid { min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: start; gap: 10px; padding: 8px 4px 8px 0; }
+.fxp-card { position: relative; display: grid; justify-items: center; gap: 4px; padding: 10px 6px; border: 2px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink); cursor: pointer; text-align: center; min-width: 0; }
+.fxp-card .fxp-ava { width: 64px; height: 64px; }
+.fxp-card b { font-size: 13px; line-height: 1.3; width: 100%; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.fxp-meta { font-size: 12px; color: var(--muted); display: inline-flex; gap: 4px; align-items: center; }
+.fxp-card.is-sel { border: 3px solid var(--ink); background: #fff8d6; color: #1b2038; }
+.fxp-card.is-sel .fxp-meta { color: #4a5073; }
+.fxp-check { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; display: grid; place-items: center; border: 2px solid #1b2038; border-radius: 50%; background: #ffc61a; color: #1b2038; }
+.fxp-card.is-lock { border-style: dashed; filter: grayscale(1); opacity: .7; }
+.fxp-tag { font-size: 12px; font-weight: 800; padding: 1px 6px; border-radius: 6px; }
+.fxp-tag.is-lock { background: var(--line); }
+.fxp-tag.is-unsup { background: #fff8d6; color: #7a5200; }
+.fxp-card.is-skel { height: 118px; background: linear-gradient(90deg, var(--line), transparent, var(--line)); background-size: 200% 100%; animation: fxp-skel 1.2s linear infinite; border: 0; }
+@keyframes fxp-skel { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .fxp-card.is-skel { animation: none; } }
+.fxp-msg { grid-column: 1 / -1; margin: 0; color: var(--muted); font-weight: 700; }
+.fxp-empty { grid-column: 1 / -1; display: grid; justify-items: center; gap: 8px; padding: 24px 8px; text-align: center; color: var(--muted); }
+.fxp-empty b { color: var(--ink); font-size: 17px; }
+.fxp-chipx { min-height: 36px; padding: 0 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--panel); color: var(--ink); font-weight: 800; cursor: pointer; }
+.fxp-tip { padding: 8px 12px; border-radius: 12px; background: #fff8d6; color: #7a5200; font-weight: 700; }
+.fxp-tip button { margin-left: 6px; border: 2px solid #7a5200; border-radius: 8px; background: #fff; font-weight: 900; min-height: 32px; cursor: pointer; }
+.fxp-ava { display: grid; place-items: center; border-radius: 14px; background: color-mix(in srgb, var(--cool) 10%, var(--panel)); overflow: hidden; flex: none; }
+.fxp-ava img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.fxp-prev { display: grid; gap: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.fxp-pinfo { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 0; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; }
+.fxp-pinfo.is-empty { justify-content: center; color: var(--muted); font-weight: 700; cursor: default; }
+.fxp-pinfo .fxp-ava { width: 64px; height: 64px; }
+.fxp-ptxt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.fxp-ptxt b { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fxp-pstats { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fxp-sks { display: flex; gap: 6px; flex-wrap: wrap; }
+.fxp-sk { font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 8px; background: color-mix(in srgb, #6d4cff 14%, var(--panel)); color: #4a2fd6; }
+.fxp-more { flex: none; display: grid; justify-items: center; font-size: 12px; font-weight: 800; color: var(--muted); min-width: 44px; }
+.fxp-pact, .fxp-dact { display: flex; gap: 10px; }
+.fxp-dact { flex-wrap: wrap; }
+.fxp-go { flex: 1; min-height: 54px; border: 3px solid #1b2038; border-radius: 16px; background: #ffc61a; color: #1b2038; font-size: 20px; font-weight: 900; box-shadow: 0 4px 0 var(--shadow); cursor: pointer; }
+.fxp-go:disabled { background: var(--line); box-shadow: none; color: var(--muted); cursor: not-allowed; }
+.fxp-fav { width: 54px; min-height: 54px; display: grid; place-items: center; border: 3px solid var(--ink); border-radius: 16px; background: var(--panel); color: var(--ink); cursor: pointer; }
+.fxp-fav[aria-pressed="true"] { color: #e0a100; }
+/* 技能詳情（直向：往上展開；背後變暗） */
+.fxp-detail { position: absolute; left: 0; right: 0; bottom: 0; max-height: 86%; overflow-y: auto; display: grid; gap: 12px; align-content: start; padding: 14px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--panel); border-radius: 24px 24px 0 0; box-shadow: 0 -4px 0 var(--shadow), 0 0 0 100vmax rgba(10,12,24,.45); }
+.fxp-detail[hidden] { display: none; }
+.fxp-dhead { display: flex; align-items: center; gap: 12px; }
+.fxp-dhead .fxp-ava { width: 56px; height: 56px; }
+.fxp-dhead > span:last-child { display: grid; flex: 1; min-width: 0; }
+.fxp-dhead small { color: var(--muted); }
+.fxp-back { order: 3; width: 48px; height: 48px; display: grid; place-items: center; border: 3px solid var(--ink); border-radius: 14px; background: var(--panel); color: var(--ink); cursor: pointer; }
+.fxp-back span { display: none; }
+.fxp-dtabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fxp-dtabs button { display: grid; gap: 1px; min-height: 52px; padding: 6px; border: 3px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink); cursor: pointer; text-align: center; }
+.fxp-dtabs button small { font-size: 12px; }
+.fxp-dtabs button[aria-pressed="true"] { background: #6d4cff; border-color: #1b2038; color: #fff; }
+.fxp-dtabs button.is-unsup small { color: #a06a00; }
+.fxp-dtabs button.is-unsup[aria-pressed="true"] small { color: #ffe08a; }
+.fxp-dtabs button:disabled { opacity: .45; cursor: not-allowed; }
+.fxp-demo { position: relative; border: 3px solid #1b2038; border-radius: 16px; overflow: hidden; background: #222852; }
+.fxp-demo canvas { display: block; width: 100%; height: auto; aspect-ratio: 640 / 240; }
+.fxp-dlabel { position: absolute; top: 8px; left: 8px; padding: 3px 10px; border-radius: 999px; background: rgba(14,17,34,.85); color: #fff; font-size: 12px; font-weight: 800; }
+.fxp-replay { position: absolute; top: 6px; right: 6px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #fff; color: #1b2038; cursor: pointer; }
+.fxp-warn { display: flex; gap: 8px; padding: 10px 12px; border: 2px solid #1b2038; border-radius: 14px; background: #fff8d6; color: #5c3d00; font-weight: 700; font-size: 14px; }
+.fxp-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.fxp-cells span { display: grid; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, var(--cool) 7%, var(--panel)); min-width: 0; }
+.fxp-cells small { color: var(--muted); font-size: 12px; }
+.fxp-cells b { font-size: 15px; overflow-wrap: anywhere; }
+.fxp-how { margin: 0; font-size: 15px; line-height: 1.6; }
+.fxp-how small { color: var(--muted); }
+.fxp-guess { margin: 0; font-size: 13px; color: #334a7a; }
+.fxp-status { display: grid; gap: 6px; }
+.fxp-status span { padding: 8px 12px; border: 2px solid var(--line); border-radius: 12px; font-size: 14px; }
+.fxp-status .is-x { background: #fff8d6; color: #5c3d00; }
+/* 橫向（範例 13、21）：全畫面左右分欄 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .fxp-sheet { inset: 0; height: auto; border-radius: 0; box-shadow: none; padding: 8px max(28px, env(safe-area-inset-left)) 8px max(28px, env(safe-area-inset-right)); gap: 8px;
+    grid-template-columns: 120px minmax(0, 1fr) 260px; grid-template-rows: auto auto auto auto auto 1fr;
+    grid-template-areas: "head head head" "off off off" "pvp pvp pvp" "els bar prev" "els tabs prev" "els grid prev"; }
+  .fxp-grab { display: none; }
+  .fxp-head { grid-area: head; } .fxp-off { grid-area: off; } .fxp-pvp { grid-area: pvp; }
+  .fxp-bar { grid-area: bar; } .fxp-bar .fxp-q, .fxp-bar .fxp-filter { min-height: 42px; } .fxp-fpanel { grid-area: grid; z-index: 2; align-self: start; background: var(--panel); }
+  .fxp-tabs { grid-area: tabs; } .fxp-tabs button { min-height: 38px; } .fxp-sort { display: none; }
+  .fxp-els { grid-area: els; flex-direction: column; overflow-y: auto; }
+  .fxp-grid { grid-area: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding-top: 4px; }
+  .fxp-card { padding: 6px 4px; } .fxp-card .fxp-ava { width: 48px; height: 48px; }
+  .fxp-prev { grid-area: prev; border-top: 0; border-left: 1px solid var(--line); padding: 0 0 0 14px; align-content: start; overflow-y: auto; }
+  .fxp-pinfo { flex-direction: column; align-items: center; text-align: center; }
+  .fxp-ptxt { justify-items: center; }
+  .fxp-detail { inset: 0; max-height: none; grid-auto-flow: dense; border-radius: 0; box-shadow: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; padding: 10px 28px; }
+  .fxp-dhead, .fxp-dtabs { grid-column: 1; }
+  .fxp-demo { grid-column: 1; }
+  .fxp-warn, .fxp-cells, .fxp-how, .fxp-guess, .fxp-status, .fxp-dact { grid-column: 2; }
+  .fxp-detail > * { align-self: start; } .fxp-dact .fxp-go { flex: 1 1 100%; min-height: 50px; max-height: 56px; }
+  .fxp-detail > :nth-child(n+4) { grid-row: auto; }
+  .fxp-back { order: -1; width: auto; padding: 0 12px; gap: 4px; display: flex; }
+  .fxp-back span { display: inline; font-weight: 900; }
+  .fxp-back svg { transform: rotate(90deg); }
+}
+
+/* 全螢幕鈕（頁首右上角） */
+.top { position: relative; }
+.fx-full { display: none; }
+body.fui-new .fx-full { position: absolute; top: 14px; right: 16px; z-index: 3; display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 3px solid var(--ink); border-radius: 12px; background: var(--panel); color: var(--ink); font-weight: 900; cursor: pointer; }
+body.fui-new .fx-full[hidden] { display: none; }
+@media (max-width: 420px) { body.fui-new .fx-full span { display: none; } body.fui-new .fx-full { top: 10px; padding: 0; width: 44px; min-height: 40px; justify-content: center; } }
+@media (orientation: landscape) and (max-height: 500px) {
+  body.fui-new .fx-full { top: 6px; right: max(16px, env(safe-area-inset-right)); min-height: 40px; }
+  body.fui-new .brand { padding-right: 140px; }
+  /* 橫向選角：標題一行、預覽欄捲動＋按鈕固定在欄底 */
+  .fxp-head h2 { font-size: 17px; display: inline; } .fxp-head p { display: inline; margin-left: 8px; }
+  .fxp-x { width: 40px; height: 40px; }
+  .fxp-prev { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .fxp-pinfo { flex: 1 1 auto; min-height: 0; overflow-y: auto; justify-content: flex-start; gap: 6px; }
+  .fxp-pinfo .fxp-ava { width: 56px; height: 56px; }
+  .fxp-ptxt b { white-space: normal; font-size: 15px; }
+  .fxp-sks { justify-content: center; }
+  .fxp-more { flex-direction: row; display: flex; gap: 4px; align-items: center; }
+  .fxp-pact { flex: none; }
+  .fxp-go { min-height: 48px; font-size: 18px; } .fxp-fav { width: 48px; min-height: 48px; }
+}
+@media (orientation: landscape) and (max-height: 360px) {
+  .fxp-sheet { gap: 6px; } .fxp-el { min-height: 34px; } .fxp-tabs button { min-height: 34px; }
+  .fxp-pinfo .fxp-ava { width: 44px; height: 44px; }
+}
+
+/* 數值小圖示：直向不顯示 */
+.fx-sico { display: none; }
+/* 橫向：依螢幕高度自動縮放（瀏覽器網址列、低解析度也放得下），角色卡改成精簡橫排 */
+@media (orientation: landscape) and (max-height: 500px) {
+  body.fui-new .top { padding-top: clamp(4px, 1.5vh, 8px); padding-bottom: clamp(2px, 1vh, 6px); }
+  body.fui-new .app-mode button { padding-block: clamp(3px, 1.2vh, 6px); }
+  .fx-setup { gap: clamp(6px, 2vh, 14px); padding-top: 0; }
+  .fx-col { gap: clamp(5px, 1.6vh, 10px); }
+  .fx-lbl { font-size: 12.5px; margin: 0; }
+  .fx-col.is-a .fx-modes { gap: clamp(4px, 1.4vh, 8px); }
+  .fx-col.is-a .fx-mode { padding: clamp(5px, 1.6vh, 9px) 12px; }
+  .fx-setup .chips .chip { min-height: clamp(34px, 9vh, 44px); padding-block: 2px; font-size: 13.5px; }
+  .fx-cards { align-items: stretch; }
+  .fx-card { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "ava name" "ava sup" "stats stats"; justify-items: start; align-items: center; column-gap: 8px; row-gap: 2px; padding: clamp(18px, 5vh, 24px) 8px clamp(6px, 2vh, 10px); text-align: left; border-top-width: 6px; }
+  .fx-card .fx-tag { top: 4px; left: 8px; font-size: 11px; padding: 0 8px; }
+  .fx-ava { grid-area: ava; width: clamp(36px, 11vh, 52px); height: clamp(36px, 11vh, 52px); border-radius: 10px; }
+  .fx-card strong { grid-area: name; font-size: clamp(12.5px, 3.4vh, 15px); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .fx-sup { grid-area: sup; font-size: 11px; padding: 1px 6px; }
+  .fx-stats { grid-area: stats; justify-self: stretch; justify-content: space-between; gap: 4px; margin-top: 2px; }
+  .fx-stats span { display: flex; align-items: center; gap: 3px; }
+  .fx-stats small { display: none; }
+  .fx-sico { display: inline-flex; color: var(--muted); }
+  .fx-stats b { font-size: clamp(13px, 3.6vh, 16px); }
+  .fx-vs { width: 38px; height: 38px; font-size: 14px; margin: 0 -8px; align-self: center; }
+  .fx-tool { min-height: clamp(36px, 10vh, 44px); font-size: 14px; }
+  .fx-start-slot #fStart { font-size: clamp(18px, 5.5vh, 22px); padding-block: clamp(4px, 1.5vh, 8px); }
+  .fx-more > summary { padding-block: 6px; }
+  .fx-foot p { font-size: 11.5px; line-height: 1.4; }
+}
+/* 很矮（網址列沒收起、低解析度）：模式說明收掉、標題縮小 */
+@media (orientation: landscape) and (max-height: 380px) {
+  .fx-col.is-a .fx-mode span { display: none; }
+  .fx-col.is-b > .fx-lbl { display: none; }
+  .fx-more > summary small { display: none; }
+}
+
+/* 模式說明改成問號按鈕；卡片只放模式名（直向、橫向都一樣） */
+.fx-lblrow { display: flex; align-items: center; gap: 8px; }
+.fx-help { width: 28px; height: 28px; padding: 0; border: 2px solid var(--ink); border-radius: 50%; background: var(--panel); color: var(--ink); font-weight: 900; font-size: 15px; line-height: 1; cursor: pointer; position: relative; }
+.fx-help::after { content: ""; position: absolute; inset: -8px; } /* 點擊範圍放大到 44 */
+.fx-help[aria-expanded="true"] { background: var(--ink); color: var(--paper); }
+.fx-helpbox { display: grid; gap: 4px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 12px; background: var(--panel); font-size: 13px; }
+.fx-helpbox[hidden] { display: none; }
+.fx-helpbox p { margin: 0; color: var(--muted); } .fx-helpbox b { color: var(--ink); margin-right: 8px; }
+.fx-mode span { display: none; }
+.fx-mode { padding-block: clamp(8px, 1.8vh, 14px); }
+/* 數值：直向也改成小圖示一橫排 */
+.fx-stats small { display: none; }
+.fx-sico { display: inline-flex; color: var(--muted); }
+.fx-stats { gap: clamp(6px, 2vw, 12px); }
+.fx-stats span { display: flex; align-items: center; gap: 3px; }
+/* 直向：依螢幕高度縮放（網址列沒收起、矮螢幕） */
+@media (orientation: portrait) {
+  .fx-setup { gap: clamp(8px, 1.5vh, 14px); }
+  .fx-ava { width: clamp(44px, 7.5vh, 64px); height: clamp(44px, 7.5vh, 64px); }
+  .fx-card { padding-top: clamp(20px, 3vh, 24px); padding-bottom: clamp(8px, 1.4vh, 12px); gap: clamp(3px, .6vh, 5px); }
+  .fx-tool { min-height: clamp(40px, 5.6vh, 46px); }
+  .fx-start-slot #fStart { font-size: clamp(19px, 2.8vh, 22px); padding-block: clamp(5px, 1vh, 8px); }
+  .fx-startbar { padding-top: clamp(8px, 1.4vh, 12px); padding-bottom: calc(clamp(8px, 1.4vh, 12px) + env(safe-area-inset-bottom)); }
+  body.fui-new .top { padding-top: clamp(8px, 1.6vh, 14px); }
+  body.fui-new .app-mode button { padding-block: clamp(7px, 1.2vh, 10px); }
+}
+@media (orientation: portrait) and (max-height: 700px) { .fx-col.is-b > .fx-lbl { display: none; } }
+
+/* 直向收緊（數值不超出卡片、矮螢幕時開始列不蓋住交換／隨機） */
+@media (orientation: portrait) {
+  .fx-stats { gap: 2px; justify-content: space-around; width: 100%; }
+  .fx-stats span { gap: 1px; }
+  .fx-sico svg { width: 13px; height: 13px; }
+  .fx-stats b { font-size: clamp(13px, 3.8vw, 16px); }
+  .fx-mode { padding-block: clamp(6px, 1.3vh, 14px); }
+  .fx-setup { gap: clamp(6px, 1.2vh, 14px); }
+  .fx-ava { width: clamp(40px, 6.6vh, 64px); height: clamp(40px, 6.6vh, 64px); }
+  .fx-setup .chips .chip { min-height: 44px; }
+}
+
+@media (orientation: portrait) and (max-height: 700px) {
+  .fx-modes { gap: 6px; }
+  .fx-card { padding-top: 18px; padding-bottom: 6px; }
+  .fx-card .fx-tag { top: 3px; }
+  .fx-startbar { padding-top: 6px; padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+  .fx-start-slot #fStart { padding-block: 4px; }
+  body.fui-new .top { padding-top: 6px; } body.fui-new .brand { gap: 6px; }
+}
+
+/* 全螢幕鈕：放進頁首排版（直向在 logo 那一列右邊、橫向在分頁右邊），取消之前的絕對定位 */
+body.fui-new .fx-full { position: static; justify-self: end; flex: none; }
+body.fui-new .brand { padding-right: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+body.fui-new .brand .logo { grid-column: 1; }
+body.fui-new .brand .fx-full { grid-column: 2; grid-row: 1; }
+body.fui-new .brand .app-mode { grid-column: 1 / -1; }
+@media (orientation: landscape) and (max-height: 500px) { body.fui-new .brand { padding-right: 0; } body.fui-new .brand .fx-full { margin-left: auto; order: 3; } }
+@media (max-width: 420px) { body.fui-new .fx-full { width: 44px; min-height: 44px; } }
+/* 有多的空間時加大間距（--fx-extra 由 fuiFit 依畫面高度算） */
+.fx-setup { row-gap: calc(clamp(6px, 1.2vh, 14px) + var(--fx-extra, 0px)); }
+.fx-col { row-gap: calc(clamp(5px, 1.2vh, 10px) + var(--fx-extra, 0px)); }
+.fx-modes { gap: calc(8px + var(--fx-extra, 0px) * .6); }
+.fx-tools { gap: calc(10px + var(--fx-extra, 0px) * .6); }
+@media (orientation: landscape) and (max-height: 500px) { .fx-col.is-a .fx-modes { gap: calc(clamp(4px, 1.4vh, 8px) + var(--fx-extra, 0px) * .6); } }
+
+/* ---------- v7.6 C 段：線上對戰三步驟（範例 06、07、10） ---------- */
+#fxOnlineSlot { display: none !important; }
+.fx-setup.is-inroom .fx-lblrow, .fx-setup.is-inroom #fxModes, .fx-setup.is-inroom #fxModeHelpBox { display: none; }
+.fx-setup.is-oljoin .fx-cards, .fx-setup.is-oljoin .fx-col.is-b > .fx-lbl { display: none; }
+.fx-olroom { display: grid; gap: 12px; }
+.fx-olroom[hidden], .fx-joincard[hidden] { display: none; }
+.fx-steps { display: flex; align-items: center; gap: 6px; list-style: none; margin: 0; padding: 0; counter-reset: fxst; font-weight: 900; font-size: 14px; color: var(--muted); }
+.fx-steps li { counter-increment: fxst; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.fx-steps li::before { content: counter(fxst); width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--line); color: var(--muted); }
+.fx-steps li + li::after { content: ""; order: -1; width: clamp(8px, 4vw, 28px); height: 3px; border-radius: 2px; background: var(--line); }
+.fx-steps li.is-done { color: var(--ink); }
+.fx-steps li.is-done::before { content: "✓"; background: var(--ink); color: var(--paper); }
+.fx-steps li.is-done + li::after { background: var(--ink); }
+.fx-steps li.is-now { color: var(--ink); }
+.fx-steps li.is-now::before { background: #ffc61a; color: #1b2038; box-shadow: 0 0 0 3px var(--ink); }
+.fx-roomcard, .fx-joincard { display: grid; gap: 8px; padding: 14px 16px; border: 3px solid var(--ink); border-radius: 18px; background: var(--panel); }
+.fx-roomtop { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.fx-roomtop small { display: block; color: var(--muted); font-weight: 700; }
+#fxOlCode { font-family: var(--font-mono); font-size: clamp(34px, 11vw, 46px); font-weight: 700; letter-spacing: .14em; line-height: 1.1; }
+.fx-roomact { display: grid; gap: 4px; justify-items: stretch; }
+.fx-roomact .fx-tool { padding: 0 14px; min-height: 44px; font-size: 15px; }
+.fx-roomlinks { display: flex; gap: 4px; justify-content: space-between; }
+.fx-link { min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--ink); font-weight: 900; font-size: 14px; text-decoration: underline; cursor: pointer; }
+.fx-link.is-danger { color: #c2203f; }
+.fx-link[hidden] { display: none; }
+.fx-olstatus { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 900; }
+.fx-olstatus i { width: 12px; height: 12px; flex: none; border-radius: 50%; background: #16a34a; }
+.fx-olstatus.is-wait i { background: #eab308; animation: fx-blink 1.2s ease-in-out infinite; }
+.fx-olstatus.is-bad i { background: #dc2626; }
+.fx-olstatus.is-bad { color: #c2203f; }
+@keyframes fx-blink { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .fx-olstatus.is-wait i { animation: none; } }
+.fx-olnote, .fx-olmsg { margin: 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.fx-olnote:empty, .fx-olmsg:empty { display: none; }
+.fx-olmsg.is-bad { color: #c2203f; font-weight: 800; }
+.fx-joincard > b { font-size: 18px; font-weight: 900; }
+.fx-joincard > p { margin: 0; color: var(--muted); font-size: 13px; }
+.fx-codeboxes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.fx-codeboxes input { min-width: 0; height: 60px; text-align: center; font-family: var(--font-mono); font-size: 28px; font-weight: 700; text-transform: uppercase; border: 3px solid var(--ink); border-radius: 14px; background: color-mix(in srgb, var(--cool) 6%, var(--panel)); color: var(--ink); }
+.fx-olmain { width: 100%; display: grid; gap: 2px; padding: 10px 16px; font-size: clamp(19px, 2.8vh, 24px); font-weight: 900; border-width: 3px; border-radius: 16px; box-shadow: 0 5px 0 var(--shadow); }
+.fx-olmain .fx-sum { font-size: 13px; font-weight: 700; white-space: normal; }
+#fxOlHelp[hidden], #fxOlBar[hidden] { display: none; }
+@media (orientation: landscape) and (max-height: 500px) {
+  .fx-steps { flex-direction: column; align-items: flex-start; gap: 4px; font-size: 13px; }
+  .fx-steps li + li::after { display: none; }
+  .fx-steps li::before { width: 24px; height: 24px; }
+  .fx-olroom { gap: 8px; }
+  .fx-roomcard, .fx-joincard { padding: 8px 12px; gap: 5px; border-radius: 14px; }
+  .fx-roomtop { flex-direction: column; align-items: stretch; gap: 4px; }
+  #fxOlCode { font-size: clamp(26px, 9vh, 36px); }
+  .fx-roomact .fx-tool { min-height: 38px; }
+  .fx-link { min-height: 36px; }
+  .fx-codeboxes input { height: clamp(40px, 13vh, 54px); font-size: 22px; }
+  .fx-olmain { font-size: clamp(18px, 5.5vh, 22px); padding-block: clamp(4px, 1.5vh, 8px); }
+}
+@media (orientation: portrait) { .fx-steps { justify-content: space-between; gap: 4px; font-size: clamp(12px, 3.4vw, 14px); } .fx-steps li { gap: 4px; min-width: 0; } .fx-steps li::before { width: 26px; height: 26px; } .fx-steps li + li::after { width: clamp(6px, 3vw, 22px); } }
+@media (orientation: landscape) and (max-height: 500px) { .fx-steps { gap: 2px; font-size: 12.5px; } .fx-steps li::before { width: 20px; height: 20px; font-size: 11px; } .fx-olroom { gap: 6px; } .fx-roomtop small { display: none; } .fx-roomcard { gap: 3px; padding: 6px 12px; } .fx-roomact .fx-tool { min-height: 36px; font-size: 14px; } .fx-link { min-height: 32px; } }
 </style>
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}</style>
 </head>
@@ -649,6 +1111,68 @@ body.fight-on { overflow: hidden; }
   </div>
 
   <section class="fight" data-app="fight" hidden aria-label="格鬥場">
+    <!-- v7.6 新版介面（測試）：預設隱藏；切成新版時，原版的部分控制會搬進下面的 slot（js-19-fight-uinew.js） -->
+    <div class="fx-setup" id="fxSetup" hidden>
+      <div class="fx-col is-a">
+      <div class="fx-lblrow"><h2 class="fx-lbl">選擇模式</h2><button class="fx-help" id="fxModeHelp" type="button" aria-expanded="false" aria-controls="fxModeHelpBox" aria-label="四種模式的說明">?</button></div>
+      <div class="fx-helpbox" id="fxModeHelpBox" hidden><p><b>打木樁</b>練習連招、測傷害，木樁不會倒</p><p><b>打電腦</b>單人對戰，可選難度</p><p><b>兩人同機</b>一台手機，兩人面對面對打</p><p><b>線上對戰</b>開房間，約朋友連線對打</p></div>
+      <div class="fx-modes" id="fxModes">
+        <button class="fx-mode" type="button" data-fxmode="dummy" aria-pressed="true"><b>打木樁</b><span>練習、測傷害</span></button>
+        <button class="fx-mode" type="button" data-fxmode="cpu" aria-pressed="false"><b>打電腦</b><span>單人對戰</span></button>
+        <button class="fx-mode" type="button" data-fxmode="pvp" aria-pressed="false"><b>兩人同機</b><span>面對面對打</span></button>
+        <button class="fx-mode" type="button" data-fxmode="online" aria-pressed="false"><b>線上對戰</b><span>約朋友連線</span></button>
+      </div>
+      <div class="fx-olroom" id="fxOlRoom" hidden>
+        <ol class="fx-steps" id="fxOlSteps"><li>開房／加入</li><li>選角色</li><li>準備開打</li></ol>
+        <div class="fx-roomcard">
+          <div class="fx-roomtop"><div><small>房號</small><b id="fxOlCode">----</b></div>
+            <div class="fx-roomact"><button class="fx-tool" id="fxOlCopy" type="button"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>複製連結</button>
+              <span class="fx-roomlinks"><button class="fx-link" id="fxOlQrBtn" type="button" hidden>QR Code</button><button class="fx-link is-danger" id="fxOlLeave" type="button">離開房間</button></span></div></div>
+          <p class="fx-olnote" id="fxOlCopied" role="status"></p>
+          <div class="online-qr" id="fxOlQr" hidden></div>
+          <p class="fx-olstatus" id="fxOlStatus" role="status"><i aria-hidden="true"></i><span id="fxOlStatusT"></span></p>
+          <p class="fx-olnote" id="fxOlNote"></p>
+        </div>
+      </div>
+      </div>
+      <div class="fx-col is-b">
+      <div class="fx-joincard" id="fxOlJoin" hidden>
+        <b>加入房間</b><p>輸入朋友給你的 4 碼房號</p>
+        <div class="fx-codeboxes" id="fxOlBoxes" role="group" aria-label="房號"><input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" aria-label="房號第 1 碼"><input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" aria-label="房號第 2 碼"><input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" aria-label="房號第 3 碼"><input type="text" inputmode="text" autocapitalize="characters" autocomplete="off" aria-label="房號第 4 碼"></div>
+        <button class="fx-tool" id="fxOlJoinBtn" type="button">加入房間</button>
+        <p class="fx-olmsg" id="fxOlMsg" role="status"></p>
+      </div>
+      <div class="fx-slot" id="fxDummySlot"></div>
+      <div class="fx-slot" id="fxCpuSlot" hidden></div>
+      <div class="fx-slot" id="fxOnlineSlot" hidden></div>
+      <h2 class="fx-lbl">對戰角色（點卡片更換）</h2>
+      <div class="fx-cards">
+        <button class="fx-card is-a" id="fxCard0" type="button"><span class="fx-tag" id="fxTag0">你</span><span class="fx-ava" id="fxAva0"></span><strong id="fxName0">未選擇</strong><span class="fx-sup" id="fxSup0"></span><span class="fx-stats" id="fxStats0"></span></button>
+        <span class="fx-vs" aria-hidden="true">VS</span>
+        <button class="fx-card is-b" id="fxCard1" type="button"><span class="fx-tag" id="fxTag1">木樁</span><span class="fx-ava" id="fxAva1"></span><strong id="fxName1">未選擇</strong><span class="fx-sup" id="fxSup1"></span><span class="fx-stats" id="fxStats1"></span></button>
+      </div>
+      <div class="fx-tools" id="fxTools">
+        <button class="fx-tool" id="fxSwap" type="button"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h12l-3-3M17 17H5l3 3"/></svg>左右交換</button>
+        <button class="fx-tool" id="fxRand" type="button"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>全部隨機</button>
+      </div>
+      <div class="fx-slot" id="fxLibSlot"></div>
+      </div>
+      <div class="fx-col is-c">
+      <details class="fx-more" id="fxMore">
+        <summary><span><b>更多設定</b><small>介面・回合・畫面方向・操作說明・測試工具</small></span><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+        <div class="fx-more-body" id="fxMoreBody">
+          <div class="group"><span class="lbl">介面</span><div class="chips"><button class="chip" type="button" data-fui="old">原版</button><button class="chip" type="button" data-fui="new">新版（測試）</button></div></div>
+        </div>
+      </details>
+      <details class="fx-more" id="fxOlHelp" hidden>
+        <summary><span><b>遇到問題？</b><small>連不上、卡住時複製連線紀錄</small></span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+        <div class="fx-more-body"><button class="fx-tool" id="fxOlLog" type="button">複製連線紀錄</button><p class="fx-olnote" id="fxOlLogMsg">把內容貼給開發者，方便找出原因。</p></div>
+      </details>
+      <div class="fx-foot" id="fxFoot"></div>
+      <div class="fx-startbar" id="fxOlBar" hidden><button class="btn primary big fx-olmain" id="fxOlMain" type="button" data-act="create"><span id="fxOlMainT">建立房間</span><span class="fx-sum" id="fxOlMainS"></span></button></div>
+      <div class="fx-startbar" id="fxStartBar"><div class="fx-start-slot" id="fxStartSlot"></div><span class="fx-sum" id="fxSum"></span></div>
+      </div>
+    </div>
     <div class="panel fight-setup">
       <div class="group">
         <span class="lbl">模式</span>
@@ -806,7 +1330,11 @@ body.fight-on { overflow: hidden; }
     </div>
     <div class="fight-stage" id="fStage" hidden>
       <canvas id="fcv" width="720" height="1280" aria-label="格鬥場"></canvas>
-      <button class="btn small fight-exit" id="fExit" type="button">✕ 離開</button>
+      <button class="btn small fight-exit" id="fExit" type="button" aria-label="離開對戰">✕ 離開</button>
+      <button class="fx-pausebtn" id="fxPauseBtn" type="button" aria-label="暫停" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg></button>
+      <div class="fx-hint" id="fxHint" role="status" hidden></div>
+      <div class="fx-overlay" id="fxPause" hidden></div>
+      <div class="fx-overlay is-notice" id="fxNotice" hidden></div>
       <div class="overlay fight-loading" id="fLoad" hidden><div class="ld-box"><i class="ld-spin"></i></div><span class="ld-text">載入中…</span></div>
       <div class="fight-replay" id="fReplay" hidden>
         <div class="fight-replay-seek">
@@ -1020,7 +1548,7 @@ body.fight-on { overflow: hidden; }
 <script>
 (() => {
   "use strict";
-  const APP_VERSION = "v7.5.3";
+  const APP_VERSION = "v7.6";
   const LOCAL = "data/";
   // 自製測試角色放在 custom/（不含官方素材，不受每日同步影響）
   const CUSTOM = "custom/", customIds = new Set();
@@ -7437,6 +7965,7 @@ body.fight-on { overflow: hidden; }
     // 右邊卡片＝對手的角色
     const opp = other && other.id ? other.id : null;
     if (FG.olOpp !== opp) { FG.olOpp = opp; fightPanel(1); fightInfo(1); }
+    fuiOl(); // v7.6 新版介面的線上畫面
   }
   function olShareUrl() { return `${location.origin}${location.pathname}?app=fight&room=${OL.code}${qs.has("fakefb") ? "&fakefb=1" : ""}${qs.has("relay") ? "&relay=1" : ""}`; }
   async function olShowQr() {
@@ -7497,19 +8026,22 @@ body.fight-on { overflow: hidden; }
       OL.pend = {};
       $("fStage").hidden = false; $("fOver").hidden = true; $("fStage").classList.remove("pvp");
       $("fExit").textContent = "✕ 離開"; document.body.classList.add("fight-on");
-      FG.running = true; sfxUnlock(); fightResize();
+      FG.running = true; sfxUnlock(); fightResize(); fuiOnStart();
       OL.started = true;
     } catch (e) { $("fOnReadyMsg").textContent = "載入失敗：" + (e.message || e); }
   }
   function olOnMsg(m) {
+    if (m.t === "bye") { if (FG.net && FG.net.game === m.g) FG.olGone = "left"; return; } // v7.6：對手打到一半離開
     if (FG.net && FG.net.link && FG.net.game === m.g) return netRecv(FG.net, m);
     if (!FG.net || !(FG.net.game >= m.g)) (OL.pend[m.g] = OL.pend[m.g] || []).push(m); // 下一場的訊息先存著
   }
   // 對戰中每一幀：對手斷線、不同步 → 停下來顯示原因
   function olTick(g) {
     if (g !== FG.g) return; // 這一幀開頭拿到的是上一場（剛好開新的一場）
-    const n = FG.net, bad = FG.olGone || !OL.room || !OL.room.guest ? "對手已斷線" : n && n.desync ? `同步錯誤（第 ${n.desync.f} 格雙方畫面不一樣），這場只好中止` : "";
+    const n = FG.net, bad = FG.olGone === "left" ? "對手離開了這場對戰" : FG.olGone || !OL.room || !OL.room.guest ? "對手已斷線" : n && n.desync ? `同步錯誤（第 ${n.desync.f} 格雙方畫面不一樣），這場只好中止` : "";
     if (n && n.waiting && g.phase !== "over" && n.stallFrames % 120 === 119) olLog(`等待對手的按鍵中：第 ${n.frame} 格，自己的佇列 ${n.q[n.me].size}、對手的佇列 ${n.q[1 - n.me].size}`);
+    if (bad && $("fOver").hidden && fuiOn()) { olLog("停止：" + bad); $("fOverText").textContent = bad; $("fOver").hidden = false; } // 新版：另外跳出彈窗（見下一行）
+    if (fuiOnlineTick(g, bad)) { if (g.phase === "over" && OL.started) olAfterGame(); return; }
     if (bad && $("fOver").hidden) { olLog("停止：" + bad); g.phase = "over"; g.winner = -2; $("fOver").hidden = false; $("fOverText").textContent = bad; }
     if (g.phase === "over" && OL.started) olAfterGame(); // 打完：雙方都取消準備，下一場要各自再按「再一場」
   }
@@ -7706,6 +8238,7 @@ body.fight-on { overflow: hidden; }
     comp.className = "compat" + (c ? " " + c.lvl : ""); comp.textContent = c ? COMPAT_LABEL[c.lvl] : ""; comp.title = c ? c.why : "";
     const th = $(`fthumb${i}`); th.textContent = "";
     if (r) { const img = document.createElement("img"); img.alt = ""; const urls = thumbUrls(r.id); let n = 0; img.onerror = () => { if (++n < urls.length) img.src = urls[n]; }; img.src = urls[0]; th.appendChild(img); }
+    if (fuiOn() && FG.ready) { fuiCard(i); fuiSummary(); } // v7.6 新版介面的角色卡
   }
   function fightSetChar(i, r) {
     if (!r) return;
@@ -7781,6 +8314,7 @@ body.fight-on { overflow: hidden; }
     $("fRight").textContent = st.mode === "pvp" ? "右方（玩家 2）" : st.mode === "cpu" ? "右方（電腦）" : online ? "對手" : "右方（木樁）";
     document.querySelector(".fighter.is-a .side-tag").textContent = online ? "你" : "左方（玩家 1）";
     $("fRounds").value = String(st.rounds); $("fSecs").value = String(st.secs); $("fShowRange").checked = st.showRange !== false; $("fShowBox").checked = st.showBox !== false;
+    fuiRefresh(); // v7.6 新版介面
   }
   async function initFight() {
     if (FG.inited) return; FG.inited = true;
@@ -7845,7 +8379,7 @@ body.fight-on { overflow: hidden; }
       $("fStage").hidden = false; $("fOver").hidden = true; $("fStage").classList.toggle("pvp", mode === "pvp");
       $("fExit").textContent = mode === "pvp" ? "✕" : "✕ 離開";
       document.body.classList.add("fight-on");
-      FG.running = true; sfxUnlock(); fightResize();
+      FG.running = true; sfxUnlock(); fightResize(); fuiOnStart();
       $("fStartMsg").textContent = "";
     } catch (e) { $("fStartMsg").textContent = "載入失敗：" + (e.message || e); }
     $("fStart").disabled = false;
@@ -7853,6 +8387,9 @@ body.fight-on { overflow: hidden; }
   function fightStop() {
     FG.running = false; $("fStage").hidden = true; document.body.classList.remove("fight-on");
     if (FG.replay) { FG.replay = null; FG.set = FG.setSaved; $("fReplay").hidden = true; } // v7.5.3：離開重播，換回存檔的設定
+    fuiCloseMenu(); fuiNoticeClose(); $("fxPauseBtn").hidden = true; $("fExit").hidden = false; // v7.6 新版介面的暫停／彈窗
+    // v7.6：線上對戰打到一半離開，先通知對手（不然對手會一直等按鍵、卡住）；舊版收到這則訊息會直接忽略
+    if (FG.set.mode === "online" && FG.net && FG.net.link && FG.g && FG.g.phase !== "over") { try { FG.net.link.send({ t: "bye" }); } catch {} }
     if (FG.set.mode === "online") { olAfterGame(); if (FG.net) FG.net.link = null; } // 中途離開：不再送按鍵
   }
   $("fStart").onclick = fightStart;
@@ -7875,6 +8412,7 @@ body.fight-on { overflow: hidden; }
     if (fcv.height !== FH) fcv.height = FH;
     const w = Math.min(vw, vh * FW / FH);
     fcv.style.width = w + "px"; fcv.style.height = (w * FH / FW) + "px";
+    fuiPlaceBtn(); // v7.6：暫停鈕跟著畫布位置
   }
   /* 對戰中轉向：瀏覽器常常不會告訴我們手指放開了，所以把按住中的按鍵、瞄準都當成「取消放開」；
      單人模式順便暫停 0.5 秒讓人重新握好手機（線上對戰不能停） */
@@ -8011,6 +8549,7 @@ body.fight-on { overflow: hidden; }
   function fightTick(dt) {
     if (!FG.running || !FG.g) return;
     if (FG.replay) return fightReplayTick(dt); // v7.5.3：重播走自己的流程（一般對戰的流程完全不變）
+    if (FG.paused) { FG.acc = 0; fightDraw(); return; } // v7.6 新版介面的暫停（只有本機模式會設；線上不會）
     const g = FG.g;
     if (FG.pauseUntil && performance.now() < FG.pauseUntil) { FG.acc = 0; fightDraw(); return; } // 轉向後的短暫暫停
     FG.acc = Math.min(FG.acc + dt, 0.25);
@@ -8053,14 +8592,15 @@ body.fight-on { overflow: hidden; }
       fightDrawPlayer(c, g, L, 0);
       c.save(); c.translate(FW, FH); c.rotate(Math.PI); fightDrawPlayer(c, g, L, 1); c.restore();
       fightHudBar(c, g, L.hud.y, L.hud.h, true);
+      if (fuiOn()) fuiHud2p(c, g, L); // v7.6：兩人同機只加血量數字
     } else {
       fightDrawPlayer(c, g, L, FG.set.mode === "online" ? FG.me : 0);
-      fightHudBar(c, g, 18, 110, false);
+      if (fuiOn()) fuiHud(c, g, L); else fightHudBar(c, g, 18, 110, false); // v7.6 新版 HUD
       if (FG.net && (FG.net.delay || FG.net.lat || FG.net.jit)) { // v6 測試：連線層狀態
         c.fillStyle = FG.net.waiting ? "#ffd84a" : "#9aa3c8"; c.font = canvasFont(700, 20); c.textAlign = "right"; c.textBaseline = "top";
         c.fillText(netLabel(FG.net), FW - 20, L.view.y + 44);
       }
-      if (g.cfg.mode === "dummy") {
+      if (g.cfg.mode === "dummy" && !fuiOn()) { // 新版把木樁傷害畫在 HUD 裡
         const st = g.stats;
         c.fillStyle = "#cfd6ff"; c.font = canvasFont(700, 24); c.textAlign = "left"; c.textBaseline = "top";
         c.fillText(`木樁・這一串 ${st.lastCombo || 0}　最後一下 ${st.lastDmg || 0}　總共 ${st.total}（${st.hits} 下）`, 20, L.view.y + 10);
@@ -8434,7 +8974,7 @@ body.fight-on { overflow: hidden; }
       c.fillStyle = ink; c.font = canvasFont(900, 14); c.fillText(label, b.x, b.y - h / 2 + 12); // 原本的字（小字）
     };
     pad("up", "跳", fightIconUp); pad("down", "防", fightIconShield); pad("left", "◀"); pad("right", "▶");
-    { // 防禦條（破防後要回到 GAUGE_REARM 才能再防：這段期間顯示灰色）
+    if (!fuiOn()) { // 防禦條（破防後要回到 GAUGE_REARM 才能再防：這段期間顯示灰色）；新版改成「防」外圈的環
       const r = Math.max(0, p.gauge) / FT.GAUGE_MAX, b = B.down;
       // 放在「防」左邊
       const gw = 90, gx = b.x - b.r - 10 - gw, gy = b.y - 6;
@@ -8471,9 +9011,10 @@ body.fight-on { overflow: hidden; }
     btn("atk", { shot: "普攻↔", lob: "普攻⌒", dline: "普攻→" }[fs.atk.kind] || "普攻", p.atkCd, fs.atk.cd, false);
     for (const s of [0, 1]) {
       const k = fs.sk[s];
-      const lab = k ? ({ rect: "定點", line: "直線", lob: "拋物", self: "自身", dash: "突進", buff: "輔助" }[k.kind] + (s + 1)) : "—";
+      const lab = k ? (({ rect: "定點", line: "直線", lob: "拋物", self: "自身", dash: "突進", buff: "輔助", front: "身前" }[k.kind] || "技能") + (s + 1)) : "—"; // v7.6：補上「身前」（之前顯示 NaN）
       btn("sk" + s, lab, k ? p.cd[s] : 0, k ? k.cd : 1, !k);
     }
+    if (fuiOn()) fuiControls(c, g, L, B, who); // v7.6：防禦環、操作提示
     c.restore();
   }
 
@@ -8521,7 +9062,7 @@ body.fight-on { overflow: hidden; }
       FG.ctl = [fightCtl(), fightCtl()]; FG.mirror = false; FG.pauseUntil = 0; FG.net = netNew(0, 0, 0);
       fightReplayMarks();
       fightReplayLoad(""); $("fReplay").hidden = false;
-      FG.running = true; sfxUnlock(); fightResize(); fightReplayUi();
+      FG.running = true; sfxUnlock(); fightResize(); fightReplayUi(); fuiOnStart();
     } catch (e) {
       if (FG.replay) { FG.replay = null; FG.set = FG.setSaved; }
       fightReplayLoad("重播失敗：" + (e.message || e), true);
@@ -8641,6 +9182,660 @@ body.fight-on { overflow: hidden; }
     else return;
     e.preventDefault(); e.stopPropagation();
   }, true);
+  /* ---------- 格鬥場新版介面（v7.6，測試中） ----------
+     規格：專案根目錄「格鬥場改版_圖檔與施作說明」。預設維持原版，「介面：原版／新版」開關切換（存這台裝置；網址 ?fui=new／old 只影響這一次）。
+     做法：新版設定頁是另一層畫面（#fxSetup）；原本的控制（開始鈕、難度、回合、畫面方向、測試工具、線上、角色庫）在切成新版時
+     「整個搬」到新版的位置，切回原版再搬回原處，所以它們原本的功能與健檢都不受影響。
+     對戰畫面只改「怎麼畫」與「暫停」：暫停時引擎不前進（本機模式）；線上對戰不能暫停，按鈕只打開選單。
+     戰鬥規則、數值、同步碼都不動。這個檔案只在開關打開時才做事（fuiOn() 為 false 時所有入口都直接返回）。 */
+  const FUI_KEY = "fightUi";
+  const FUI = { on: false, moved: [], dbl: 0, waitSince: 0 };
+  const fuiOn = () => FUI.on;
+  const FUI_MODE = { dummy: "打木樁", cpu: "打電腦", pvp: "兩人同機", online: "線上對戰" };
+  const FUI_LEVEL = { easy: "簡單", normal: "普通", hard: "困難" };
+  const FUI_SUP = { ok: ["完整支援", "ok"], guess: ["有推測", "guess"], unsup: ["部分支援", "unsup"], unfit: ["不適合", "unfit"] };
+  // 線條圖示（SVG，stroke 2.6、round cap）
+  const fuiIcon = (d, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const FUI_ICONS = {
+    swap: '<path d="M7 7h12l-3-3M17 17H5l3 3"/>', dice: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>',
+    pause: '<path d="M9 6v12M15 6v12"/>', play: '<path d="M8 5l11 7-11 7z" fill="currentColor"/>', restart: '<path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/>',
+    leave: '<path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9"/>', chev: '<path d="M6 9l6 6 6-6"/>', alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>',
+  };
+
+  /* ---------- 開關 ---------- */
+  function fuiInit() {
+    const q = new URLSearchParams(location.search).get("fui");
+    let on = false; try { on = store.get(FUI_KEY, "old") === "new"; } catch {}
+    if (q === "new" || q === "old") on = q === "new";
+    // 原版設定頁最上面加一個「介面」選項（新版裡也有一份在「更多設定」）
+    const box = document.createElement("div"); box.className = "group"; box.id = "fUiBox";
+    box.innerHTML = '<span class="lbl">介面</span><div class="chips"><button class="chip" type="button" data-fui="old">原版</button><button class="chip" type="button" data-fui="new">新版（測試）</button></div>';
+    document.querySelector(".fight-setup").prepend(box);
+    document.querySelectorAll("[data-fui]").forEach((b) => (b.onclick = () => fuiSet(b.dataset.fui === "new", true)));
+    // 全螢幕鈕（頁首右上角；只在新版顯示；瀏覽器不支援時不出現，例如 iPhone Safari、部分內嵌頁）
+    const fs = document.createElement("button"); fs.type = "button"; fs.id = "fxFull"; fs.className = "fx-full";
+    fs.onclick = fuiFullToggle; document.querySelector(".brand").appendChild(fs); // 放在頁首自己的排版裡（不用絕對定位，不會壓到分頁）
+    window.addEventListener("resize", () => { clearTimeout(FUI.fitT); FUI.fitT = setTimeout(fuiFit, 120); });
+    document.addEventListener("fullscreenchange", fuiFullUi); document.addEventListener("webkitfullscreenchange", fuiFullUi);
+    fuiSet(on, false);
+  }
+  // 切換：存檔、頁首樣式、把原本的控制搬過去／搬回來
+  function fuiSet(on, save) {
+    if (save) { try { store.set(FUI_KEY, on ? "new" : "old"); } catch {} }
+    FUI.on = on;
+    document.body.classList.toggle("fui-new", on); // 頁首（三個模式共用）的新樣式跟著開關走
+    document.querySelectorAll("[data-fui]").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.fui === "new") === on)));
+    $("fxSetup").hidden = !on; document.querySelector(".fight-setup").hidden = on;
+    if (on) fuiMoveIn(); else fuiMoveOut();
+    fuiRefresh(); fuiFullUi(); setTimeout(fuiFit, 50);
+  }
+  /* 第一眼的版面（v7.6）：量目前畫面還剩多少高度。
+     有多的空間：加大區塊之間的間距，並把「更多設定」與最下方的小字推到第一屏之下；空間不夠：維持緊湊（CSS 依高度縮放）。 */
+  function fuiFit() {
+    const box = $("fxSetup"); if (!fuiOn() || box.hidden || FG.running) return;
+    const st = box.style; st.setProperty("--fx-extra", "0px"); st.removeProperty("min-height");
+    const anchors = [$("fxTools"), box.querySelector(".fx-cards"), $("fxOlJoin")]; for (const a of anchors) a.style.marginBottom = "";
+    // 線上對戰沒有交換／隨機：改以角色卡（或加入房間卡）為準；底部按鈕列也換成線上那一條
+    const anchor = anchors.find((a) => a.offsetParent !== null) || $("fxTools"), barEl = $("fxStartBar").hidden ? $("fxOlBar") : $("fxStartBar");
+    const land = window.innerWidth > window.innerHeight, H = window.innerHeight, top = box.getBoundingClientRect().top + window.scrollY;
+    const bottomOf = (el) => el.getBoundingClientRect().bottom + window.scrollY;
+    if (!land) {
+      const bar = barEl.getBoundingClientRect().height, room = H - bar - bottomOf(anchor) - 8;
+      if (room <= 0) return;
+      st.setProperty("--fx-extra", Math.min(room * 0.5 / 6, 14).toFixed(1) + "px");
+      const left = H - bar - bottomOf(anchor);
+      anchor.style.marginBottom = Math.max(12, left + 12) + "px"; // 更多設定從第一屏之下開始
+    } else {
+      const cols = [...box.querySelectorAll(".fx-col")].map(bottomOf), room = H - Math.max(...cols) - 8;
+      if (room > 0) st.setProperty("--fx-extra", Math.min(room / 5, 12).toFixed(1) + "px");
+      st.minHeight = Math.max(0, H - top) + "px"; // 最下方的網站說明文字留在第一屏之下
+    }
+  }
+  /* ---------- 全螢幕 ---------- */
+  const fuiFullOk = () => !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+  const fuiIsFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  function fuiFullToggle() {
+    try {
+      if (fuiIsFull()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else { const el = document.documentElement, f = el.requestFullscreen || el.webkitRequestFullscreen; const pr = f && f.call(el, { navigationUI: "hide" }); if (pr && pr.catch) pr.catch(() => {}); }
+    } catch {}
+  }
+  function fuiFullUi() {
+    const b = $("fxFull"); if (!b) return;
+    const full = fuiIsFull();
+    b.hidden = !fuiOn() || !fuiFullOk();
+    b.setAttribute("aria-label", full ? "離開全螢幕" : "全螢幕");
+    b.innerHTML = fuiIcon(full ? '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>' : '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>', 22) + `<span>${full ? "離開全螢幕" : "全螢幕"}</span>`;
+    setTimeout(fuiPlaceBtn, 300); // 全螢幕切換後畫面大小變了
+  }
+  // 要搬的東西：[元素, 新版的位置]
+  function fuiMoveIn() {
+    if (FUI.moved.length) return;
+    const orient = $("fOrient").closest(".group"), help = document.querySelector(".fight-help");
+    const list = [[$("fDummyBox"), "fxDummySlot"], [$("fCpuBox"), "fxCpuSlot"], [$("fOnlineBox"), "fxOnlineSlot"], [$("fLibHolder"), "fxLibSlot"],
+      [$("fRoundBox"), "fxMoreBody"], [orient, "fxMoreBody"], [$("fAdvBox"), "fxMoreBody"], [help, "fxMoreBody"], [$("fStart"), "fxStartSlot"], [$("fStartMsg"), "fxStartSlot"]];
+    for (const [el, slot] of list) {
+      if (!el) continue;
+      const mark = document.createComment("fui"); el.before(mark); FUI.moved.push([el, mark]);
+      $(slot).appendChild(el);
+    }
+    $("fStart").appendChild($("fxSum")); // 小字摘要放進開始鈕裡
+  }
+  function fuiMoveOut() {
+    $("fxStartBar").appendChild($("fxSum"));
+    for (const [el, mark] of FUI.moved.reverse()) { mark.replaceWith(el); }
+    FUI.moved = [];
+  }
+
+  /* ---------- 新版設定頁 ---------- */
+  function fuiBind() {
+    document.querySelectorAll("#fxModes [data-fxmode]").forEach((b) => (b.onclick = () => { const o = document.querySelector(`#fMode [data-fmode="${b.dataset.fxmode}"]`); if (o) o.click(); }));
+    for (const i of [0, 1]) $(`fxCard${i}`).onclick = () => { if (FG.set.mode === "online" && i === 1) return; fxpOpen(i); }; // B 段：新的選角面板
+    $("fxSwap").onclick = () => $("fSwap").click();
+    $("fxRand").onclick = () => $("fRandAll").click();
+    $("fxPauseBtn").onclick = fuiPausePress;
+    $("fxModeHelp").onclick = () => { const box = $("fxModeHelpBox"), open = box.hidden; box.hidden = !open; $("fxModeHelp").setAttribute("aria-expanded", String(open)); fuiFit(); }; // 模式說明
+    document.addEventListener("keydown", (e) => { if (!fuiOn() || !FG.running || FG.replay) return; if (e.key === "Escape") { e.preventDefault(); FUI.dbl = Date.now(); fuiPausePress(); } });
+  }
+  // 設定頁內容跟著目前設定更新（原版的 fightSetupUi／fightPanel 改完時呼叫）
+  function fuiRefresh() {
+    if (!fuiOn() || !FG.set) return;
+    const st = FG.set, online = st.mode === "online";
+    document.querySelectorAll("#fxModes [data-fxmode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.fxmode === st.mode)));
+    $("fxDummySlot").hidden = st.mode !== "dummy"; $("fxCpuSlot").hidden = st.mode !== "cpu"; $("fxOnlineSlot").hidden = true; // 線上：改用 C 段的新畫面（js-19-fight-uiol.js），原本的區塊藏著
+    fuiOl();
+    $("fxTools").hidden = online; $("fxStartBar").hidden = online;
+    const tagR = { dummy: "木樁", cpu: "電腦", pvp: "玩家 2", online: "對手" }[st.mode];
+    $("fxTag0").textContent = st.mode === "pvp" ? "玩家 1" : "你"; $("fxTag1").textContent = tagR;
+    for (const i of [0, 1]) fuiCard(i);
+    fuiSummary(); fuiFoot(); clearTimeout(FUI.fitT); FUI.fitT = setTimeout(fuiFit, 60);
+  }
+  // 頁面最下方的小字：模式說明（木樁）＋角色數量與資料日期（原本在頁首、木樁選項下面）
+  function fuiFoot() {
+    const lines = [];
+    const dh = $("fDummyBox").querySelector(".hint"); if (FG.set.mode === "dummy" && dh) lines.push(dh.textContent);
+    const note = $("modeNote").textContent.trim(); if (note) lines.push(note);
+    $("fxFoot").textContent = ""; for (const t of lines) { const p = document.createElement("p"); p.textContent = t; $("fxFoot").appendChild(p); }
+  }
+  async function fuiCard(i) {
+    const id = fightCardId(i), card = $(`fxCard${i}`), blind = i === 0 && FXP.hidden0 && FXP.hidden0 === id; // 盲選：玩家 2 選角時先藏起玩家 1 的角色
+    const r = !blind && id && S.index.find((x) => x.id === id);
+    if (blind) { $(`fxName${i}`).textContent = "已選好（盲選）"; $(`fxSup${i}`).textContent = ""; $(`fxAva${i}`).textContent = ""; $(`fxStats${i}`).textContent = ""; return; }
+    const waiting = FG.set.mode === "online" && i === 1 && !r;
+    card.classList.toggle("is-wait", waiting); card.disabled = FG.set.mode === "online" && i === 1;
+    $(`fxName${i}`).textContent = r ? r.name : waiting ? "等待對手" : "未選擇";
+    const sup = $(`fxSup${i}`), c = r ? fightCompatOf(r) : null, lab = waiting ? ["對手選擇中…", "wait"] : c ? FUI_SUP[c.lvl] : null;
+    sup.textContent = lab ? lab[0] : ""; sup.className = "fx-sup" + (lab ? " is-" + lab[1] : ""); sup.title = c && c.why ? c.why : "";
+    card.setAttribute("aria-label", `${i ? "右方" : "左方"}角色：${r ? r.name : "未選擇"}${lab ? "，" + lab[0] : ""}，點一下更換`);
+    const ava = $(`fxAva${i}`); ava.textContent = "";
+    if (r) { const img = document.createElement("img"); img.alt = ""; img.loading = "lazy"; const urls = thumbUrls(r.id); let n = 0; img.onerror = () => { if (++n < urls.length) img.src = urls[n]; }; img.src = urls[0]; ava.appendChild(img); }
+    const stats = $(`fxStats${i}`); stats.innerHTML = r ? fuiStatsHtml(null) : "";
+    if (!r) return;
+    try {
+      const fs = fightStats(await fightLoad(r.id));
+      if (fightCardId(i) === id) stats.innerHTML = fuiStatsHtml(fs);
+    } catch { /* 讀不到就留「—」 */ }
+  }
+  // 數值三格：直向顯示文字標籤；橫向改成小圖示一橫排（CSS 切換）
+  const FUI_STAT_ICON = { 血量: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>', 攻擊: '<path d="M14 4h6v6L9 21l-6-6z"/><path d="M5 13l6 6"/>', 速度: '<path d="M7 3h5v8l6 3a2 2 0 0 1 2 2v3H5V3z"/><path d="M5 16h15"/>' }; // 速度＝靴子
+  const fuiStatsHtml = (fs) => [["血量", fs && fs.hp], ["攻擊", fs && fs.atk && fs.atk.dmg], ["速度", fs && Math.round(fs.walk)]]
+    .map(([k, v]) => `<span title="${k}"><i class="fx-sico" aria-hidden="true">${fuiIcon(FUI_STAT_ICON[k], 15)}</i><small>${k}</small><b aria-label="${k} ${v == null ? "未知" : Math.round(v)}">${v == null ? "—" : Math.round(v)}</b></span>`).join("");
+  // 開始列的小字：模式・左 vs 右；有部分支援／有推測的角色就註明
+  function fuiSummary() {
+    const st = FG.set, rs = [0, 1].map((i) => S.index.find((x) => x.id === fightCardId(i)));
+    const lv = rs.map((r) => (r ? fightCompatOf(r).lvl : null));
+    let s = `${FUI_MODE[st.mode]}${st.mode === "cpu" ? "・" + FUI_LEVEL[st.level] : ""}`; // 不放角色名字（使用者決定）
+    if (lv.includes("unsup")) s += "・含部分支援角色"; else if (lv.includes("guess")) s += "・含有推測角色";
+    $("fxSum").textContent = s;
+  }
+
+  /* ---------- 對戰：暫停鈕、暫停選單 ---------- */
+  // 開打時（一般對戰與線上）呼叫：決定暫停鈕顯不顯示、放哪裡
+  function fuiOnStart() {
+    fuiCloseMenu(); fuiNoticeClose(); FUI.waitSince = 0; FG.paused = false;
+    if (!FG.replay) FXP.prevPair = [FG.set.c0, FG.set.c1]; // 選角的「同上一場」
+    const on = fuiOn() && !FG.replay;
+    $("fxPauseBtn").hidden = !on; $("fExit").hidden = on;
+    if (on) fuiPlaceBtn();
+  }
+  // 暫停鈕的位置（畫布座標 → 螢幕）：直向＝右側 HUD 內、橫向＝左上、兩人同機＝中央條左側
+  function fuiPlaceBtn() {
+    if (!fuiOn() || FG.replay) return;
+    const r = fcv.getBoundingClientRect(), k = r.width / FW, L = fightLayout(), b = $("fxPauseBtn");
+    const [x, y] = L.pvp ? [56, L.hud.y + L.hud.h / 2] : L.land ? [52, 52] : [FW - 54, 146]; // 直向：右側血條下方（不蓋住血條）
+    const size = Math.max(44, 84 * k), sr = $("fStage").getBoundingClientRect();
+    Object.assign(b.style, { width: size + "px", height: size + "px", left: r.left - sr.left + x * k - size / 2 + "px", top: r.top - sr.top + y * k - size / 2 + "px" });
+    b.classList.toggle("is-rot", !!L.pvp);
+  }
+  // 按暫停：兩人同機要在 1.5 秒內按兩次（防誤觸）
+  function fuiPausePress() {
+    if (!FG.running || FG.replay) return;
+    const g = FG.g; if (!g || g.phase === "over") return;
+    if (FG.set.mode === "pvp" && Date.now() - FUI.dbl > 1500) { FUI.dbl = Date.now(); fuiHint("再按一次暫停"); return; }
+    FUI.dbl = 0; fuiOpenMenu();
+  }
+  function fuiHint(text) {
+    const h = $("fxHint"); h.textContent = text; h.hidden = false;
+    clearTimeout(FUI.hintT); FUI.hintT = setTimeout(() => (h.hidden = true), 1500);
+  }
+  function fuiOpenMenu() {
+    const online = FG.set.mode === "online", pvp = FG.set.mode === "pvp", g = FG.g;
+    if (!online) FG.paused = true; // 本機模式：整個停住（含倒數計時）；線上不能停
+    const t = Math.max(0, Math.floor(g.t)), sub = online ? "線上對戰不會暫停，對戰還在進行" : `${FUI_MODE[FG.set.mode]}　已進行 ${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+    const box = $("fxPause"); box.textContent = ""; box.classList.toggle("is-pvp", pvp);
+    for (const who of pvp ? [1, 0] : [0]) box.appendChild(fuiMenuCard(online ? "選單" : "暫停", sub, online, who));
+    box.hidden = false;
+    const first = box.querySelector("[data-act=resume]"); if (first) first.focus();
+  }
+  function fuiMenuCard(title, sub, online, who) {
+    const card = document.createElement("div"); card.className = "fx-pcard" + (who === 1 ? " is-top" : ""); card.setAttribute("role", "dialog"); card.setAttribute("aria-label", title);
+    const btn = (act, cls, icon, text, extra) => `<button class="fx-pbtn ${cls}" type="button" data-act="${act}">${fuiIcon(FUI_ICONS[icon])}<span>${text}</span>${extra ? `<small>${extra}</small>` : ""}</button>`;
+    card.innerHTML = `<h2>${title}</h2><p class="fx-psub">${sub}</p>` +
+      btn("resume", "is-main", "play", "繼續") + (online ? "" : btn("restart", "", "restart", "重新開始")) +
+      (fuiFullOk() ? `<button class="fx-pbtn" type="button" data-act="full">${fuiIcon('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>')}<span>${fuiIsFull() ? "離開全螢幕" : "全螢幕"}</span></button>` : "") + btn("leave", "is-danger", "leave", "離開對戰") +
+      '<p class="fx-pnote">點「離開對戰」會再確認一次</p>';
+    card.onclick = (e) => {
+      const b = e.target.closest("[data-act]"); if (!b) return;
+      const act = b.dataset.act;
+      if (act === "resume") fuiCloseMenu();
+      else if (act === "full") { fuiFullToggle(); fuiCloseMenu(); }
+      else if (act === "restart") { fuiCloseMenu(); fightStart(); }
+      else if (act === "leave") fuiConfirmLeave(card);
+      else if (act === "leave-yes") { fuiCloseMenu(); fightStop(); }
+      else if (act === "leave-no") { fuiCloseMenu(); fuiOpenMenu(); }
+    };
+    return card;
+  }
+  function fuiConfirmLeave(card) {
+    card.querySelectorAll(".fx-pbtn, .fx-pnote").forEach((x) => x.remove());
+    card.querySelector("h2").textContent = "確定要離開？";
+    card.querySelector(".fx-psub").textContent = FG.set.mode === "online" ? "離開後這場對戰會結束，對手會收到通知" : "這場對戰的進度不會保留";
+    card.insertAdjacentHTML("beforeend", `<button class="fx-pbtn is-danger-fill" type="button" data-act="leave-yes">${fuiIcon(FUI_ICONS.leave)}<span>確定離開</span></button><button class="fx-pbtn" type="button" data-act="leave-no"><span>取消，回到選單</span></button>`);
+  }
+  function fuiCloseMenu() { $("fxPause").hidden = true; $("fxPause").textContent = ""; FG.paused = false; FG.acc = 0; }
+
+  /* ---------- 線上：對手離開／沒有回應的彈窗（同暫停選單的樣式） ---------- */
+  function fuiNotice(title, text, wait) {
+    const box = $("fxNotice");
+    if (!box.hidden && box.dataset.title === title) return;
+    box.dataset.title = title; box.textContent = "";
+    const card = document.createElement("div"); card.className = "fx-pcard"; card.setAttribute("role", "alertdialog"); card.setAttribute("aria-label", title);
+    card.innerHTML = `<h2>${fuiIcon(FUI_ICONS.alert, 26)} ${title}</h2><p class="fx-psub">${text}</p>` +
+      (wait ? `<button class="fx-pbtn" type="button" data-act="wait"><span>再等一下</span></button>` : "") +
+      `<button class="fx-pbtn is-main" type="button" data-act="back">${fuiIcon(FUI_ICONS.leave)}<span>返回選角</span></button>`;
+    card.onclick = (e) => { const b = e.target.closest("[data-act]"); if (!b) return; if (b.dataset.act === "wait") { FUI.waitSince = Date.now(); fuiNoticeClose(); } else { fuiNoticeClose(); fightStop(); } };
+    box.appendChild(card); box.hidden = false;
+  }
+  function fuiNoticeClose() { const box = $("fxNotice"); box.hidden = true; box.textContent = ""; box.dataset.title = ""; }
+  // 線上每一幀（olTick 呼叫）：對手 8 秒沒有送按鍵就問要不要繼續等。回傳 true＝這一幀由新版處理掉了
+  function fuiOnlineTick(g, bad) {
+    if (!fuiOn()) return false;
+    if (bad) { if (g.phase !== "over") { g.phase = "over"; g.winner = -2; } fuiNotice(FG.olGone === "left" ? "對手離開了" : "連線中斷", bad + "。", false); return true; }
+    const n = FG.net;
+    if (n && n.waiting && g.phase !== "over") {
+      if (!FUI.waitSince) FUI.waitSince = Date.now();
+      if (Date.now() - FUI.waitSince > 8000) fuiNotice("對手沒有回應", "已經 8 秒沒有收到對手的操作，可能斷線了。可以再等一下，或回到選角。", true);
+    } else { FUI.waitSince = 0; if ($("fxNotice").dataset.title === "對手沒有回應") fuiNoticeClose(); } // 對手恢復了：自動收起
+    return false;
+  }
+
+  /* ---------- 對戰畫面：新版 HUD（單人直向／橫向）、兩人同機的血量數字 ---------- */
+  function fuiRound(c, x, y, w, h, r) { c.beginPath(); if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); }
+  function fuiHud(c, g, L) {
+    c.save();
+    const top = L.land ? 0 : 0, H = L.land ? 110 : 150;
+    c.fillStyle = "#121630"; c.fillRect(0, top, FW, H);
+    const bw = L.land ? Math.min(420, FW * 0.3) : 270, bh = 30, by = L.land ? 52 : 58, edge = L.land ? 110 : 20;
+    for (const i of [0, 1]) {
+      const d = FG.mirror ? 1 - i : i, p = g.p[i], ratio = Math.max(0, p.hp / p.maxHp), x0 = d ? FW - edge - bw : edge;
+      c.fillStyle = "#e8ebff"; c.font = canvasFont(900, 24); c.textBaseline = "alphabetic"; c.textAlign = d ? "right" : "left";
+      c.fillText(`${g.cfg.f[i].r.name}${g.cfg.mode === "online" && i === FG.me ? "（你）" : ""}`, d ? FW - edge : edge, by - 10, bw);
+      fuiRound(c, x0, by, bw, bh, 9); c.fillStyle = "#2a3050"; c.fill();
+      c.save(); fuiRound(c, x0, by, bw, bh, 9); c.clip(); c.fillStyle = i ? "#2563eb" : "#d92a42";
+      if (d) c.fillRect(x0 + bw * (1 - ratio), by, bw * ratio, bh); else c.fillRect(x0, by, bw * ratio, bh); c.restore();
+      fuiRound(c, x0, by, bw, bh, 9); c.strokeStyle = "#1b2038"; c.lineWidth = 3; c.stroke();
+      c.fillStyle = "#fff"; c.font = canvasFont(900, 20); c.textBaseline = "middle"; c.textAlign = d ? "right" : "left";
+      c.fillText(`${Math.max(0, Math.ceil(p.hp))} / ${p.maxHp}`, d ? x0 + bw - 12 : x0 + 12, by + bh / 2 + 1);
+      // 硬直值（細條）
+      c.fillStyle = "#262b48"; c.fillRect(x0, by + bh + 4, bw, 5);
+      const sv = Math.min(1, p.sv / FT.SV_MAX); c.fillStyle = sv > 0.7 ? "#ff8a3d" : "#ffd84a";
+      if (d) c.fillRect(x0 + bw * (1 - sv), by + bh + 4, bw * sv, 5); else c.fillRect(x0, by + bh + 4, bw * sv, 5);
+      if (g.cfg.mode !== "dummy") for (let n = 0; n < Math.ceil(g.cfg.rounds / 2); n++) {
+        c.fillStyle = n < g.wins[i] ? "#ffc61a" : "#444a6e"; c.beginPath(); c.arc(d ? FW / 2 + 64 + n * 18 : FW / 2 - 64 - n * 18, by + bh + 22, 6, 0, Math.PI * 2); c.fill(); // 回合點靠中間（右側留給暫停鈕）
+      }
+    }
+    // 計時圓：黃色外環
+    const cy = by + bh / 2 - 8, R = L.land ? 40 : 46;
+    c.fillStyle = "#1b2038"; c.beginPath(); c.arc(FW / 2, cy, R, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "#ffc61a"; c.lineWidth = 5; c.stroke();
+    c.fillStyle = "#fff"; c.font = canvasFont(900, 36); c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillText(g.cfg.secs > 0 && g.cfg.mode !== "dummy" ? String(Math.ceil(g.timeLeft)) : "∞", FW / 2, cy + 2);
+    // 打木樁：傷害統計
+    if (g.cfg.mode === "dummy" && !L.land) {
+      const st = g.stats; c.textAlign = "left"; c.textBaseline = "alphabetic";
+      c.fillStyle = "#a9b0d6"; c.font = canvasFont(700, 16); c.fillText("木樁傷害", 20, 118);
+      c.fillStyle = "#fff"; c.font = canvasFont(900, 22); c.fillText(`這一串 ${st.lastCombo || 0}　最後一下 ${st.lastDmg || 0}　總共 ${st.total}`, 20, 142, FW - 140);
+    }
+    c.restore();
+    // 戰場上方的模式膠囊
+    const pill = g.cfg.mode === "dummy" ? "練習・打木樁" : g.cfg.mode === "cpu" ? `打電腦・${FUI_LEVEL[FG.set.level] || ""}` : g.cfg.mode === "online" ? "線上對戰" : "";
+    if (pill) {
+      c.save(); c.font = canvasFont(800, 20); const w = c.measureText(pill).width + 36, y = L.view.y + 16;
+      fuiRound(c, FW / 2 - w / 2, y, w, 36, 18); c.fillStyle = "rgba(14,17,34,0.7)"; c.fill();
+      c.fillStyle = "#fff"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(pill, FW / 2, y + 19); c.restore();
+    }
+  }
+  // 兩人同機：只加雙方血量數字（畫在原本的中央血條上）
+  function fuiHud2p(c, g, L) {
+    const y = L.hud.y, h = L.hud.h, cy = y + h / 2, bw = 215, edge = 110;
+    c.save(); c.font = canvasFont(900, 18); c.fillStyle = "#fff"; c.textBaseline = "middle";
+    for (const i of [0, 1]) {
+      const p = g.p[i], x0 = i ? FW - edge - bw : edge, txt = String(Math.max(0, Math.ceil(p.hp)));
+      c.textAlign = i ? "right" : "left"; c.lineWidth = 4; c.strokeStyle = "rgba(0,0,0,0.6)";
+      const tx = i ? x0 + bw - 8 : x0 + 8; c.strokeText(txt, tx, cy + 1); c.fillText(txt, tx, cy + 1);
+    }
+    c.restore();
+  }
+  /* 新版的操作提示與防禦環（單人直向；兩人同機不加）：畫在原本的按鈕之上 */
+  function fuiControls(c, g, L, B, who) {
+    if (L.pvp) return;
+    const p = g.p[who];
+    c.save(); c.globalAlpha = 1;
+    // 防禦環（外圈＝防禦條；破防後灰色）
+    const b = B.down, r = b.r + 5, ratio = Math.max(0, p.gauge) / FT.GAUGE_MAX;
+    c.lineWidth = 6; c.strokeStyle = "rgba(255,255,255,0.15)"; c.beginPath(); c.arc(b.x, b.y, r, 0, Math.PI * 2); c.stroke();
+    c.strokeStyle = p.guardLock ? "#777c99" : ratio < 0.3 ? "#ff5060" : "#59a7ff"; c.lineCap = "round";
+    c.beginPath(); c.arc(b.x, b.y, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * ratio); c.stroke();
+    if (!L.land) {
+      // 技能提示條（技能群上方）、移動提示（方向鍵下方）
+      const tip = "技能：按住拖曳瞄準，放開出招", ty = L.ctrl.y + 16;
+      c.font = canvasFont(700, 19); const w = c.measureText(tip).width + 30;
+      fuiRound(c, 420 - w / 2, ty, w, 32, 16); c.fillStyle = "rgba(255,255,255,0.1)"; c.fill();
+      c.fillStyle = "#e8ebff"; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText(tip, 420, ty + 17);
+      const mv = B.left, my = mv.y + mv.h / 2 + 26;
+      c.fillStyle = "#a9b0d6"; c.font = canvasFont(700, 18); c.textAlign = "left"; c.textBaseline = "top";
+      c.fillText("按住左右移動，同方向", 22, my); c.fillText("連點兩下衝刺", 22, my + 24);
+    }
+    c.restore();
+  }
+
+  // 啟動（fuiInit／fuiBind）放在 js-19-fight-uipick.js 最後：要等選角面板（FXP）也定義好
+  /* ---------- 格鬥場新版介面 C 段（v7.6）：線上對戰三步驟畫面 ----------
+     規格：「格鬥場改版_圖檔與施作說明」§4.6（圖 06、07、10）。只有新版介面使用。
+     只換「畫面」：開房、加入、準備、離開都還是去按原本的按鈕（fOnCreate／fOnJoin／fOnReady／fOnLeave），
+     連線流程、房號格式（4 個英數字）、同步檢查都沒有改。原本的線上對戰區塊在新版裡藏起來（還在頁面上）。
+     畫面：還沒進房＝模式卡＋「加入房間」卡（4 格房號）＋底部「建立房間」；
+           進房後＝步驟條＋房號卡（複製連結、QR Code、離開）＋狀態＋雙方角色卡＋「遇到問題？」＋底部「我準備好了」。 */
+  function fuiOlBind() {
+    const boxes = [...document.querySelectorAll("#fxOlBoxes input")];
+    const clean = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const fill = (s, from) => { [...s].slice(0, 4 - from).forEach((ch, k) => (boxes[from + k].value = ch)); boxes[Math.min(3, from + s.length)].focus(); };
+    const join = () => { $("fOnCode").value = boxes.map((b) => b.value).join(""); $("fOnJoin").click(); };
+    boxes.forEach((b, i) => {
+      // 逐格自動跳下一格；一次進來好幾個字（輸入法、貼上）就往後填
+      b.addEventListener("input", () => { const v = clean(b.value); if (v.length > 1) { b.value = ""; fill(v, i); } else { b.value = v; if (v && boxes[i + 1]) boxes[i + 1].focus(); } });
+      b.addEventListener("keydown", (e) => { if (e.key === "Backspace" && !b.value && boxes[i - 1]) { boxes[i - 1].value = ""; boxes[i - 1].focus(); e.preventDefault(); } else if (e.key === "Enter") join(); });
+      b.addEventListener("paste", (e) => { e.preventDefault(); boxes.forEach((x) => (x.value = "")); fill(clean((e.clipboardData || window.clipboardData).getData("text")).slice(0, 4), 0); });
+      b.addEventListener("focus", () => b.select());
+    });
+    $("fxOlJoinBtn").onclick = join;
+    $("fxOlMain").onclick = () => { const act = $("fxOlMain").dataset.act; $(act === "create" ? "fOnCreate" : act === "leave" ? "fOnLeave" : "fOnReady").click(); };
+    $("fxOlLeave").onclick = () => $("fOnLeave").click();
+    const copy = async (text, msgEl, ok) => { try { await navigator.clipboard.writeText(text); msgEl.textContent = ok; } catch { msgEl.textContent = text; } };
+    $("fxOlCopy").onclick = () => copy(olShareUrl(), $("fxOlCopied"), "已複製連結，傳給朋友就能加入");
+    $("fxOlQrBtn").onclick = () => { const q = $("fxOlQr"); q.hidden = !q.hidden; if (!q.hidden) q.innerHTML = $("fOnQr").innerHTML; };
+    $("fxOlLog").onclick = () => copy(olReport(), $("fxOlLogMsg"), "已複製，貼給開發者即可");
+    // 原本的訊息欄（建立失敗、加入失敗、載入失敗…）有變化就更新新版畫面
+    const mo = new MutationObserver(() => fuiOl());
+    for (const id of ["fOnStatus", "fOnReadyMsg", "fOnQr"]) mo.observe($(id), { childList: true, characterData: true, subtree: true });
+  }
+  function fuiOl() {
+    if (!fuiOn() || !FG.set) return;
+    const online = FG.set.mode === "online", inRoom = online && !!OL.code, box = $("fxSetup");
+    box.classList.toggle("is-inroom", inRoom); box.classList.toggle("is-oljoin", online && !inRoom);
+    $("fxOlRoom").hidden = !inRoom; $("fxOlJoin").hidden = !online || inRoom; $("fxOlBar").hidden = !online; $("fxOlHelp").hidden = !online;
+    if (!online) return;
+    const main = $("fxOlMain"), set = (act, text, sub, off) => { main.dataset.act = act; $("fxOlMainT").textContent = text; $("fxOlMainS").textContent = sub; main.disabled = !!off; };
+    if (!inRoom) {
+      const msg = $("fOnStatus").textContent, busy = /中…$/.test(msg), bad = /失敗/.test(msg);
+      $("fxOlMsg").textContent = bad || busy ? msg : ""; $("fxOlMsg").classList.toggle("is-bad", bad);
+      $("fxOlCopied").textContent = ""; $("fxOlQr").hidden = true;
+      set("create", "建立房間", "建立後把房號或連結傳給朋友", busy);
+      return;
+    }
+    const other = olOther(), mine = olMine(), connected = !!(OL.link && OL.link.ready), host = OL.side === 0;
+    const closed = /關閉/.test(OL.status || ""), hashBad = !!(mine && other && mine.h && other.h && mine.h !== other.h);
+    const step = !connected ? 0 : !(other && other.id && mine && mine.id) ? 1 : 2;
+    document.querySelectorAll("#fxOlSteps li").forEach((li, k) => { li.classList.toggle("is-done", k < step); li.classList.toggle("is-now", k === step); if (k === step) li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current"); });
+    $("fxOlCode").textContent = OL.code;
+    $("fxOlQrBtn").hidden = !$("fOnQr").innerHTML; if ($("fxOlQrBtn").hidden) $("fxOlQr").hidden = true;
+    // 狀態：[文字, 顏色 ok／wait／bad]
+    const st = closed ? ["房間已關閉（房主離開了）", "bad"] : hashBad ? ["雙方的角色資料不一樣，請兩邊都重新整理頁面", "bad"]
+      : !connected ? [host ? (OL.room && OL.room.guest ? "對手已加入，連線中…" : "等待對手加入") : "連線中…", "wait"]
+      : !other || !other.id ? ["對手已加入，正在選角色", "ok"] : other.ready && mine && mine.ready ? ["雙方都準備好了，開打！", "ok"] : other.ready ? ["對手已準備", "ok"] : ["對手已選好角色，還沒準備", "ok"];
+    $("fxOlStatus").className = "fx-olstatus is-" + st[1]; $("fxOlStatusT").textContent = st[0];
+    $("fxOlNote").textContent = connected && /轉送/.test(OL.status || "") ? "轉送模式：直連失敗，延遲會比較高" : !host && connected ? "回合數與秒數由房主決定" : "";
+    if (closed) set("leave", "回到開房", "房間已經關閉", false);
+    else if (!connected) set("ready", "我準備好了", host ? "等待對手加入…" : "連線中…", true);
+    else if (!other || !other.id) set("ready", "我準備好了", "等待對手選角色…", true);
+    else if (mine && mine.ready) set("ready", "取消準備", other.ready ? "雙方都準備好了，開打！" : "等對手按下準備", false);
+    else set("ready", "我準備好了", other.ready ? "對手已準備，就等你了" : "雙方都按下就會開打", hashBad);
+  }
+  /* ---------- 格鬥場新版介面 B 段（v7.6）：選角面板＋技能預覽 ----------
+     規格：「格鬥場改版_圖檔與施作說明」§5（圖 11–22）。只在新版介面打開時使用（點新版的角色卡）；原版的搜尋、角色庫照舊。
+     直向＝底部面板；橫向＝全畫面左右分欄。點卡片先預覽，按「選這隻」才確定（選定走原本的 fightSetChar）。
+     最近／收藏存這台裝置（fightRecent／fightFav）；兩人同機可以輪流選（玩家 1 → 玩家 2），可開「盲選」。 */
+  const FXP = { side: 0, tab: "all", el: "", q: "", sort: "date", stars: new Set(), src: "", pick: null, shown: 60, pvpTurn: false, blind: false, hidden0: null, skill: 2, anim: 0 };
+  const FXP_EL = { 火: "#ef4444", 水: "#3b82f6", 木: "#22c55e", 光: "#eab308", 暗: "#8b5cf6", 無: "#9ca3af" };
+  const FXP_KIND = { melee: "近戰", shot: "投射物", lob: "拋物線", dline: "瞬間直線", rect: "定點", line: "直線", self: "自身", dash: "突進", buff: "輔助", front: "身前範圍" };
+  const FXP_OP = { melee: "按下就放", dline: "按下就放", self: "按下就放", buff: "按下就放", shot: "按住選方向", line: "按住選方向", rect: "拖曳瞄準", lob: "拖曳瞄準", dash: "拖曳選落點", front: "左右選方向" };
+  const FXP_HOW = {
+    melee: "靠近對手按下就揮，打身前一小段距離。", shot: "朝面向射出投射物，按住可以轉向，放開才射。", line: "朝面向射出直線投射物，一路飛到打中或飛出場地。",
+    dline: "按下立刻朝面向打出一道直線，不會飛行，前搖有虛線預告。", lob: "按住拖曳選落點，放開後拋出，弧線很高，快落地時才打得到。",
+    rect: "按住拖曳到想打的位置，放開後先預告，再落下範圍攻擊。對站著不動的目標很好打。", dash: "按住左右拖曳選落點，衝過去才判定，衝的途中不會被打斷。",
+    front: "打自己身前一段範圍，按住左右拖可以換方向。", self: "按下就套用在自己身上的效果。", buff: "暫時加攻擊並回一點血（原作效果還沒支援時的代替）。",
+  };
+  const FXP_FORM = { melee: "近戰", dline: "瞬間直線", line: "直線", lob: "拋物線", target: "定點", dash: "突進", self: "自身", buff: "輔助" }; // 標籤用短名
+  const fxpGet = (k, d) => { try { return store.get(k, d); } catch { return d; } };
+  const fxpSet = (k, v) => { try { store.set(k, v); } catch {} };
+  const fxpStar = (r) => (r.custom || customIds.has(r.id) ? "自製" : (r.star || "").replace("終極進化", "終極 ").replace("超進化", "超進化 ") || "—");
+  const fxpForms = (r) => { try { const N = normUnit(r, NORM_ALL_ANIMS); return { atk: N.atk.form, sk: N.sk.map((k) => (k.exists ? k.form : null)), issues: N.issues }; } catch { return null; } };
+
+  function fxpEnsure() {
+    if ($("fxPick")) return;
+    const el = document.createElement("div"); el.id = "fxPick"; el.className = "fxp"; el.hidden = true;
+    el.innerHTML = `<div class="fxp-dim" data-x="close"></div>
+      <div class="fxp-sheet" role="dialog" aria-modal="true" aria-labelledby="fxpTitle">
+        <div class="fxp-grab" aria-hidden="true"></div>
+        <div class="fxp-head" id="fxpHead"><div><h2 id="fxpTitle">選擇角色</h2><p id="fxpSub"></p></div>
+          <span class="fxp-steps" id="fxpSteps" hidden></span>
+          <button class="fxp-x" type="button" data-x="close" aria-label="關閉">${fuiIcon('<path d="M6 6l12 12M18 6 6 18"/>')}</button></div>
+        <div class="fxp-off" id="fxpOff" hidden>${fuiIcon(FUI_ICONS.alert, 18)}<span>連不上資料庫，只能從「最近」選</span><button type="button" data-x="retry">重試</button></div>
+        <div class="fxp-pvp" id="fxpPvp" hidden><button type="button" class="fxp-mini" data-x="rand">隨機選</button><button type="button" class="fxp-mini" data-x="last">同上一場</button>
+          <label class="fxp-blind"><input type="checkbox" id="fxpBlind"> 盲選</label></div>
+        <div class="fxp-bar"><label class="fxp-q">${fuiIcon('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>', 20)}<input id="fxpQ" type="search" placeholder="搜尋角色名稱" autocomplete="off" aria-label="搜尋角色名稱"></label>
+          <button class="fxp-filter" type="button" data-x="filter" aria-label="篩選">${fuiIcon('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>', 20)}<span>篩選</span><b id="fxpBadge" hidden></b></button></div>
+        <div class="fxp-fpanel" id="fxpFilter" hidden></div>
+        <div class="fxp-tabs" role="tablist" id="fxpTabs">${[["recent", "最近"], ["feat", "精選"], ["all", "全部"], ["fav", "收藏"]].map(([k, t]) => `<button type="button" role="tab" data-tab="${k}">${t}</button>`).join("")}</div>
+        <div class="fxp-els" id="fxpEls"></div>
+        <div class="fxp-sort"><span id="fxpCount"></span><button type="button" data-x="sort" id="fxpSortBtn"></button></div>
+        <div class="fxp-grid" id="fxpGrid" role="list"></div>
+        <div class="fxp-prev" id="fxpPrev"></div>
+        <div class="fxp-detail" id="fxpDetail" hidden></div>
+      </div>`;
+    $("fStage").before(el);
+    el.addEventListener("click", fxpClick);
+    $("fxpQ").addEventListener("input", () => { clearTimeout(FXP.qt); FXP.qt = setTimeout(() => { FXP.q = $("fxpQ").value.trim(); FXP.shown = 60; fxpList(); }, 200); });
+    $("fxpBlind").onchange = () => { FXP.blind = $("fxpBlind").checked; fxpSet("fightBlind", FXP.blind); };
+    $("fxpGrid").addEventListener("scroll", () => { const g = $("fxpGrid"); if (g.scrollTop + g.clientHeight > g.scrollHeight - 300 && FXP.shown < FXP.list.length) { FXP.shown += 60; fxpList(true); } });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("fxPick").hidden) { e.stopPropagation(); if (!$("fxpDetail").hidden) fxpDetail(false); else fxpClose(); } }, true);
+  }
+
+  /* 打開：side＝0／1；兩人同機從玩家 1 開始輪流 */
+  function fxpOpen(side) {
+    fxpEnsure();
+    const pvp = FG.set.mode === "pvp";
+    FXP.pvpTurn = pvp; FXP.side = pvp ? 0 : side; FXP.blind = !!fxpGet("fightBlind", false); $("fxpBlind").checked = FXP.blind;
+    FXP.tab = "all"; FXP.q = ""; $("fxpQ").value = ""; FXP.shown = 60; FXP.scrollY = window.scrollY;
+    FXP.pick = S.index.find((x) => x.id === fightCardId(FXP.side)) || null;
+    $("fxPick").hidden = false; document.body.classList.add("fxp-on");
+    fxpHead(); fxpRender();
+  }
+  function fxpClose() {
+    $("fxPick").hidden = true; document.body.classList.remove("fxp-on"); fxpDetail(false);
+    if (FXP.hidden0) { FXP.hidden0 = null; fuiRefresh(); }
+    window.scrollTo(0, FXP.scrollY || 0); // 選完回到原本的捲動位置
+  }
+  function fxpHead() {
+    const pvp = FXP.pvpTurn, s = FXP.side, sheet = document.querySelector(".fxp-sheet");
+    sheet.classList.toggle("is-p1", pvp && s === 0); sheet.classList.toggle("is-p2", pvp && s === 1);
+    $("fxpTitle").textContent = pvp ? `玩家 ${s + 1} 選角` : `選擇${s ? "右方" : "左方"}角色`;
+    $("fxpPvp").hidden = !pvp; $("fxpSteps").hidden = !pvp; $("fxpSteps").textContent = `${s + 1}／2`;
+    $("fxpBlind").closest("label").hidden = s === 1;
+  }
+  // 目前分頁＋搜尋＋篩選後的清單
+  function fxpPool() {
+    const ready = FG.ready && S.index.length > 0, recent = fxpGet("fightRecent", []), fav = new Set(fxpGet("fightFav", []));
+    let base = !ready ? [] : FXP.tab === "recent" ? recent.map((id) => S.index.find((r) => r.id === id)).filter(Boolean)
+      : FXP.tab === "feat" ? FIGHT_ROSTER.map(([id]) => S.index.find((r) => r.id === id)).filter(Boolean)
+      : FXP.tab === "fav" ? S.index.filter((r) => fav.has(r.id)) : S.index.filter((r) => !r.hidden);
+    FXP.hiddenUnnamed = 0;
+    base = base.filter((r) => { const named = r.name && r.name !== r.id; if (!named && !FXP.showUnnamed) { FXP.hiddenUnnamed++; return false; } return true; });
+    const q = FXP.q.toLowerCase();
+    let list = base.filter((r) => (!q || (r.name || "").toLowerCase().includes(q) || r.id.includes(q)) && (!FXP.el || r.element === FXP.el)
+      && (!FXP.stars.size || FXP.stars.has(fxpStar(r).replace(/^.*?(\d+)\s*星$/, "$1"))) && (!FXP.src || (FXP.src === "custom") === !!(r.custom || customIds.has(r.id))));
+    if (FXP.tab === "all") list.sort(FXP.sort === "name" ? (a, b) => a.name.localeCompare(b.name, "zh-Hant") : FXP.sort === "star" ? (a, b) => (parseInt(b.star) || 0) - (parseInt(a.star) || 0) : (a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    return { list, base };
+  }
+  function fxpRender() {
+    const ready = FG.ready && S.index.length > 0, off = $("modeNote").classList.contains("off");
+    $("fxpOff").hidden = !off;
+    document.querySelector(".fxp-sheet").classList.toggle("is-loading", !ready);
+    $("fxpQ").disabled = !ready; document.querySelectorAll("#fxpTabs button, .fxp-filter").forEach((b) => (b.disabled = !ready || (off && b.dataset.tab && b.dataset.tab !== "recent")));
+    document.querySelectorAll("#fxpTabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === FXP.tab)));
+    $("fxpEls").innerHTML = [["", "全部屬性"], ...Object.keys(FXP_EL).map((k) => [k, k])].map(([k, t]) =>
+      `<button type="button" class="fxp-el" data-el="${k}" aria-pressed="${FXP.el === k}">${k ? `<i style="background:${FXP_EL[k]}"></i>` : ""}${t}</button>`).join("");
+    const nf = FXP.stars.size + (FXP.src ? 1 : 0); $("fxpBadge").hidden = !nf; $("fxpBadge").textContent = nf;
+    $("fxpSortBtn").textContent = { date: "最新登場", name: "名稱", star: "星數" }[FXP.sort] + " ▾"; $("fxpSortBtn").hidden = FXP.tab !== "all";
+    fxpList(); fxpPrev();
+  }
+  function fxpList(append) {
+    const grid = $("fxpGrid"), ready = FG.ready && S.index.length > 0;
+    if (!ready) { grid.innerHTML = `<p class="fxp-msg">載入角色資料中，請稍候</p>` + '<div class="fxp-card is-skel"></div>'.repeat(9); $("fxpCount").textContent = ""; return; }
+    const { list } = fxpPool(); FXP.list = list;
+    $("fxpSub").textContent = FXP.pvpTurn ? (FXP.side ? "選好後就開始對戰" : "選好後把手機交給玩家 2") : `共 ${S.index.filter((r) => !r.hidden).length} 隻`;
+    $("fxpCount").textContent = `${list.length} 隻`;
+    if (!append) { grid.textContent = ""; grid.scrollTop = 0; }
+    if (!list.length) { grid.innerHTML = fxpEmpty(); return; }
+    const start = append ? grid.querySelectorAll(".fxp-card").length : 0;
+    for (const r of list.slice(start, FXP.shown)) grid.appendChild(fxpCard(r));
+  }
+  function fxpEmpty() {
+    if (FXP.tab === "recent" && !FXP.q) return `<div class="fxp-empty"><b>未偵測到最近使用角色</b><span>選過的角色會出現在這裡</span></div>`;
+    if (FXP.tab === "fav" && !FXP.q) return `<div class="fxp-empty"><b>還沒有收藏的角色</b><span>預覽時按「選這隻」旁邊的星星加入收藏</span></div>`;
+    const chips = [FXP.el && `<button type="button" class="fxp-chipx" data-x="rm-el">${FXP.el} ✕</button>`, ...[...FXP.stars].map((s) => `<button type="button" class="fxp-chipx" data-x="rm-star" data-v="${s}">${s} 星 ✕</button>`),
+      FXP.src && `<button type="button" class="fxp-chipx" data-x="rm-src">${FXP.src === "custom" ? "自製" : "官方"} ✕</button>`].filter(Boolean);
+    return `<div class="fxp-empty">${fuiIcon('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>', 44)}<b>${FXP.q ? `找不到「${escapeHtml(FXP.q)}」` : "沒有符合條件的角色"}</b><span>試試別的名字，或拿掉一些篩選條件</span>
+      ${chips.length ? `<div class="fxp-chips">${chips.join("")}</div><button type="button" class="fxp-mini" data-x="clear">清除全部篩選</button>` : ""}
+      ${FXP.hiddenUnnamed && !FXP.showUnnamed ? `<div class="fxp-tip">另有 ${FXP.hiddenUnnamed} 隻未命名的角色被隱藏 <button type="button" data-x="unnamed">顯示</button></div>` : ""}</div>`;
+  }
+  function fxpCard(r) {
+    const c = fightCompatOf(r), b = document.createElement("button"), sel = FXP.pick && FXP.pick.id === r.id && !(FXP.blind && FXP.side === 1 && FXP.hidden0 === r.id);
+    b.type = "button"; b.className = "fxp-card" + (c.lvl === "unfit" ? " is-lock" : "") + (sel ? " is-sel" : ""); b.dataset.id = r.id; b.setAttribute("role", "listitem");
+    b.setAttribute("aria-pressed", String(!!sel));
+    const sub = c.lvl === "unfit" ? '<span class="fxp-tag is-lock">🔒 不適用</span>' : c.lvl === "unsup" ? '<span class="fxp-tag is-unsup">⚠ 部分支援</span>'
+      : `<span class="fxp-meta"><i style="background:${FXP_EL[r.element] || "#9ca3af"}"></i>${fxpStar(r)}${r.element ? "・" + r.element : ""}</span>`;
+    b.setAttribute("aria-label", `${r.name}，${fxpStar(r)}，${r.element || "無"}屬性${c.lvl === "unfit" ? "，不適用" : c.lvl === "unsup" ? "，部分支援" : ""}${sel ? "，已選取" : ""}`);
+    b.innerHTML = `<span class="fxp-ava"><img alt="" loading="lazy"></span><b>${escapeHtml(r.name)}</b>${sub}${sel ? `<span class="fxp-check">${fuiIcon('<path d="M5 12l5 5 9-10"/>', 16)}</span>` : ""}`;
+    const img = b.querySelector("img"), urls = thumbUrls(r.id); let n = 0; img.onerror = () => { if (++n < urls.length) img.src = urls[n]; else img.remove(); }; img.src = urls[0];
+    return b;
+  }
+  // 底部預覽列（直向）／右側預覽（橫向）
+  async function fxpPrev() {
+    const box = $("fxpPrev"), r = FXP.pick && !(FXP.blind && FXP.side === 1 && FXP.hidden0 === FXP.pick.id) ? FXP.pick : null;
+    if (!r) { box.innerHTML = `<div class="fxp-pinfo is-empty">${FG.ready ? "先選一隻角色" : "資料載入完成後即可選角"}</div><div class="fxp-pact"><button class="fxp-go" type="button" disabled>${fxpGoText(null)}</button></div>`; return; }
+    const c = fightCompatOf(r), F = fxpForms(r), fav = new Set(fxpGet("fightFav", [])).has(r.id);
+    const tag = (s, form) => `<span class="fxp-sk">${s === 2 ? "普攻" : "技能" + (s + 1)} ${form ? FXP_FORM[form] || form : "沒有"}</span>`;
+    box.innerHTML = `<button class="fxp-pinfo" type="button" data-x="detail" aria-label="看技能：${escapeHtml(r.name)}">
+        <span class="fxp-ava"><img alt=""></span><span class="fxp-ptxt"><b>${escapeHtml(r.name)}</b><span class="fxp-pstats" id="fxpStats">血量 — 攻擊 — 速度 —</span>
+        <span class="fxp-sks">${F ? tag(2, F.atk) + tag(0, F.sk[0]) + tag(1, F.sk[1]) : ""}</span></span><span class="fxp-more">${fuiIcon('<path d="M6 15l6-6 6 6"/>', 18)}看技能</span></button>
+      <div class="fxp-pact"><button class="fxp-fav" type="button" data-x="fav" aria-pressed="${fav}" aria-label="${fav ? "取消收藏" : "加入收藏"}">${fuiIcon('<path d="M12 4l2.5 5 5.5.8-4 3.9.9 5.5L12 16.6 7.1 19.2l.9-5.5-4-3.9 5.5-.8z"' + (fav ? ' fill="currentColor"' : "") + "/>", 22)}</button>
+        <button class="fxp-go" type="button" data-x="go" ${c.lvl === "unfit" ? "disabled" : ""}>${c.lvl === "unfit" ? "不適用，無法選" : fxpGoText(c)}</button></div>`;
+    const img = box.querySelector("img"), urls = thumbUrls(r.id); let n = 0; img.onerror = () => { if (++n < urls.length) img.src = urls[n]; }; img.src = urls[0];
+    try { const fs = fightStats(await fightLoad(r.id)); if (FXP.pick === r && $("fxpStats")) { box.querySelector(".fxp-sks").innerHTML = [2, 0, 1].map((s) => { const k = fightSlot(fs, s); return `<span class="fxp-sk">${s === 2 ? "普攻" : "技能" + (s + 1)} ${k ? FXP_KIND[k.kind] || k.kind : "沒有"}</span>`; }).join(""); $("fxpStats").textContent = `血量 ${Math.round(fs.hp)}　攻擊 ${Math.round(fs.atk.dmg)}　速度 ${Math.round(fs.walk)}`; FXP.fs = fs; FXP.fsId = r.id; if (!$("fxpDetail").hidden) fxpDetail(true); } } catch {}
+  }
+  const fxpGoText = (c) => (FXP.pvpTurn ? (FXP.side ? "確定，開始對戰" : "確定，換玩家 2") : c && c.lvl === "unsup" ? "仍要選這隻" : "選這隻");
+
+  /* 技能詳情：普攻／技能 1／技能 2 分頁、示意動畫、四格數值、說明、支援狀態 */
+  function fxpDetail(show) {
+    const box = $("fxpDetail"); cancelAnimationFrame(FXP.anim);
+    if (!show) { box.hidden = true; document.querySelector(".fxp-sheet").classList.remove("is-detail"); return; }
+    const r = FXP.pick; if (!r) return;
+    const fs = FXP.fsId === r.id ? FXP.fs : null, F = fxpForms(r), c = fightCompatOf(r);
+    box.hidden = false; document.querySelector(".fxp-sheet").classList.add("is-detail");
+    const slots = [[2, "普攻"], [0, "技能1"], [1, "技能2"]], where = { 2: "普攻", 0: "技能1", 1: "技能2" };
+    const iss = (s, l) => (F ? F.issues.filter((x) => x.where === where[s] && x.lvl === l).map((x) => x.msg) : []);
+    const k = fs ? fightSlot(fs, FXP.skill) : null, has = FXP.skill === 2 || (F && F.sk[FXP.skill]);
+    const uns = iss(FXP.skill, "unsupported"), gs = iss(FXP.skill, "guess");
+    const sk = FXP.skill < 2 && S.skills[r.id] && S.skills[r.id][FXP.skill];
+    const kind = k ? k.kind : null, val = (v) => (v == null || v === "" ? "資料不足" : v);
+    box.innerHTML = `<div class="fxp-dhead"><button type="button" class="fxp-back" data-x="back" aria-label="收合">${fuiIcon('<path d="M6 9l6 6 6-6"/>', 22)}<span>返回</span></button>
+        <span class="fxp-ava"><img alt=""></span><span><b>${escapeHtml(r.name)}</b><small>${fxpStar(r)}${r.element ? "・" + r.element : ""}</small></span></div>
+      <div class="fxp-dtabs">${slots.map(([s, t]) => { const u = iss(s, "unsupported").length, ex = s === 2 || (F && F.sk[s]); const kk = fs && fightSlot(fs, s), f = kk ? kk.kind : s === 2 ? F && F.atk : F && F.sk[s];
+        return `<button type="button" data-skill="${s}" aria-pressed="${FXP.skill === s}" class="${u ? "is-unsup" : ""}" ${ex ? "" : "disabled"}><b>${t}</b><small>${!ex ? "沒有" : u ? "⚠ 部分支援" : (kk ? FXP_KIND[f] : FXP_FORM[f]) || f}</small></button>`; }).join("")}</div>
+      ${has ? `<div class="fxp-demo"><span class="fxp-dlabel">示意動畫・自動循環</span><button type="button" class="fxp-replay" data-x="replay" aria-label="重播">${fuiIcon(FUI_ICONS.restart, 20)}</button><canvas id="fxpCanvas" width="640" height="240" aria-label="招式示意動畫"></canvas></div>
+      ${uns.length ? `<div class="fxp-warn">${fuiIcon(FUI_ICONS.alert, 20)}<span>${escapeHtml(uns.join("；").replace(/（待做）/g, ""))}。對戰時照樣能出招，其他招式正常。</span></div>` : ""}
+      <div class="fxp-cells"><span><small>類型</small><b>${val(kind && FXP_KIND[kind])}</b></span><span><small>傷害</small><b>${val(k && Math.round(k.dmg))}</b></span>
+        <span><small>冷卻</small><b>${val(k && (+k.cd).toFixed(1) + " 秒")}</b></span><span><small>操作</small><b>${val(kind && FXP_OP[kind])}</b></span></div>
+      <p class="fxp-how">${escapeHtml((kind && FXP_HOW[kind]) || "資料不足")}${sk && sk.name ? `<br><small>原作技能：${escapeHtml(sk.name)}</small>` : ""}</p>
+      ${gs.length ? `<p class="fxp-guess">？ 部分數值為推測：${escapeHtml(gs.join("、"))}</p>` : ""}` : `<p class="fxp-how">這隻角色沒有這個技能。</p>`}
+      ${c.lvl === "unsup" ? `<div class="fxp-status">${slots.map(([s, t]) => { const u = iss(s, "unsupported").length, ex = s === 2 || (F && F.sk[s]); return ex ? `<span class="${u ? "is-x" : "is-ok"}">${u ? "⚠" : "✓"} <b>${t}</b> ${u ? "部分效果還沒支援" : "可正常使用"}</span>` : ""; }).join("")}</div>` : ""}
+      <div class="fxp-dact"><button class="fxp-go" type="button" data-x="go">${fxpGoText(c)}</button>${c.lvl === "unsup" ? '<button class="fxp-mini is-wide" type="button" data-x="back">回到列表，換一隻</button>' : ""}</div>`;
+    const img = box.querySelector("img"), urls = thumbUrls(r.id); let n = 0; img.onerror = () => { if (++n < urls.length) img.src = urls[n]; }; img.src = urls[0];
+    if (has) fxpDemo(kind || (FXP.skill === 2 ? F && { melee: "melee", line: "shot", lob: "lob", dline: "dline" }[F.atk] : "rect"));
+  }
+  // 示意動畫：依招式種類畫一段循環（角色＝圓、木樁＝方塊）；減少動態效果＝停在一格
+  function fxpDemo(kind) {
+    const cv = $("fxpCanvas"); if (!cv) return;
+    const c = cv.getContext("2d"), W = cv.width, H = cv.height, gy = H - 50, ax = 120, bx = W - 140, T = 1.6;
+    const still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const t0 = performance.now();
+    const frame = (now) => {
+      const t = still ? 0.62 : ((now - t0) / 1000 % T) / T;
+      c.clearRect(0, 0, W, H); c.fillStyle = "#222852"; c.fillRect(0, 0, W, H); c.fillStyle = "#3d3a52"; c.fillRect(0, gy, W, H - gy);
+      c.fillStyle = "#c8a060"; c.fillRect(bx - 22, gy - 70, 44, 70); c.strokeStyle = "#1b2038"; c.lineWidth = 3; c.strokeRect(bx - 22, gy - 70, 44, 70);
+      let x = ax; if (kind === "dash") x = ax + (bx - 70 - ax) * Math.min(1, t / 0.5);
+      c.fillStyle = "#ffc61a"; c.beginPath(); c.arc(x, gy - 34, 30, 0, Math.PI * 2); c.fill(); c.stroke();
+      c.strokeStyle = "#ff8fb0"; c.fillStyle = "rgba(255,143,176,.9)"; c.lineWidth = 5; c.setLineDash([]);
+      const hit = (p) => { if (t > p) { c.fillStyle = "rgba(255,214,74," + (1 - (t - p) / (1 - p)) + ")"; c.beginPath(); c.arc(bx, gy - 40, 46, 0, Math.PI * 2); c.fill(); } };
+      if (kind === "melee") { c.beginPath(); c.arc(ax + 30, gy - 34, 60, -1.2 + t * 2, -0.2 + t * 2); c.stroke(); }
+      else if (kind === "lob") { c.setLineDash([10, 8]); c.strokeStyle = "rgba(255,255,255,.6)"; c.beginPath(); c.moveTo(ax, gy - 60); c.quadraticCurveTo((ax + bx) / 2, gy - 220, bx, gy - 10); c.stroke(); c.setLineDash([]);
+        const u = Math.min(1, t / 0.7), px = ax + (bx - ax) * u, py = (1 - u) * (1 - u) * (gy - 60) + 2 * u * (1 - u) * (gy - 220) + u * u * (gy - 10); c.fillStyle = "#ff8fb0"; c.beginPath(); c.arc(px, py, 12, 0, Math.PI * 2); c.fill(); hit(0.7); }
+      else if (kind === "rect") { c.strokeStyle = "#ffc61a"; c.setLineDash([10, 8]); c.beginPath(); c.ellipse(bx, gy - 2, 60, 14, 0, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
+        if (t > 0.45) { const u = Math.min(1, (t - 0.45) / 0.2); c.fillStyle = "#ffc61a"; c.beginPath(); c.arc(bx, gy - 200 + 170 * u, 16, 0, Math.PI * 2); c.fill(); } hit(0.68); }
+      else if (kind === "shot" || kind === "line") { const u = Math.min(1, t / 0.55); c.fillStyle = "#ff8fb0"; c.beginPath(); c.arc(ax + 40 + (bx - ax - 60) * u, gy - 40, 12, 0, Math.PI * 2); c.fill(); hit(0.55); }
+      else if (kind === "dline") { if (t < 0.25) { c.setLineDash([8, 8]); c.strokeStyle = "rgba(255,255,255,.6)"; } else c.lineWidth = 10 * (1 - t); c.beginPath(); c.moveTo(ax + 30, gy - 40); c.lineTo(W - 20, gy - 40); c.stroke(); c.setLineDash([]); hit(0.28); }
+      else if (kind === "dash") { if (t > 0.5) { c.beginPath(); c.arc(x + 30, gy - 34, 55, -1, 1); c.stroke(); } hit(0.55); }
+      else if (kind === "front") { if (t > 0.3) { c.fillStyle = "rgba(255,143,176," + (1 - t) + ")"; c.fillRect(ax + 30, gy - 90, 220, 90); } }
+      else { c.strokeStyle = kind === "buff" ? "#7dff9a" : "#9ad1ff"; c.beginPath(); c.arc(ax, gy - 34, 36 + 30 * t, 0, Math.PI * 2); c.stroke(); }
+      if (!still && !$("fxpDetail").hidden) FXP.anim = requestAnimationFrame(frame);
+    };
+    FXP.anim = requestAnimationFrame(frame);
+  }
+
+  function fxpConfirm() {
+    const r = FXP.pick; if (!r || fightCompatOf(r).lvl === "unfit") return;
+    fxpSet("fightRecent", [r.id, ...fxpGet("fightRecent", []).filter((x) => x !== r.id)].slice(0, 20));
+    if (FXP.pvpTurn && FXP.side === 0) {
+      FXP.last0 = fightCardId(0); fightSetChar(0, r);
+      if (FXP.blind) FXP.hidden0 = r.id;
+      FXP.side = 1; FXP.pick = S.index.find((x) => x.id === fightCardId(1)) || null; FXP.q = ""; $("fxpQ").value = "";
+      fxpDetail(false); fxpHead(); fxpRender(); fuiRefresh(); return;
+    }
+    const go = FXP.pvpTurn && FXP.side === 1;
+    fightSetChar(FXP.side, r); fxpClose();
+    if (go) fightStart(); // 兩人同機輪流選完：直接開打
+  }
+  function fxpFilterPanel() {
+    const box = $("fxpFilter"); box.hidden = !box.hidden; if (box.hidden) return;
+    const stars = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+    box.innerHTML = `<b>星數</b><div class="fxp-chips">${stars.map((s) => `<button type="button" class="fxp-el" data-star="${s}" aria-pressed="${FXP.stars.has(s)}">${s} 星</button>`).join("")}</div>
+      <b>來源</b><div class="fxp-chips">${[["", "全部"], ["official", "官方"], ["custom", "自製"]].map(([k, t]) => `<button type="button" class="fxp-el" data-src="${k}" aria-pressed="${FXP.src === k}">${t}</button>`).join("")}</div>`;
+  }
+  function fxpClick(e) {
+    const b = e.target.closest("button, [data-x], [data-tab]"); if (!b || b.disabled) return;
+    const x = b.dataset.x;
+    if (x === "close") return fxpClose();
+    if (b.dataset.tab) { FXP.tab = b.dataset.tab; FXP.shown = 60; return fxpRender(); }
+    if (b.dataset.el != null && b.classList.contains("fxp-el") && b.closest("#fxpEls")) { FXP.el = b.dataset.el; FXP.shown = 60; return fxpRender(); }
+    if (b.dataset.star) { FXP.stars.has(b.dataset.star) ? FXP.stars.delete(b.dataset.star) : FXP.stars.add(b.dataset.star); fxpFilterPanel(); fxpFilterPanel(); return fxpRender(); }
+    if (b.dataset.src != null && b.closest("#fxpFilter")) { FXP.src = b.dataset.src; fxpFilterPanel(); fxpFilterPanel(); return fxpRender(); }
+    if (b.dataset.skill) { FXP.skill = +b.dataset.skill; return fxpDetail(true); }
+    if (b.classList.contains("fxp-card")) {
+      const r = S.index.find((y) => y.id === b.dataset.id); FXP.pick = r;
+      if (fxpGet("fightPickTap", false) && fightCompatOf(r).lvl !== "unfit") return fxpConfirm(); // 設定「點一下直接選定」（D 段）
+      $("fxpGrid").querySelectorAll(".fxp-card.is-sel").forEach((y) => { y.classList.remove("is-sel"); y.setAttribute("aria-pressed", "false"); const ck = y.querySelector(".fxp-check"); if (ck) ck.remove(); });
+      if (fightCompatOf(r).lvl !== "unfit") { b.classList.add("is-sel"); b.setAttribute("aria-pressed", "true"); b.insertAdjacentHTML("beforeend", `<span class="fxp-check">${fuiIcon('<path d="M5 12l5 5 9-10"/>', 16)}</span>`); }
+      FXP.skill = 2; return fxpPrev();
+    }
+    if (x === "go") return fxpConfirm();
+    if (x === "detail") { FXP.skill = FXP.skill == null ? 2 : FXP.skill; return fxpDetail(true); }
+    if (x === "back") return fxpDetail(false);
+    if (x === "replay") return fxpDetail(true);
+    if (x === "fav") { const r = FXP.pick, f = fxpGet("fightFav", []); fxpSet("fightFav", f.includes(r.id) ? f.filter((y) => y !== r.id) : [r.id, ...f]); fxpPrev(); if (FXP.tab === "fav") fxpList(); return; }
+    if (x === "filter") return fxpFilterPanel();
+    if (x === "sort") { FXP.sort = { date: "name", name: "star", star: "date" }[FXP.sort]; return fxpRender(); }
+    if (x === "rand") { const pool = fightPool(fightCardId(1 - FXP.side)); FXP.pick = pool[Math.floor(Math.random() * pool.length)] || null; return fxpRender(); }
+    if (x === "last") { const id = FXP.side ? FXP.prevPair && FXP.prevPair[1] : FXP.prevPair && FXP.prevPair[0]; FXP.pick = S.index.find((y) => y.id === (id || fightCardId(FXP.side))) || null; return fxpRender(); }
+    if (x === "rm-el") { FXP.el = ""; return fxpRender(); }
+    if (x === "rm-star") { FXP.stars.delete(b.dataset.v); return fxpRender(); }
+    if (x === "rm-src") { FXP.src = ""; return fxpRender(); }
+    if (x === "clear") { FXP.el = ""; FXP.stars.clear(); FXP.src = ""; FXP.q = ""; $("fxpQ").value = ""; return fxpRender(); }
+    if (x === "unnamed") { FXP.showUnnamed = true; return fxpRender(); }
+    if (x === "retry") return location.reload();
+  }
+
+  fuiInit(); fuiBind(); fuiOlBind(); // 新版介面啟動（A、B 段都定義好之後）
 })();
 </script>
 
