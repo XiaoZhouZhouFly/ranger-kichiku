@@ -594,6 +594,71 @@ await test("格鬥場：新版介面（設定頁、暫停、兩人同機、線�
   return `房號 ${code}`;
 });
 
+// v7.6.1：新版介面手機橫放的版面規則（寬字型模擬：字距 +10%）
+// 換模式卡片不跳、三欄等高、數字在卡片內、名字最多兩行且不會一個字單獨一行、展開「更多設定」不推動別的東西、線上加入房間框對齊
+await test("格鬥場：新版介面手機橫放版面（v7.6.1）", async (open) => {
+  const p = await open({ width: 891, height: 411 });
+  await p.goto(BASE + "?app=fight&fui=new"); await p.waitForFunction(() => window.__rk && window.__rk.fight().ready, null, { timeout: 60000 });
+  await p.waitForFunction(() => /\d/.test(document.getElementById("fxStats0").textContent), null, { timeout: 20000 });
+  const notes = [];
+  for (const [w, h] of [[667, 375], [891, 340], [891, 411], [932, 430]]) {
+    await p.setViewportSize({ width: w, height: h });
+    const tag = `${w}×${h}`;
+    const r = await p.evaluate(async () => {
+      const wait = (t) => new Promise((ok) => setTimeout(ok, t)), R = (el) => el.getBoundingClientRect();
+      const refit = async () => { dispatchEvent(new Event("resize")); await wait(300); };
+      document.body.style.letterSpacing = "0.1em"; await refit();
+      const out = { tops: [], bad: [] };
+      for (const mode of ["dummy", "cpu", "pvp"]) {
+        document.querySelector(`#fxModes [data-fxmode="${mode}"]`).click(); await refit(); scrollTo(0, 0);
+        out.tops.push(Math.round(R(document.querySelector(".fx-cards")).top));
+        const cols = [...document.querySelectorAll(".fx-col")].map((c) => R(c));
+        if (Math.max(...cols.map((c) => c.bottom)) - Math.min(...cols.map((c) => c.bottom)) > 8) out.bad.push(`${mode} 三欄底部沒對齊`);
+        if (R(document.getElementById("fStart")).bottom > innerHeight || R(document.querySelector(".fx-cards")).bottom > innerHeight) out.bad.push(`${mode} 第一屏看不到開始鈕或卡片`);
+      }
+      document.querySelector('#fxModes [data-fxmode="dummy"]').click(); await refit();
+      // 數字：血量 5 位數也要在卡片內、不疊字
+      const bs = document.querySelectorAll(".fx-card .fx-stats b"), old = [...bs].map((b) => b.textContent);
+      bs.forEach((b, i) => { if (i % 3 === 0) b.textContent = "12345"; }); await refit();
+      for (const c of document.querySelectorAll(".fx-card")) { const cr = R(c), sp = [...c.querySelectorAll(".fx-stats > span")].map(R);
+        if (sp.some((s) => s.right > cr.right - 2 || s.left < cr.left + 2)) out.bad.push("數字超出卡片");
+        for (let k = 1; k < sp.length; k++) if (Math.abs(sp[k].top - sp[k - 1].top) < 4 && sp[k].left < sp[k - 1].right - 0.5) out.bad.push("數字疊在一起"); }
+      bs.forEach((b, i) => (b.textContent = old[i]));
+      // 名字：最多兩行（放不下才「…」）、最後一行不會只有一個字
+      const el = document.getElementById("fxName0"), keep = el.dataset.full, help = document.getElementById("fxModeHelp");
+      for (const name of ["方塊騎士", "職業高爾夫選手KSM", "遭遇螃蟹橫禍的少女 戰場原黑儀", "拉諾亞魔法大學特別生 莉妮亞＆普露塞娜", "經驗豐富的冒險者 琉"]) {
+        el.dataset.full = name; help.click(); help.click(); // 這顆按鈕會馬上重排一次
+        const tops = []; const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let t;
+        while ((t = tw.nextNode())) for (let i = 0; i < t.length; i++) { if (!t.data[i].trim()) continue; const q = document.createRange(); q.setStart(t, i); q.setEnd(t, i + 1); tops.push(Math.round(q.getBoundingClientRect().top)); }
+        const lines = [...new Set(tops)]; if (el.classList.contains("is-clamp")) continue;
+        if (lines.length > 2) out.bad.push(`名字超過兩行：${name}`);
+        if (lines.length > 1 && tops.filter((y) => y === lines[lines.length - 1]).length === 1) out.bad.push(`名字最後一個字單獨一行：${name}`);
+      }
+      el.dataset.full = keep; help.click(); help.click();
+      // 展開「更多設定」：其他東西的位置都不能變
+      const snap = () => ["fxModes", "fxCard0", "fxTools", "fxStartBar"].map((id) => { const q = R(document.getElementById(id)); return Math.round(q.top) + "," + Math.round(q.height); }).join("|");
+      const s0 = snap(); document.querySelector("#fxMore > summary").click(); await wait(200);
+      if (snap() !== s0) out.bad.push("展開「更多設定」推動了其他東西");
+      document.querySelector("#fxMore > summary").click(); await wait(200);
+      // 線上：加入房間框上緣＝打木樁中心線、下緣＝線上對戰下緣；「更多設定」貼底
+      document.querySelector('#fxModes [data-fxmode="online"]').click(); await refit();
+      const m0 = R(document.querySelector('[data-fxmode="dummy"]')), m3 = R(document.querySelector('[data-fxmode="online"]')), j = R(document.getElementById("fxOlJoin"));
+      if (Math.abs(j.top - (m0.top + m0.height / 2)) > 2 || Math.abs(j.bottom - m3.bottom) > 2) out.bad.push("線上：加入房間框沒對齊");
+      if (Math.abs(R(document.querySelector(".fx-col.is-c")).bottom - R(document.getElementById("fxMore")).bottom) > 2) out.bad.push("線上：更多設定沒有貼底");
+      document.querySelector('#fxModes [data-fxmode="dummy"]').click(); document.body.style.letterSpacing = ""; await refit();
+      return out;
+    });
+    check(Math.max(...r.tops) - Math.min(...r.tops) <= 4, `${tag} 換模式時角色卡上下跳動：${r.tops.join("/")}`);
+    check(!r.bad.length, `${tag}：${r.bad.join("、")}`);
+    notes.push(tag);
+  }
+  // 橫放時線上畫面的對齊，轉回直向後不能留著（加入房間框的高度、位置）
+  await p.setViewportSize({ width: 891, height: 411 }); await p.click('#fxModes [data-fxmode="online"]'); await p.waitForTimeout(400);
+  await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(500);
+  check(await p.evaluate(() => { const j = document.getElementById("fxOlJoin"); return !j.style.height && !j.style.marginTop; }), "轉回直向後，加入房間框還留著橫向的高度或位置");
+  return `${notes.join("、")} 都通過；轉回直向會復原`;
+});
+
 // v7.6 B 段：新版選角面板（預覽再確認、最近、找不到、技能詳情、兩人輪流＋盲選）
 await test("格鬥場：新版選角面板與技能預覽", async (open) => {
   const p = await open({ width: 390, height: 844 });

@@ -846,3 +846,122 @@ body.fui-new .brand .app-mode { grid-column: 1 / -1; }
 }
 @media (orientation: portrait) { .fx-steps { justify-content: space-between; gap: 4px; font-size: clamp(12px, 3.4vw, 14px); } .fx-steps li { gap: 4px; min-width: 0; } .fx-steps li::before { width: 26px; height: 26px; } .fx-steps li + li::after { width: clamp(6px, 3vw, 22px); } }
 @media (orientation: landscape) and (max-height: 500px) { .fx-steps { gap: 2px; font-size: 12.5px; } .fx-steps li::before { width: 20px; height: 20px; font-size: 11px; } .fx-olroom { gap: 6px; } .fx-roomtop small { display: none; } .fx-roomcard { gap: 3px; padding: 6px 12px; } .fx-roomact .fx-tool { min-height: 36px; font-size: 14px; } .fx-link { min-height: 32px; } }
+
+/* v7.6.1：手機橫向留餘裕（手機字型比較寬、或使用者把字放大時不爆版） */
+@media (orientation: landscape) and (max-height: 500px) {
+  body.fui-new .fx-stats { gap: 2px; }
+  body.fui-new .fx-stats span { gap: 1px; }
+  body.fui-new .fx-sico svg { width: 13px; height: 13px; }
+  body.fui-new .fx-col.is-c .fx-more > summary { padding-block: 4px; min-height: 40px; }
+  body.fui-new .fx-col.is-c .fx-more > summary small { font-size: 12px; line-height: 1.35; }
+  body.fui-new #fxOlHelp > summary small { display: none; }
+  body.fui-new .fx-olmain .fx-sum { font-size: 12px; }
+  body.fui-new .fx-foot p { font-size: 11px; line-height: 1.35; }
+}
+/* 數字縮到最小還放不下：換成兩行（不疊字、不超出卡片） */
+body.fui-new .fx-stats.is-wrap { flex-wrap: wrap; justify-content: center; column-gap: 8px; row-gap: 0; }
+/* 窄的橫向手機（中間欄放不下「頭像＋名字」並排）：卡片改成上下排 */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 780px) {
+  body.fui-new .fx-setup { grid-template-columns: minmax(118px, .7fr) minmax(0, 1.8fr) minmax(150px, .8fr); gap: 12px; padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right)); }
+  body.fui-new .fx-card { grid-template-columns: minmax(0, 1fr); grid-template-areas: "ava" "name" "sup" "stats"; justify-items: center; text-align: center; padding-inline: 6px; }
+  body.fui-new .fx-ava { width: clamp(32px, 9vh, 44px); height: clamp(32px, 9vh, 44px); }
+}
+/* 「更多設定」說明：每個詞不拆開，避免一個字單獨一行 */
+body.fui-new .fx-more > summary small { text-wrap: balance; }
+body.fui-new .fx-more > summary small i { font-style: normal; white-space: nowrap; }
+
+/* ---------- v7.6.1：手機橫向版面一致性（三欄等高、中欄骨架固定、角色卡名字規則） ---------- */
+/* 名字：兩行平均分配、最後兩個字黏在一起、空格分段、最多兩行才「…」（直向、橫向都用） */
+body.fui-new .fx-card strong { text-wrap: balance; }
+body.fui-new .fx-card strong .fx-nglue, body.fui-new .fx-card strong .fx-nseg { white-space: nowrap; }
+body.fui-new .fx-card strong.is-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* 直向不用這些（只在手機橫放出現） */
+.fx-opthint, .fx-morenote, .fx-olhow, .fx-pvpnote, .fx-morespace { display: none; }
+.fx-olhow[hidden] { display: none !important; }
+@media (orientation: landscape) and (max-height: 500px) {
+  body.fui-new .fx-card strong { display: block; -webkit-line-clamp: unset; overflow: visible; }
+  body.fui-new .fx-card strong.is-clamp { display: -webkit-box; -webkit-line-clamp: 2; overflow: hidden; }
+  /* 三欄等高：每欄拉滿，底部共用一條線 */
+  body.fui-new .fx-setup { align-items: stretch; padding-bottom: 8px; --fx-chip-h: clamp(34px, 9vh, 44px); }
+  body.fui-new .fx-col { display: flex; flex-direction: column; gap: clamp(5px, 1.6vh, 10px); min-height: 0; }
+  body.fui-new .fx-col.is-c { position: static; }
+  /* 左欄：四個模式平均分配高度 */
+  body.fui-new .fx-col.is-a .fx-modes { flex: 1 1 auto; grid-auto-rows: minmax(0, 1fr); align-content: stretch; }
+  body.fui-new .fx-col.is-a .fx-mode { align-content: center; }
+  body.fui-new .fx-setup.is-inroom .fx-olroom { flex: 1 1 auto; grid-template-rows: auto 1fr; align-content: stretch; }
+  /* 中欄：選項列固定高度（選項一行＋說明兩行），卡片區吃掉剩下的高度 */
+  body.fui-new .fx-opt { display: grid; grid-template-rows: var(--fx-chip-h) 30px; row-gap: 2px; flex: none; }
+  body.fui-new .fx-setup.is-oljoin .fx-opt, body.fui-new .fx-setup.is-inroom .fx-opt { display: none; }
+  body.fui-new .fx-opt .fx-slot .group { flex-wrap: nowrap; gap: 8px; }
+  body.fui-new .fx-opt .fx-slot .group > .lbl { flex: none; font-size: 12.5px; }
+  body.fui-new .fx-opt .chips { flex-wrap: nowrap; gap: 6px; min-width: 0; }
+  body.fui-new .fx-opt .chips .chip { white-space: nowrap; padding-inline: clamp(8px, 1.6vw, 14px); }
+  body.fui-new .fx-pvpnote { display: flex; align-items: center; }
+  body.fui-new .fx-pvpnote[hidden] { display: none; }
+  body.fui-new .fx-pvpnote p { margin: 0; font-weight: 700; font-size: 14px; color: var(--ink); }
+  body.fui-new .fx-opthint { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; grid-row: 2; margin: 0; font-size: 11.5px; line-height: 1.3; color: var(--muted); }
+  body.fui-new .fx-cards { flex: 1 1 auto; min-height: 0; }
+  body.fui-new .fx-setup.is-measure .fx-cards { flex: none; }
+  body.fui-new .fx-card { align-content: center; }
+  body.fui-new .fx-ava { width: calc(clamp(36px, 11vh, 52px) + var(--fx-ava-x, 0px)); height: calc(clamp(36px, 11vh, 52px) + var(--fx-ava-x, 0px)); }
+  /* 角色卡：「你／木樁」標籤放在頂邊色條上 */
+  body.fui-new .fx-card { border-top-width: 18px; padding-top: clamp(5px, 1.6vh, 9px); }
+  body.fui-new .fx-card .fx-tag { top: -18px; left: 6px; padding: 0 4px; background: none; font-size: 11.5px; line-height: 16px; }
+  /* 線上（還沒進房）：加入房間＋步驟說明＋「遇到問題？」（貼齊底線） */
+  body.fui-new .fx-olhow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; counter-reset: fxhow; }
+  body.fui-new .fx-olhow li { counter-increment: fxhow; display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 6px; align-items: center; font-size: 12.5px; line-height: 1.3; }
+  body.fui-new .fx-olhow li::before { content: counter(fxhow); grid-row: 1 / span 2; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--line); color: var(--ink); font-weight: 900; font-size: 12px; }
+  body.fui-new .fx-olhow li b { font-weight: 900; }
+  body.fui-new .fx-olhow li b i { font-style: normal; white-space: nowrap; }
+  body.fui-new .fx-olhow li span { color: var(--muted); font-size: 11px; }
+  body.fui-new .fx-codeboxes input { height: clamp(38px, 11vh, 52px); font-size: clamp(20px, 6vh, 26px); }
+  body.fui-new .fx-joincard .fx-tool { min-height: clamp(36px, 10vh, 44px); }
+  /* 右欄：開始鈕＋更多設定當成一組，放在欄的垂直正中間；資料小字放進更多設定 */
+  body.fui-new .fx-col.is-c { justify-content: center; position: relative; top: auto; } /* 取消原本 sticky 的 top，否則會往下偏 */
+  /* 展開的東西都「浮在上面」，不撐高欄位（三欄等高，撐高一欄會把整個畫面拉長） */
+  body.fui-new #fxMore[open] { position: absolute; inset: 0; z-index: 6; overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  body.fui-new #fxMore[open] + .fx-morespace { display: block; height: var(--fx-more-h, 52px); flex: none; }
+  body.fui-new #fxMore[open] > summary { position: sticky; top: 0; z-index: 1; background: var(--panel); border-radius: 11px 11px 0 0; }
+  body.fui-new .fx-col.is-a { position: relative; }
+  body.fui-new #fxModeHelpBox { position: absolute; top: 34px; left: 0; width: max(100%, 280px); z-index: 6; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  body.fui-new .fx-col.is-c .fx-foot { display: none; }
+  body.fui-new .fx-morenote { display: block; margin: 0; padding: 0 14px 10px; font-size: 11.5px; color: var(--muted); }
+  body.fui-new .fx-morenote:empty { display: none; }
+}
+@media (orientation: landscape) and (max-height: 380px) {
+  body.fui-new .fx-olhow li span { display: none; }
+  body.fui-new .fx-joincard > p { display: none; }
+}
+
+/* v7.6.1 第三輪：固定間距（區與區 20、區內 10）、右欄三塊（開始鈕往下長／遇到問題／更多設定貼底）、線上中欄 */
+@media (orientation: landscape) and (max-height: 500px) {
+  body.fui-new .fx-setup { column-gap: 20px; }
+  body.fui-new .fx-col { gap: 10px; row-gap: 10px; }
+  body.fui-new .fx-col.is-a .fx-modes, body.fui-new .fx-tools, body.fui-new .fx-modes { gap: 10px; }
+  body.fui-new .fx-opt { row-gap: 2px; }
+  /* 右欄：開始鈕在上、往下填滿（上限＝打木樁按鈕的兩倍）；「遇到問題？」「更多設定」貼底 */
+  body.fui-new .fx-col.is-c { justify-content: flex-start; }
+  body.fui-new .fx-col.is-c .fx-startbar { order: -1; flex: 1 1 auto; max-height: var(--fx-start-max, none); display: flex; flex-direction: column; gap: 4px; }
+  body.fui-new .fx-col.is-c .fx-startbar[hidden] { display: none; }
+  body.fui-new .fx-start-slot { flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; }
+  body.fui-new .fx-start-slot #fStart, body.fui-new #fxOlMain { flex: 1 1 auto; align-content: center; }
+  body.fui-new #fxOlHelp, body.fui-new .fx-helpspace { order: 1; }
+  body.fui-new #fxMore, body.fui-new #fxMoreSpace { order: 2; }
+  body.fui-new .fx-col.is-c::after { content: ""; order: 0; flex: 1 1 0; } /* 開始鈕長到上限後，剩下的空白放這裡，下面兩塊就貼底 */
+  body.fui-new .fx-col.is-c .fx-startbar { flex-grow: 999; }
+  body.fui-new #fxOlHelp[open] { position: absolute; inset: 0; z-index: 6; overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+  body.fui-new #fxOlHelp[open] > summary { position: sticky; top: 0; z-index: 1; background: var(--panel); border-radius: 11px 11px 0 0; }
+  body.fui-new #fxOlHelp[open] + .fx-helpspace { display: block; flex: none; }
+  body.fui-new #fxOlHelp > summary small { display: none; }
+  /* 線上（還沒進房）中欄：步驟說明在最上面，加入房間框對齊「打電腦」（位置由 fuiFit 算） */
+  body.fui-new #fxOlHow { order: -1; }
+}
+/* 加入房間框拉長時：房號格子跟著長高一點（最多 72），其餘空間平均分配 */
+@media (orientation: landscape) and (max-height: 500px) {
+  body.fui-new #fxOlJoin { display: flex; flex-direction: column; }
+  body.fui-new #fxOlJoin[hidden] { display: none; }
+  body.fui-new #fxOlJoin .fx-codeboxes { flex: 1 1 auto; align-items: center; min-height: 0; }
+  body.fui-new #fxOlJoin .fx-codeboxes input { height: auto; aspect-ratio: 1 / 1; min-height: 38px; max-height: min(72px, 100%); } /* 最多正方形 */
+  body.fui-new #fxOlJoin .fx-olmsg:empty { display: none; }
+  body.fui-new #fxLibSlot:has(> #fLibHolder:empty) { display: none; } /* 空的（舊版角色庫用的位置）不佔間距 */
+}

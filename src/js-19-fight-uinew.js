@@ -32,6 +32,7 @@
     const fs = document.createElement("button"); fs.type = "button"; fs.id = "fxFull"; fs.className = "fx-full";
     fs.onclick = fuiFullToggle; document.querySelector(".brand").appendChild(fs); // 放在頁首自己的排版裡（不用絕對定位，不會壓到分頁）
     window.addEventListener("resize", () => { clearTimeout(FUI.fitT); FUI.fitT = setTimeout(fuiFit, 120); });
+    try { document.fonts.ready.then(() => setTimeout(fuiFit, 30)); document.fonts.addEventListener("loadingdone", () => setTimeout(fuiFit, 30)); } catch {} // 網頁字型載完後字變寬：重新排一次
     document.addEventListener("fullscreenchange", fuiFullUi); document.addEventListener("webkitfullscreenchange", fuiFullUi);
     fuiSet(on, false);
   }
@@ -49,8 +50,12 @@
      有多的空間：加大區塊之間的間距，並把「更多設定」與最下方的小字推到第一屏之下；空間不夠：維持緊湊（CSS 依高度縮放）。 */
   function fuiFit() {
     const box = $("fxSetup"); if (!fuiOn() || box.hidden || FG.running) return;
-    const st = box.style; st.setProperty("--fx-extra", "0px"); st.removeProperty("min-height");
+    const st = box.style; st.setProperty("--fx-extra", "0px"); st.setProperty("--fx-ava-x", "0px"); st.removeProperty("min-height");
+    fuiStatsFit(); fuiNameFit(0); fuiNameFit(1);
     const anchors = [$("fxTools"), box.querySelector(".fx-cards"), $("fxOlJoin")]; for (const a of anchors) a.style.marginBottom = "";
+    // v7.6.1 手機橫放的對齊（下面設定的位置）每次先清掉：轉回直向、或平板橫放時都不能留著
+    const colC = box.querySelector(".fx-col.is-c"), how = $("fxOlHow"), join = $("fxOlJoin");
+    colC.style.paddingTop = ""; how.style.marginTop = ""; join.style.marginTop = ""; join.style.height = "";
     // 線上對戰沒有交換／隨機：改以角色卡（或加入房間卡）為準；底部按鈕列也換成線上那一條
     const anchor = anchors.find((a) => a.offsetParent !== null) || $("fxTools"), barEl = $("fxStartBar").hidden ? $("fxOlBar") : $("fxStartBar");
     const land = window.innerWidth > window.innerHeight, H = window.innerHeight, top = box.getBoundingClientRect().top + window.scrollY;
@@ -61,10 +66,80 @@
       st.setProperty("--fx-extra", Math.min(room * 0.5 / 6, 14).toFixed(1) + "px");
       const left = H - bar - bottomOf(anchor);
       anchor.style.marginBottom = Math.max(12, left + 12) + "px"; // 更多設定從第一屏之下開始
-    } else {
+    } else if (!matchMedia("(orientation: landscape) and (max-height: 500px)").matches) {
+      // 平板橫放（高度超過 500）：跟 v7.6 一樣
       const cols = [...box.querySelectorAll(".fx-col")].map(bottomOf), room = H - Math.max(...cols) - 8;
       if (room > 0) st.setProperty("--fx-extra", Math.min(room / 5, 12).toFixed(1) + "px");
-      st.minHeight = Math.max(0, H - top) + "px"; // 最下方的網站說明文字留在第一屏之下
+      st.minHeight = Math.max(0, H - top) + "px";
+    } else {
+      // v7.6.1：三欄等高（＝畫面扣掉頁首），多出來的高度給角色卡（頭像放大），不再平均加間距
+      st.minHeight = Math.max(0, H - top) + "px";
+      // 開始鈕往下長，最多到「打木樁」按鈕的兩倍高（進房後左欄沒有模式按鈕，沿用上次量到的）
+      const m0 = document.querySelector('#fxModes [data-fxmode="dummy"]'), mh = m0 && m0.offsetParent ? m0.getBoundingClientRect().height : 0;
+      if (mh) FUI.startMax = mh * 2; if (FUI.startMax) st.setProperty("--fx-start-max", FUI.startMax.toFixed(1) + "px");
+      // 右欄：開始鈕（線上＝建立房間／我準備好了）的上緣對齊左欄「打木樁」按鈕的上緣（進房後沿用上次量到的）
+      if (mh) FUI.cTop = m0.getBoundingClientRect().top - colC.getBoundingClientRect().top;
+      if (FUI.cTop > 0) colC.style.paddingTop = FUI.cTop.toFixed(1) + "px";
+      // 線上步驟說明：中心線對齊「打木樁」按鈕的上緣
+      if (how.offsetParent && mh) { const r = how.getBoundingClientRect(); how.style.marginTop = Math.max(0, m0.getBoundingClientRect().top - r.height / 2 - r.top).toFixed(1) + "px"; }
+      // 線上（還沒進房）：「加入房間」框上緣對齊「打木樁」按鈕的中心線、下緣對齊「線上對戰」按鈕的下緣
+      //（小畫面說明比較高時，框往下讓，跟說明至少留 6 點）
+      const m3 = document.querySelector('#fxModes [data-fxmode="online"]');
+      if (join.offsetParent && mh && m3 && m3.offsetParent) {
+        const mr = m0.getBoundingClientRect(), jt = join.getBoundingClientRect().top;
+        const want = Math.max(mr.top + mr.height / 2, how.offsetParent ? how.getBoundingClientRect().bottom + 6 : 0);
+        join.style.marginTop = (want - jt).toFixed(1) + "px"; // 可以是負的（欄內間距 10，比 6 大）
+        const hgt = m3.getBoundingClientRect().bottom - want; if (hgt > 0) join.style.height = hgt.toFixed(1) + "px";
+      }
+      const cards = box.querySelector(".fx-cards"), card = $("fxCard0");
+      if (cards.offsetParent) {
+        box.classList.add("is-measure"); const h0 = card.getBoundingClientRect().height; box.classList.remove("is-measure");
+        const free = card.getBoundingClientRect().height - h0;
+        // 頭像放大會讓名字區變窄：名字因此要被截成「…」的話，頭像就少放大一點（名字優先）
+        if (free > 4) for (const x of [Math.min(free * 0.6, 28), Math.min(free * 0.3, 14), 0]) {
+          st.setProperty("--fx-ava-x", x.toFixed(1) + "px"); fuiNameFit(0); fuiNameFit(1);
+          if ([0, 1].every((i) => !$(`fxName${i}`).classList.contains("is-clamp") && $(`fxName${i}`).clientWidth >= 64)) break; // 名字區至少留 64 點寬
+        }
+        fuiStatsFit();
+      }
+    }
+  }
+  // 角色卡名字（v7.6.1）：最多兩行；不讓最後一個字單獨一行；有空格時優先在空格換行；放不下先縮小一級字，再不行才「…」
+  function fuiName(i, text) { const el = $(`fxName${i}`); el.dataset.full = text; el.textContent = text; fuiNameFit(i); }
+  function fuiNameFit(i) {
+    const el = $(`fxName${i}`), full = el.dataset.full; if (full == null) return;
+    el.style.fontSize = ""; el.classList.remove("is-clamp"); el.textContent = full;
+    if (!el.offsetParent) return;
+    const parts = full.split(/[ 　]+/).filter(Boolean);
+    const lines = () => Math.round(el.scrollHeight / (parseFloat(getComputedStyle(el).lineHeight) || 18));
+    let cut = full.length; for (let n = 0; cut > 0 && n < 2; ) if (full[--cut].trim()) n++; // 最後兩個「看得到的字」黏在一起（中間的空格也一起）
+    const plain = () => { el.textContent = ""; if (cut > 0) { el.append(full.slice(0, cut)); const g = document.createElement("span"); g.className = "fx-nglue"; g.textContent = full.slice(cut); el.append(g); } else el.append(full); };
+    const split = () => { el.textContent = ""; parts.forEach((p, k) => { if (k) el.append(" "); const s = document.createElement("span"); s.className = "fx-nseg"; s.textContent = p; el.append(s); }); };
+    const fits = () => {
+      plain(); if (lines() <= 1) return true;
+      // 空格後只有一個字（例如「… 琉」）就不在空格換行
+      if (parts.length > 1 && [...parts[parts.length - 1]].length > 1) { split(); const W = el.clientWidth + 0.5; if ([...el.children].every((s) => s.getBoundingClientRect().width <= W) && lines() <= 2) return true; plain(); }
+      return lines() <= 2;
+    };
+    if (fits()) return;
+    el.style.fontSize = Math.max(11, parseFloat(getComputedStyle(el).fontSize) - 2) + "px";
+    if (fits()) return;
+    el.classList.add("is-clamp");
+  }
+  // 角色卡數字：字太寬（手機寬字型、放大字）時把數字縮小，不讓數字超出卡片
+  function fuiStatsFit() {
+    for (const st of document.querySelectorAll("#fxSetup .fx-stats")) {
+      const bs = [...st.querySelectorAll("b")], card = st.closest(".fx-card"); bs.forEach((b) => (b.style.fontSize = "")); st.classList.remove("is-wrap");
+      if (!bs.length || !card || !st.offsetParent) continue;
+      const over = () => { // 數字或圖示跑到卡片邊框（含 2px 留白）外面
+        const c = card.getBoundingClientRect(), pad = card.clientLeft + 2;
+        return [...st.children].some((x) => { const r = x.getBoundingClientRect(); return r.right > c.right - pad || r.left < c.left + pad; });
+      };
+      if (!over()) continue;
+      const base = parseFloat(getComputedStyle(bs[0]).fontSize);
+      let s = 1; while (s > 0.8 && over()) { s -= 0.05; bs.forEach((b) => (b.style.fontSize = (base * s).toFixed(1) + "px")); }
+      if (over()) { st.classList.add("is-wrap"); bs.forEach((b) => (b.style.fontSize = "")); } // 縮到八成還放不下：改兩行
+      for (s = 0.95; s > 0.6 && over(); s -= 0.05) bs.forEach((b) => (b.style.fontSize = (base * s).toFixed(1) + "px"));
     }
   }
   /* ---------- 全螢幕 ---------- */
@@ -110,6 +185,8 @@
     $("fxSwap").onclick = () => $("fSwap").click();
     $("fxRand").onclick = () => $("fRandAll").click();
     $("fxPauseBtn").onclick = fuiPausePress;
+    // 手機橫放時「更多設定」展開會浮在右欄上面（CSS）；原位留一塊一樣高的空位，開始鈕才不會跟著移動
+    for (const [d, sp] of [["fxMore", "fxMoreSpace"], ["fxOlHelp", "fxOlHelpSpace"]]) $(d).addEventListener("click", (e) => { if (e.target.closest("summary") && !$(d).open) $(sp).style.height = $(d).getBoundingClientRect().height + "px"; });
     $("fxModeHelp").onclick = () => { const box = $("fxModeHelpBox"), open = box.hidden; box.hidden = !open; $("fxModeHelp").setAttribute("aria-expanded", String(open)); fuiFit(); }; // 模式說明
     document.addEventListener("keydown", (e) => { if (!fuiOn() || !FG.running || FG.replay) return; if (e.key === "Escape") { e.preventDefault(); FUI.dbl = Date.now(); fuiPausePress(); } });
   }
@@ -118,7 +195,7 @@
     if (!fuiOn() || !FG.set) return;
     const st = FG.set, online = st.mode === "online";
     document.querySelectorAll("#fxModes [data-fxmode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.fxmode === st.mode)));
-    $("fxDummySlot").hidden = st.mode !== "dummy"; $("fxCpuSlot").hidden = st.mode !== "cpu"; $("fxOnlineSlot").hidden = true; // 線上：改用 C 段的新畫面（js-19-fight-uiol.js），原本的區塊藏著
+    $("fxDummySlot").hidden = st.mode !== "dummy"; $("fxCpuSlot").hidden = st.mode !== "cpu"; $("fxPvpSlot").hidden = st.mode !== "pvp"; $("fxOnlineSlot").hidden = true; // 線上：改用 C 段的新畫面（js-19-fight-uiol.js），原本的區塊藏著
     fuiOl();
     $("fxTools").hidden = online; $("fxStartBar").hidden = online;
     const tagR = { dummy: "木樁", cpu: "電腦", pvp: "玩家 2", online: "對手" }[st.mode];
@@ -132,14 +209,16 @@
     const dh = $("fDummyBox").querySelector(".hint"); if (FG.set.mode === "dummy" && dh) lines.push(dh.textContent);
     const note = $("modeNote").textContent.trim(); if (note) lines.push(note);
     $("fxFoot").textContent = ""; for (const t of lines) { const p = document.createElement("p"); p.textContent = t; $("fxFoot").appendChild(p); }
+    // 手機橫放（v7.6.1）：模式說明放在中欄選項列下面、資料小字放進「更多設定」；直向仍用上面的 fxFoot
+    $("fxOptHint").textContent = FG.set.mode === "dummy" && dh ? dh.textContent : ""; $("fxMoreNote").textContent = note;
   }
   async function fuiCard(i) {
     const id = fightCardId(i), card = $(`fxCard${i}`), blind = i === 0 && FXP.hidden0 && FXP.hidden0 === id; // 盲選：玩家 2 選角時先藏起玩家 1 的角色
     const r = !blind && id && S.index.find((x) => x.id === id);
-    if (blind) { $(`fxName${i}`).textContent = "已選好（盲選）"; $(`fxSup${i}`).textContent = ""; $(`fxAva${i}`).textContent = ""; $(`fxStats${i}`).textContent = ""; return; }
+    if (blind) { fuiName(i, "已選好（盲選）"); $(`fxSup${i}`).textContent = ""; $(`fxAva${i}`).textContent = ""; $(`fxStats${i}`).textContent = ""; return; }
     const waiting = FG.set.mode === "online" && i === 1 && !r;
     card.classList.toggle("is-wait", waiting); card.disabled = FG.set.mode === "online" && i === 1;
-    $(`fxName${i}`).textContent = r ? r.name : waiting ? "等待對手" : "未選擇";
+    fuiName(i, r ? r.name : waiting ? "等待對手" : "未選擇");
     const sup = $(`fxSup${i}`), c = r ? fightCompatOf(r) : null, lab = waiting ? ["對手選擇中…", "wait"] : c ? FUI_SUP[c.lvl] : null;
     sup.textContent = lab ? lab[0] : ""; sup.className = "fx-sup" + (lab ? " is-" + lab[1] : ""); sup.title = c && c.why ? c.why : "";
     card.setAttribute("aria-label", `${i ? "右方" : "左方"}角色：${r ? r.name : "未選擇"}${lab ? "，" + lab[0] : ""}，點一下更換`);

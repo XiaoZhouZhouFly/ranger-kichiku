@@ -262,8 +262,12 @@
         <button class="fx-tool" id="fxOlJoinBtn" type="button">加入房間</button>
         <p class="fx-olmsg" id="fxOlMsg" role="status"></p>
       </div>
+      <div class="fx-opt" id="fxOpt">
       <div class="fx-slot" id="fxDummySlot"></div>
       <div class="fx-slot" id="fxCpuSlot" hidden></div>
+      <div class="fx-slot fx-pvpnote" id="fxPvpSlot" hidden><p>兩人共用一台手機，面對面操作</p></div>
+      <p class="fx-opthint" id="fxOptHint"></p>
+      </div>
       <div class="fx-slot" id="fxOnlineSlot" hidden></div>
       <h2 class="fx-lbl">對戰角色（點卡片更換）</h2>
       <div class="fx-cards">
@@ -276,18 +280,22 @@
         <button class="fx-tool" id="fxRand" type="button"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>全部隨機</button>
       </div>
       <div class="fx-slot" id="fxLibSlot"></div>
+      <ol class="fx-olhow" id="fxOlHow" hidden><li><b><i>開房或</i><i>加入</i></b><span>建立房間，或輸入房號</span></li><li><b>選角色</b><span>點自己的角色卡</span></li><li><b>準備開打</b><span>雙方都按準備</span></li></ol>
       </div>
       <div class="fx-col is-c">
       <details class="fx-more" id="fxMore">
-        <summary><span><b>更多設定</b><small>介面・回合・畫面方向・操作說明・測試工具</small></span><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+        <summary><span><b>更多設定</b><small><i>介面</i>・<i>回合</i>・<i>方向</i>・<i>說明</i>・<i>測試</i></small></span><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
         <div class="fx-more-body" id="fxMoreBody">
           <div class="group"><span class="lbl">介面</span><div class="chips"><button class="chip" type="button" data-fui="old">原版</button><button class="chip" type="button" data-fui="new">新版（測試）</button></div></div>
         </div>
+        <p class="fx-morenote" id="fxMoreNote"></p>
       </details>
+      <div class="fx-morespace" id="fxMoreSpace" aria-hidden="true"></div>
       <details class="fx-more" id="fxOlHelp" hidden>
         <summary><span><b>遇到問題？</b><small>連不上、卡住時複製連線紀錄</small></span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
         <div class="fx-more-body"><button class="fx-tool" id="fxOlLog" type="button">複製連線紀錄</button><p class="fx-olnote" id="fxOlLogMsg">把內容貼給開發者，方便找出原因。</p></div>
       </details>
+      <div class="fx-morespace fx-helpspace" id="fxOlHelpSpace" aria-hidden="true"></div>
       <div class="fx-foot" id="fxFoot"></div>
       <div class="fx-startbar" id="fxOlBar" hidden><button class="btn primary big fx-olmain" id="fxOlMain" type="button" data-act="create"><span id="fxOlMainT">建立房間</span><span class="fx-sum" id="fxOlMainS"></span></button></div>
       <div class="fx-startbar" id="fxStartBar"><div class="fx-start-slot" id="fxStartSlot"></div><span class="fx-sum" id="fxSum"></span></div>

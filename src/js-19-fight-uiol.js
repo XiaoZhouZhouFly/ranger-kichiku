@@ -31,14 +31,14 @@
     if (!fuiOn() || !FG.set) return;
     const online = FG.set.mode === "online", inRoom = online && !!OL.code, box = $("fxSetup");
     box.classList.toggle("is-inroom", inRoom); box.classList.toggle("is-oljoin", online && !inRoom);
-    $("fxOlRoom").hidden = !inRoom; $("fxOlJoin").hidden = !online || inRoom; $("fxOlBar").hidden = !online; $("fxOlHelp").hidden = !online;
+    $("fxOlRoom").hidden = !inRoom; $("fxOlJoin").hidden = !online || inRoom; $("fxOlBar").hidden = !online; $("fxOlHelp").hidden = !online; $("fxOlHow").hidden = !online || inRoom;
     if (!online) return;
     const main = $("fxOlMain"), set = (act, text, sub, off) => { main.dataset.act = act; $("fxOlMainT").textContent = text; $("fxOlMainS").textContent = sub; main.disabled = !!off; };
     if (!inRoom) {
       const msg = $("fOnStatus").textContent, busy = /中…$/.test(msg), bad = /失敗/.test(msg);
       $("fxOlMsg").textContent = bad || busy ? msg : ""; $("fxOlMsg").classList.toggle("is-bad", bad);
       $("fxOlCopied").textContent = ""; $("fxOlQr").hidden = true;
-      set("create", "建立房間", "建立後把房號或連結傳給朋友", busy);
+      set("create", "建立房間", "把房號或連結傳給朋友", busy);
       return;
     }
     const other = olOther(), mine = olMine(), connected = !!(OL.link && OL.link.ready), host = OL.side === 0;
